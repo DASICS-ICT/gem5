@@ -2,11 +2,11 @@
 
 #include "gem5/m5ops.h"
 
-/* Preserve repeated loads; the offsets alias in both tested caches. */
-_Alignas(4096) static volatile unsigned char cache_data[4097] = {
+/* Place the third line in another set for the tested caches. */
+_Alignas(4096) static volatile unsigned char cache_data[4161] = {
     [0] = 1,
     [2048] = 2,
-    [4096] = 3,
+    [4160] = 3,
 };
 
 int
@@ -17,14 +17,14 @@ main(void)
     /* Load the three data lines before resetting statistics. */
     (void)cache_data[0];
     (void)cache_data[2048];
-    (void)cache_data[4096];
+    (void)cache_data[4160];
 
     m5_reset_stats(0, 0);
 
     for (unsigned int i = 0; i < 10000; ++i) {
         sum += cache_data[0];
         sum += cache_data[2048];
-        sum += cache_data[4096];
+        sum += cache_data[4160];
     }
 
     m5_dump_stats(0, 0);
