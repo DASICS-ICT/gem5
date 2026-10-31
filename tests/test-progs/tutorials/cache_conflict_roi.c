@@ -14,6 +14,11 @@ main(void)
 {
     unsigned int sum = 0;
 
+    /* Load the three data lines before resetting statistics. */
+    (void)cache_data[0];
+    (void)cache_data[2048];
+    (void)cache_data[4096];
+
     m5_reset_stats(0, 0);
 
     for (unsigned int i = 0; i < 10000; ++i) {
