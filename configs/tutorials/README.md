@@ -4,7 +4,8 @@
 
 当前主线是逐渐过渡到 **RISC-V Linux 全系统仿真**，为后续 DASICS 的
 特权态、异常隔离和性能研究准备环境。SE/FS 与 RiscvBoard 硬件组成的
-概念课已通过理解检查，下一课认识 Linux 启动资源。
+概念课已通过理解检查，Linux 启动资源角色的理解检查也已通过。
+下一课只读核对 workload 引用的具体资源和版本。
 
 RVV 暂停在“同一个 23 元素加法程序适配 VLEN=256 和 VLEN=128”。
 恢复时从本文的“RVV 暂停与恢复入口”继续，不必重做已完成的基础课程。
@@ -21,7 +22,7 @@ Git 提交正文中；RVV 概念和代码用法同步整理在
 | 缓存与统计 | 已完成相关实验 | 容量、行大小、相联度、冲突、预热、ROI |
 | O3 性能分析 | 已完成相关实验 | IPC、提交宽度、发射宽度、ALU 延迟与数量 |
 | RVV 基础 | 暂停，已有可复跑结果 | 配置 VL、向量加法、分批循环、不同 VLEN |
-| RISC-V Linux FS | SE/FS 与硬件组成理解检查通过；启动未验证 | 下一课：Linux 启动资源 |
+| RISC-V Linux FS | SE/FS、硬件组成与资源角色已完成；启动未验证 | 下一课：workload 资源元数据 |
 | DASICS 移植 | 尚未开展实现 | 待 Linux 基线建立后规划 |
 
 下文的命令和非链接路径以仓库根目录 `gem5/` 为基准。
@@ -248,7 +249,7 @@ rg '^(vlen|elen)=' m5out/rvv-add-resume-vlen128/config.ini
 | --- | --- | --- | --- |
 | 1，已完成 | SE 与 FS 的区别 | 对比现有 SE 配置和官方 FS 入口，只读代码 | 能解释 SE 中谁处理系统调用，以及研究真实内核/特权态为何需要 FS |
 | 2，已完成 | 模拟硬件与 RiscvBoard | 识别 CPU、缓存、内存、设备及连接关系 | 能区分硬件配置和待加载的软件资源 |
-| 3，当前下一课 | Linux 启动资源 | 认识启动固件、内核、设备树、磁盘镜像与根文件系统；阅读 workload 元数据 | 能说明各资源用途和来源，不混用不同平台资源 |
+| 3，角色已完成，元数据待学 | Linux 启动资源 | 先认识固件、内核、设备树、磁盘镜像与根文件系统，再阅读 workload 元数据 | 能说明各资源用途和来源，不混用不同平台资源 |
 | 4 | 官方配置与退出事件 | 阅读 set_workload、Simulator 和 ExitHandler | 能区分内核启动、用户态启动脚本、预期仿真结束，以及两种日志 |
 | 5 | 启动前准备 | 确认执行主机、资源版本、缓存/日志位置、空间与下载；核对配置 | 得到可复现的资源清单和启动命令 |
 | 6 | 第一次 Linux 启动 | 使用配套 RISC-V 官方示例运行并保存控制台输出 | 内核与用户态启动流程完成，发生预期结束事件 |
@@ -341,6 +342,41 @@ rg -n '^\[root\]|^full_system=' \
   与本课判据一致，理解检查通过。
 - 验证边界：已核对当前版本代码与官方概览；没有改变硬件配置或启动 Linux。
 - 下一课：分别认识内核、设备树、磁盘镜像等启动资源。
+- 学习记录提交：`9c46bd567b`。
+
+### 2026-11-01：Linux 启动资源的角色
+
+- 状态：资源角色已讲解，理解检查通过；具体元数据核对另行记录。
+- 目标：区分启动时各类代码、描述数据和存储内容，理解它们如何配合。
+- 内核：实际执行的操作系统核心代码，负责进程、内存、系统调用、异常
+  处理与驱动等。当前标准库接口把内核资源和磁盘镜像分别指定。
+- 设备树：描述硬件的数据，例如 CPU、内存范围、设备地址与中断。
+  DTS 是源文本，DTB 是供软件读取的二进制表示；设备树不提供驱动实现。
+  依据为 [Linux 设备树文档][linux-devicetree]。
+- 磁盘镜像与根文件系统：镜像文件表示模拟磁盘的内容，可能包含分区表
+  和文件系统。本课程的磁盘启动路线中，根文件系统通常位于磁盘的一个分区，
+  挂载为 `/`，提供用户程序、库和配置文件。见
+  [gem5 磁盘镜像说明][disk-images]。
+- 启动固件：负责内核之前的启动交接，并可提供底层运行服务；
+  [OpenSBI][opensbi] 是 SBI 固件实现的例子。资源可能分别提供固件与内核，
+  也可能组合打包；当前 workload 的具体形式留到元数据核对时确认。
+- 当前代码证据：
+  [KernelDiskWorkload](../../src/python/gem5/components/boards/kernel_disk_workload.py)
+  的 `set_kernel_disk_workload()` 接收 `kernel`、`disk_image` 和可选
+  `bootloader`；
+  [RiscvBoard](../../src/python/gem5/components/boards/riscv_board.py)
+  在预实例化阶段调用 `generate_device_tree()`，从硬件配置生成
+  `device.dts` 和 `device.dtb`，并将磁盘镜像绑定到模拟磁盘设备。
+- 资源版本：官方示例中的 `resource_version="2.0.0"` 是启动 workload
+  资源的版本，不是 Linux 内核版本。内核、固件、磁盘的实际资源身份待核对。
+- 理解检查：修改 Linux 的异常处理逻辑，应修改并重新编译内核
+  还是设备树？描述串口地址和中断号的硬件信息，应放在哪类描述数据里？
+- 回答与判定：学习者回答重新编译内核，并将串口硬件描述归入设备树；
+  与本课判据一致，理解检查通过。
+- 验证边界：已核对上述本地接口及官方文档；未下载资源、生成 FS 设备树
+  或启动 Linux。本课不推断启动资源包内尚未读取的具体文件版本。
+- 下一课：只读查看 workload 的资源元数据与版本，
+  然后进入配置和退出事件学习。
 
 ## 以后每次学习如何记录
 
@@ -366,3 +402,6 @@ rg -n '^\[root\]|^full_system=' \
 [stdlib]: https://www.gem5.org/documentation/gem5-stdlib/overview
 [fs-tutorial]: https://www.gem5.org/documentation/gem5-stdlib/x86-full-system-tutorial
 [resources]: https://www.gem5.org/documentation/general_docs/gem5_resources/
+[linux-devicetree]: https://docs.kernel.org/devicetree/usage-model.html
+[disk-images]: https://www.gem5.org/documentation/general_docs/fullsystem/disks
+[opensbi]: https://github.com/riscv-software-src/opensbi/blob/master/README.md
