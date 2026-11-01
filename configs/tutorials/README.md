@@ -5,7 +5,7 @@
 当前主线是逐渐过渡到 **RISC-V Linux 全系统仿真**，为后续 DASICS 的
 特权态、异常隔离和性能研究准备环境。SE/FS 与 RiscvBoard 硬件组成的
 概念课已通过理解检查，Linux 启动资源角色的理解检查也已通过。
-下一课只读核对 workload 引用的具体资源和版本。
+workload 资源元数据已核对，版本与绑定机制的理解检查通过；下一课学习退出事件。
 
 RVV 暂停在“同一个 23 元素加法程序适配 VLEN=256 和 VLEN=128”。
 恢复时从本文的“RVV 暂停与恢复入口”继续，不必重做已完成的基础课程。
@@ -22,7 +22,7 @@ Git 提交正文中；RVV 概念和代码用法同步整理在
 | 缓存与统计 | 已完成相关实验 | 容量、行大小、相联度、冲突、预热、ROI |
 | O3 性能分析 | 已完成相关实验 | IPC、提交宽度、发射宽度、ALU 延迟与数量 |
 | RVV 基础 | 暂停，已有可复跑结果 | 配置 VL、向量加法、分批循环、不同 VLEN |
-| RISC-V Linux FS | SE/FS、硬件组成与资源角色已完成；启动未验证 | 下一课：workload 资源元数据 |
+| RISC-V Linux FS | 基础概念与资源元数据理解检查通过；启动未验证 | 下一课：配置与退出事件 |
 | DASICS 移植 | 尚未开展实现 | 待 Linux 基线建立后规划 |
 
 下文的命令和非链接路径以仓库根目录 `gem5/` 为基准。
@@ -249,8 +249,8 @@ rg '^(vlen|elen)=' m5out/rvv-add-resume-vlen128/config.ini
 | --- | --- | --- | --- |
 | 1，已完成 | SE 与 FS 的区别 | 对比现有 SE 配置和官方 FS 入口，只读代码 | 能解释 SE 中谁处理系统调用，以及研究真实内核/特权态为何需要 FS |
 | 2，已完成 | 模拟硬件与 RiscvBoard | 识别 CPU、缓存、内存、设备及连接关系 | 能区分硬件配置和待加载的软件资源 |
-| 3，角色已完成，元数据待学 | Linux 启动资源 | 先认识固件、内核、设备树、磁盘镜像与根文件系统，再阅读 workload 元数据 | 能说明各资源用途和来源，不混用不同平台资源 |
-| 4 | 官方配置与退出事件 | 阅读 set_workload、Simulator 和 ExitHandler | 能区分内核启动、用户态启动脚本、预期仿真结束，以及两种日志 |
+| 3，已完成 | Linux 启动资源 | 先认识固件、内核、设备树、磁盘镜像与根文件系统，再阅读 workload 元数据 | 能说明各资源用途和来源，不混用不同平台资源 |
+| 4，当前下一课 | 官方配置与退出事件 | 阅读 set_workload、Simulator 和 ExitHandler | 能区分内核启动、用户态启动脚本、预期仿真结束，以及两种日志 |
 | 5 | 启动前准备 | 确认执行主机、资源版本、缓存/日志位置、空间与下载；核对配置 | 得到可复现的资源清单和启动命令 |
 | 6 | 第一次 Linux 启动 | 使用配套 RISC-V 官方示例运行并保存控制台输出 | 内核与用户态启动流程完成，发生预期结束事件 |
 | 7 | 在 Linux 中运行自己的程序 | 学习工作负载注入、结果回收和统计范围 | 能重复运行并核对访客程序结果，再规划 DASICS 实验 |
@@ -265,7 +265,7 @@ rg '^(vlen|elen)=' m5out/rvv-add-resume-vlen128/config.ini
   workload、处理退出事件”的流程；具体 RISC-V 平台和 API 以本仓库
   v26.0.0.0 示例为准，不直接套用其中的 X86/KVM 配置。
 - [gem5 Resources][resources] 用于理解资源标识、版本、内核与磁盘镜像。
-  示例最终使用哪个内核、固件与磁盘文件，需要在资源准备时核对元数据。
+  示例引用的内核、固件和磁盘资源已核对，见后面的 workload 元数据记录。
 - 当前 RISC-V 入口是
   [riscv-ubuntu-run.py](../example/gem5_library/riscv-ubuntu-run.py)，
   硬件组件实现可从
@@ -377,6 +377,72 @@ rg -n '^\[root\]|^full_system=' \
   或启动 Linux。本课不推断启动资源包内尚未读取的具体文件版本。
 - 下一课：只读查看 workload 的资源元数据与版本，
   然后进入配置和退出事件学习。
+- 学习记录提交：`46fa040982`。
+
+### 2026-11-01：workload 元数据与资源版本
+
+- 状态：已完成只读元数据核对；版本与绑定机制理解检查通过。
+- 目标：把 Python 配置里的 workload 名称与实际依赖对应起来，区分
+  workload 版本、依赖资源版本和软件自身版本。
+- 查询入口：当前版本的
+  [默认资源配置](../../src/python/gem5/gem5_default_config.py)
+  指向官方 `https://api.gem5.org/api/resources`；
+  [资源客户端](../../src/python/gem5/resources/client_api/azure_functions_client.py)
+  通过 `find-resources-in-batch` 查询 JSON。此次仅查询元数据，没有访问
+  内核、固件或镜像的下载 URL。
+- 查询对象：`riscv-ubuntu-24.04-boot`，资源版本 `2.0.0`。
+  官方返回的 `category` 为 `workload`，`function` 为
+  `set_kernel_disk_workload`，`additional_params` 为空对象。
+  这里的 workload 是资源与参数的组合清单。
+- 概念补充：本课讨论的是资源库中的 workload 资源，可理解为配套资源
+  的逻辑组合及配置说明。它引用各自独立的资源，并指定配置方法和参数；
+  不表示把固件、内核、磁盘文件合并成一个压缩包。
+  三项依赖是这个启动 workload 的内容，其他 workload 可以引用不同资源。
+  [WorkloadResource](../../src/python/gem5/resources/resource.py)
+  保存要调用的函数名称和传给该函数的参数。
+- 绑定机制：[AbstractBoard.set_workload](../../src/python/gem5/components/boards/abstract_board.py)
+  根据 workload 指定的函数名称取得对应方法，并传入准备好的参数；
+  此 workload 将下面三项依赖分别作为 `bootloader`、`kernel`、
+  `disk_image` 参数使用。
+
+| 角色 | 依赖资源 ID | 依赖资源版本 | 软件版本或发行版 |
+| --- | --- | --- | --- |
+| bootloader | `riscv-bootloader-opensbi-1.3.1` | `1.0.0` | OpenSBI 1.3.1 |
+| kernel | `riscv-linux-6.8.12-kernel` | `1.0.0` | Linux 6.8.12 |
+| disk_image | `riscv-ubuntu-24.04-img` | `2.0.0` | Ubuntu 24.04 |
+
+- 核对结果：三个依赖的类型分别为 `bootloader`、`kernel`、`disk-image`，
+  架构均为 `RISCV`。workload 与三个依赖的 `gem5_versions` 均包含
+  `26.0`。这记录了官方的兼容性声明，实际启动成功仍待后续验证。
+- 已保存的后续线索：磁盘元数据的 `root_partition` 为字符串 `1`；
+  当前 Board 的磁盘设备名为 `/dev/vda`。它们如何形成内核参数将在配置课
+  中继续说明。DTB 则由 Board 根据模拟硬件生成，不在这三项下载依赖中。
+- 关键区别：启动 workload 的 `2.0.0`、内核资源的 `1.0.0` 和 Linux
+  自身的 `6.8.12` 是不同层次的版本。复现时应保留资源 ID 与资源版本。
+
+可从任意目录执行下面的只读查询，观察 workload 的完整 JSON：
+
+```bash
+curl --fail --silent --show-error --max-time 30 --get \
+  'https://api.gem5.org/api/resources/find-resources-in-batch' \
+  --data-urlencode 'id=riscv-ubuntu-24.04-boot' \
+  --data-urlencode 'resource_version=2.0.0' |
+  /usr/bin/python3 -m json.tool
+```
+
+- 来源：2026-11-01 查询的[官方 workload 元数据][riscv-boot-metadata]，
+  并按返回的 ID 与版本逐项查询三个依赖；资源接口的用法参考
+  [gem5 Resources][resources] 和当前版本客户端源码。
+- 理解检查：此 workload 的 `resource_version="2.0.0"`
+  是否代表 Linux 内核版本为 2.0.0？实际引用的 Linux 内核版本是什么？
+  `function="set_kernel_disk_workload"` 告诉 Board 做什么？
+- 回答与判定：学习者正确指出内核为 6.8.12，并说明 Board 应通过指定
+  方法传入固件、内核和磁盘资源；版本与绑定机制检查通过。
+- 补充问答：针对“是否是三个软件的软件包”的提问，进一步解释逻辑组合
+  与物理打包的区别，并说明 workload 还包含配置方法和可选参数。
+- 验证边界：完成了元数据级核对，未检查下载文件内容、解压镜像或执行
+  Linux 启动。资源版本不能代替这些后续验证。
+- 下一课：理解 `set_workload` 到启动配置的衔接，以及三个启动退出事件。
 
 ## 以后每次学习如何记录
 
@@ -405,3 +471,4 @@ rg -n '^\[root\]|^full_system=' \
 [linux-devicetree]: https://docs.kernel.org/devicetree/usage-model.html
 [disk-images]: https://www.gem5.org/documentation/general_docs/fullsystem/disks
 [opensbi]: https://github.com/riscv-software-src/opensbi/blob/master/README.md
+[riscv-boot-metadata]: https://api.gem5.org/api/resources/find-resources-in-batch?id=riscv-ubuntu-24.04-boot&resource_version=2.0.0
