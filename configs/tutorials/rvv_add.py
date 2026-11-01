@@ -17,7 +17,7 @@ processor = SimpleProcessor(
 )
 
 cpu = processor.get_cores()[0].get_simobject()
-cpu.isa[0].vlen = 256
+cpu.isa[0].vlen = 128
 
 cache_hierarchy = PrivateL1CacheHierarchy(
     l1i_size="32KiB",
