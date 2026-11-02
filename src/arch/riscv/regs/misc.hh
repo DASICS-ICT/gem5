@@ -295,6 +295,12 @@ enum MiscRegIndex
     // Dasics（RV64） CSRs
     // Per-hart trusted-call entry shared by S and U modes.
     MISCREG_DASICS_MAIN_CALL_ENTRY,
+    // Per-hart trusted return address shared by S and U modes.
+    MISCREG_DASICS_RETURN_PC,
+    // Per-hart active-zone return address shared by S and U modes.
+    MISCREG_DASICS_ACTIVE_ZONE_RETURN_PC,
+    // Per-hart DASICS fault reason shared by S and U modes.
+    MISCREG_DASICS_FREASON,
 
     NUM_PHYS_MISCREGS,
     MISCREG_FFLAGS_EXE = NUM_PHYS_MISCREGS,
@@ -549,6 +555,12 @@ enum CSRIndex
     // Dasics（RV64） CSRs
     // Dasics trusted-call entry address.
     CSR_DASICS_MAIN_CALL_ENTRY = 0x8B0,
+    // Return address in trusted code for calls into untrusted code.
+    CSR_DASICS_RETURN_PC = 0x8B1,
+    // Dasics active-zone return address.
+    CSR_DASICS_ACTIVE_ZONE_RETURN_PC = 0x8B2,
+    // DASICS fault reason.
+    CSR_DASICS_FREASON = 0x8B3,
 
     // H-extension (RV64) CSRs
 
@@ -1223,6 +1235,15 @@ const std::unordered_map<int, CSRMetadata> CSRData = {
     {CSR_DASICS_MAIN_CALL_ENTRY,
      {"dasics_main_call_entry", MISCREG_DASICS_MAIN_CALL_ENTRY,
       rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_RETURN_PC,
+     {"dasics_return_pc", MISCREG_DASICS_RETURN_PC, rvTypeFlags(RV64),
+      isaExtsFlags()}},
+    {CSR_DASICS_ACTIVE_ZONE_RETURN_PC,
+     {"dasics_active_zone_return_pc", MISCREG_DASICS_ACTIVE_ZONE_RETURN_PC,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_FREASON,
+     {"dasics_freason", MISCREG_DASICS_FREASON, rvTypeFlags(RV64),
+      isaExtsFlags()}},
 
     // H-extension CSR -> MISCREG mappings
     {CSR_MTINST,
@@ -1631,6 +1652,10 @@ const RegVal VSI_MASK[enums::Num_PrivilegeModeSet] = {
 const RegVal FFLAGS_MASK = (1 << FRM_OFFSET) - 1;
 const RegVal FRM_MASK = 0x7;
 
+// DASICS CSR masks.
+// FReason bits [2:0] are readable and writable; bits [63:3] read as zero.
+const RegVal DASICS_FREASON_MASK = 0x7;
+
 const RegVal CAUSE_INTERRUPT_MASKS[enums::Num_RiscvType] = {
     [RV32] = (1ULL << 31),
     [RV64] = (1ULL << 63),
@@ -1643,6 +1668,7 @@ const RegVal DELEGABLE_INTS_MASK = SSI_MASK | STI_MASK | SEI_MASK |
 // H-extension
 const RegVal HS_INTERRUPTS = SGEI_MASK | VSSI_MASK | VSTI_MASK | VSEI_MASK;
 
+// clang-format off
 const std::unordered_map<int, RegVal>
 CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
     [RV32] = {
@@ -1698,6 +1724,9 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
             {CSR_MISA, MISA_MASKS[RV64]},
             {CSR_MIE, MI_MASK[enums::M]},
             {CSR_MIP, MI_MASK[enums::M]},
+
+            // DASICS CSR masks.
+            {CSR_DASICS_FREASON, DASICS_FREASON_MASK},
         },
         [enums::MU] = {
             {CSR_FFLAGS, FFLAGS_MASK},
@@ -1710,6 +1739,9 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
             {CSR_MISA, MISA_MASKS[RV64]},
             {CSR_MIE, MI_MASK[enums::MU]},
             {CSR_MIP, MI_MASK[enums::MU]},
+
+            // DASICS CSR masks.
+            {CSR_DASICS_FREASON, DASICS_FREASON_MASK},
         },
         [enums::MSU] = {
             {CSR_FFLAGS, FFLAGS_MASK},
@@ -1722,6 +1754,9 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
             {CSR_MISA, MISA_MASKS[RV64]},
             {CSR_MIE, MI_MASK[enums::MSU]},
             {CSR_MIP, MI_MASK[enums::MSU]},
+
+            // DASICS CSR masks.
+            {CSR_DASICS_FREASON, DASICS_FREASON_MASK},
         },
         [enums::MHSU] = {
             {CSR_FFLAGS, FFLAGS_MASK},
@@ -1741,6 +1776,9 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
             {CSR_MISA, MISA_MASKS[RV64]},
             {CSR_MIE, MI_MASK[enums::MHSU]},
             {CSR_MIP, MI_MASK[enums::MHSU]},
+
+            // DASICS CSR masks.
+            {CSR_DASICS_FREASON, DASICS_FREASON_MASK},
         },
     },
 };
@@ -1765,7 +1803,6 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
 // If the mask is present it is used, otherwise the write mask
 // that should be used is the "visible bits" mask define above.
 
-// clang-format off
 const std::unordered_map<int, RegVal>
 CSRWriteMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
     [RV32] = {

@@ -28,6 +28,9 @@
 
     /* Use the numeric address without a custom assembler CSR name. */
     .equ CSR_DASICS_MAIN_CALL_ENTRY, 0x8B0
+    .equ CSR_DASICS_RETURN_PC, 0x8B1
+    .equ CSR_DASICS_ACTIVE_ZONE_RETURN_PC, 0x8B2
+    .equ CSR_DASICS_FREASON, 0x8B3
 
     /* No runtime initializes gp or provides a dynamic linker. */
     .option norelax
@@ -38,29 +41,179 @@ _start:
     la      t0, trap_handler
     csrw    mtvec, t0
 
-    /* Exit codes identify the first failed assertion; zero means success. */
-    li      a2, 1
-    csrr    t0, CSR_DASICS_MAIN_CALL_ENTRY
-    bnez    t0, exit_test
+    /* Leaf tests return zero on success or a failure code in a0. */
+    call    test_csr_initial_values
+    bnez    a0, .Lfinish_tests
+    call    test_main_call_entry
+    bnez    a0, .Lfinish_tests
+    call    test_return_pc
+    bnez    a0, .Lfinish_tests
+    call    test_active_zone_return_pc
+    bnez    a0, .Lfinish_tests
+    call    test_freason
+    bnez    a0, .Lfinish_tests
+    call    test_csr_independence
 
+.Lfinish_tests:
+    mv      a2, a0
+    j       exit_test
+
+test_csr_initial_values:
+    /* Check cold state before any test writes a DASICS CSR. */
+    li      a0, 1
+    csrr    t0, CSR_DASICS_MAIN_CALL_ENTRY
+    bnez    t0, .Linitial_values_done
+    li      a0, 6
+    csrr    t0, CSR_DASICS_RETURN_PC
+    bnez    t0, .Linitial_values_done
+    li      a0, 12
+    csrr    t0, CSR_DASICS_ACTIVE_ZONE_RETURN_PC
+    bnez    t0, .Linitial_values_done
+    li      a0, 17
+    csrr    t0, CSR_DASICS_FREASON
+    bnez    t0, .Linitial_values_done
+    li      a0, 0
+.Linitial_values_done:
+    ret
+
+test_main_call_entry:
     /* Include bit 63 and nonzero low bits to detect truncation or masking. */
-    li      a2, 2
+    li      a0, 2
     li      t0, 0xFEDCBA9876543217
     csrw    CSR_DASICS_MAIN_CALL_ENTRY, t0
     csrr    t1, CSR_DASICS_MAIN_CALL_ENTRY
-    bne     t1, t0, exit_test
+    bne     t1, t0, .Lmain_call_entry_done
 
-    li      a2, 3
+    li      a0, 3
     li      t2, 0x0123456789ABCDE3
     csrrw   t1, CSR_DASICS_MAIN_CALL_ENTRY, t2
-    bne     t1, t0, exit_test
+    bne     t1, t0, .Lmain_call_entry_done
 
-    li      a2, 4
+    li      a0, 4
     csrr    t1, CSR_DASICS_MAIN_CALL_ENTRY
-    bne     t1, t2, exit_test
+    bne     t1, t2, .Lmain_call_entry_done
+    li      a0, 0
+.Lmain_call_entry_done:
+    ret
 
-    li      a2, 0
-    j       exit_test
+test_return_pc:
+    li      a0, 7
+    li      t0, 0xFEDCBA9876543217
+    csrw    CSR_DASICS_RETURN_PC, t0
+    csrr    t1, CSR_DASICS_RETURN_PC
+    bne     t1, t0, .Lreturn_pc_done
+
+    li      a0, 9
+    li      t2, 0x0123456789ABCDE3
+    csrrw   t1, CSR_DASICS_RETURN_PC, t2
+    bne     t1, t0, .Lreturn_pc_done
+
+    li      a0, 10
+    csrr    t1, CSR_DASICS_RETURN_PC
+    bne     t1, t2, .Lreturn_pc_done
+    li      a0, 0
+.Lreturn_pc_done:
+    ret
+
+test_active_zone_return_pc:
+    li      a0, 13
+    li      t0, 0xFEDCBA9876543217
+    csrw    CSR_DASICS_ACTIVE_ZONE_RETURN_PC, t0
+    csrr    t1, CSR_DASICS_ACTIVE_ZONE_RETURN_PC
+    bne     t1, t0, .Lactive_zone_return_pc_done
+
+    li      a0, 14
+    li      t2, 0x0123456789ABCDE3
+    csrrw   t1, CSR_DASICS_ACTIVE_ZONE_RETURN_PC, t2
+    bne     t1, t0, .Lactive_zone_return_pc_done
+
+    li      a0, 15
+    csrr    t1, CSR_DASICS_ACTIVE_ZONE_RETURN_PC
+    bne     t1, t2, .Lactive_zone_return_pc_done
+    li      a0, 0
+.Lactive_zone_return_pc_done:
+    ret
+
+test_freason:
+    /* All bits set must read back as the three-bit reason mask. */
+    li      a0, 18
+    li      t0, -1
+    csrw    CSR_DASICS_FREASON, t0
+    li      t2, 7
+    csrr    t1, CSR_DASICS_FREASON
+    bne     t1, t2, .Lfreason_done
+
+    /* CSR operations return the old reason and mask upper operand bits. */
+    li      a0, 19
+    li      t0, -6
+    csrrw   t1, CSR_DASICS_FREASON, t0
+    bne     t1, t2, .Lfreason_done
+
+    li      a0, 20
+    li      t2, 2
+    csrr    t1, CSR_DASICS_FREASON
+    bne     t1, t2, .Lfreason_done
+
+    li      a0, 21
+    li      t0, -7
+    csrrs   t1, CSR_DASICS_FREASON, t0
+    bne     t1, t2, .Lfreason_done
+
+    li      a0, 22
+    li      t2, 3
+    csrr    t1, CSR_DASICS_FREASON
+    bne     t1, t2, .Lfreason_done
+
+    li      a0, 23
+    csrrc   t1, CSR_DASICS_FREASON, t0
+    bne     t1, t2, .Lfreason_done
+
+    li      a0, 24
+    li      t2, 2
+    csrr    t1, CSR_DASICS_FREASON
+    bne     t1, t2, .Lfreason_done
+
+    li      a0, 25
+    csrw    CSR_DASICS_FREASON, zero
+    csrr    t1, CSR_DASICS_FREASON
+    bnez    t1, .Lfreason_done
+
+    li      a0, 26
+    li      t0, -8
+    csrw    CSR_DASICS_FREASON, t0
+    csrr    t1, CSR_DASICS_FREASON
+    bnez    t1, .Lfreason_done
+    li      a0, 0
+.Lfreason_done:
+    ret
+
+test_csr_independence:
+    /* Prepare distinct values without relying on earlier test results. */
+    li      t0, 0x0123456789ABCDE3
+    csrw    CSR_DASICS_MAIN_CALL_ENTRY, t0
+    li      t1, 0xFEDCBA9876543217
+    csrw    CSR_DASICS_RETURN_PC, t1
+    li      t2, 0x89ABCDEF01234565
+    csrw    CSR_DASICS_ACTIVE_ZONE_RETURN_PC, t2
+    /* Distinct low bits detect aliasing with the masked FReason register. */
+    li      t3, 2
+    csrw    CSR_DASICS_FREASON, t3
+
+    li      a0, 8
+    csrr    t4, CSR_DASICS_MAIN_CALL_ENTRY
+    bne     t4, t0, .Lindependence_done
+    li      a0, 11
+    csrr    t4, CSR_DASICS_RETURN_PC
+    bne     t4, t1, .Lindependence_done
+    li      a0, 16
+    csrr    t4, CSR_DASICS_ACTIVE_ZONE_RETURN_PC
+    bne     t4, t2, .Lindependence_done
+    li      a0, 27
+    csrr    t4, CSR_DASICS_FREASON
+    bne     t4, t3, .Lindependence_done
+    li      a0, 0
+.Lindependence_done:
+    ret
 
     /* Direct-mode mtvec requires four-byte alignment. */
     .balign 4
