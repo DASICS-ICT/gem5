@@ -10,6 +10,10 @@
 | `DASICS_RETURN_PC` | `0x8B1` |
 | `DASICS_ACTIVE_ZONE_RETURN_PC` | `0x8B2` |
 | `DASICS_FREASON` | `0x8B3` |
+| `DASICS_U_MAIN_BOUND_LO` | `0x9E2` |
+| `DASICS_U_MAIN_BOUND_HI` | `0x9E3` |
+| `DASICS_S_MAIN_BOUND_LO` | `0xBC2` |
+| `DASICS_S_MAIN_BOUND_HI` | `0xBC3` |
 
 | 项目 | 值 |
 | --- | --- |
@@ -23,21 +27,26 @@
 ## 检查项
 
 `_start` 初始化 `mtvec` 后，依次调用 `test_csr_initial_values`、
-`test_main_call_entry`、`test_return_pc`、`test_active_zone_return_pc`、`test_freason`、`test_csr_independence`，遇非零返回值立即退出。
+`test_main_call_entry`、`test_return_pc`、`test_active_zone_return_pc`、`test_freason`、
+`test_u_main_bound_lo`、`test_u_main_bound_hi`、`test_s_main_bound_lo`、
+`test_s_main_bound_hi`、`test_csr_independence`，遇非零返回值立即退出。
 各测试均为叶函数，通过 `a0` 返回 `0` 或唯一错误码，不使用栈或嵌套调用。
 
 前三个全 64 位 CSR 的测试函数各自准备 `P = 0xFEDCBA9876543217` 和 `Q = 0x0123456789ABCDE3`。
 FReason 单独验证低 3 位读写、高位读零及交换、置位和清位。
 独立性检查另用 `R = 0x89ABCDEF01234565`，并将 FReason 设为 `2`。
+MainBound 交换检查使用对齐值 `PA = 0xFEDCBA9876543210`、`QA = 0x0123456789ABCDE0`。
+MainBound 测试在 M 态验证存储与对齐，不覆盖 S/U 权限或 PC 可信检查。
 
 | 用例 | 操作 | 预期结果 |
 | --- | --- | --- |
-| 冷初始化 | `test_csr_initial_values` 在任何 DASICS CSR 写入前读取四个初值 | 各自返回 `0` |
+| 冷初始化 | `test_csr_initial_values` 在任何 DASICS CSR 写入前读取八个初值 | 各自返回 `0` |
 | 64 位读写 | 前三个 CSR 分别写入 P 后读回 | 各自完整返回 P，包含高 32 位、bit 63 和低 3 位 |
 | 读写交换 | 前三个 CSR 分别使用 `CSRRW` 写入 Q，随后读取 | 各自返回旧值 P，后续读取返回 Q |
 | FReason 掩码与交换 | 写入 `-1` 后读回，再用 `CSRRW` 写入 `-6`；另检查写入 `0` 和 `-8` | 初次读回 `7`，交换返回旧值 `7`、新值为 `2`；写入 `0` 和 `-8` 均读回 `0` |
 | FReason 置位与清位 | 值为 `2` 时以 `-7` 为源执行 `CSRRS`，随后用同一源执行 `CSRRC` | 置位返回旧值 `2`、新值 `3`；清位返回旧值 `3`、新值 `2` |
-| 存储独立性 | `test_csr_independence` 自行写入 MainCallEntry=Q、ReturnPC=P、ActiveZoneReturnPC=R、FReason=2，再依次读取四者 | 分别为 Q、P、R、2，低 3 位也互异（3、7、5、2），不依赖其他函数状态 |
+| MainBound 读写 | 四个函数各自验证对齐、非对齐、高位保留、交换及仅低位写入 | 低 3 位读零，写入向下对齐；交换返回对齐后的旧值，具体输入与错误码见下表 |
+| 存储独立性 | `test_csr_independence` 自行准备原 Q/P/R/2，另将四个 MainBound 依次设为 `0x1000`、`0x2000`、`0x3000`、`0x4000`，完成全部写入后再读取八者 | 各自匹配预期，不依赖其他函数状态；原 Q/P/R/2 的低 3 位仍互异（3、7、5、2） |
 
 ## 测试退出码
 
@@ -76,6 +85,19 @@ FReason 单独验证低 3 位读写、高位读零及交换、置位和清位。
 | `27` | 独立性检查中，FReason 不等于 `2` | 红色 `[FAIL]` |
 | `124` | 宿主运行超时 | 红色 `[FAIL]` |
 
+四个 MainBound 的失败退出码如下，均显示红色 `[FAIL]`；原退出码 1–27 保持不变。
+
+| 检查 | UMainLo | UMainHi | SMainLo | SMainHi |
+| --- | --- | --- | --- | --- |
+| 初值（读 `0`） | `28` | `29` | `30` | `31` |
+| 对齐写入（`0x1000` → `0x1000`） | `32` | `38` | `44` | `50` |
+| 非对齐写入（`0x123F` → `0x1238`） | `33` | `39` | `45` | `51` |
+| 高位保留（P → PA） | `34` | `40` | `46` | `52` |
+| 交换旧值（写 Q，返回 PA） | `35` | `41` | `47` | `53` |
+| 交换新值（读 QA） | `36` | `42` | `48` | `54` |
+| 仅低位（写 `7`，读 `0`） | `37` | `43` | `49` | `55` |
+| 独立性（分别读 `0x1000/0x2000/0x3000/0x4000`） | `56` | `57` | `58` | `59` |
+
 ## 源码
 
 - [汇编程序](src/riscv-dasics-csr.S)
@@ -93,4 +115,4 @@ FReason 单独验证低 3 位读写、高位读零及交换、置位和清位。
 | 退出码 | `0` |
 | 结果 | 通过 |
 
-当前完整测试已由用户完成验证。
+新增 MainBound 测试已通过交叉编译检查；用户确认已完成八 CSR 版本的构建与运行验证。

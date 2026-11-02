@@ -10,6 +10,10 @@
 | `DASICS_RETURN_PC` | `0x8B1` |
 | `DASICS_ACTIVE_ZONE_RETURN_PC` | `0x8B2` |
 | `DASICS_FREASON` | `0x8B3` |
+| `DASICS_U_MAIN_BOUND_LO` | `0x9E2` |
+| `DASICS_U_MAIN_BOUND_HI` | `0x9E3` |
+| `DASICS_S_MAIN_BOUND_LO` | `0xBC2` |
+| `DASICS_S_MAIN_BOUND_HI` | `0xBC3` |
 
 | Field | Value |
 | --- | --- |
@@ -23,24 +27,31 @@
 
 After initializing `mtvec`, `_start` calls `test_csr_initial_values`,
 `test_main_call_entry`, `test_return_pc`, `test_active_zone_return_pc`,
-`test_freason`, and `test_csr_independence` in order, exiting immediately on
-a nonzero return value. Each test is a leaf function that returns `0` or a
-unique error code in `a0`, without a stack or nested calls.
+`test_freason`, `test_u_main_bound_lo`, `test_u_main_bound_hi`,
+`test_s_main_bound_lo`, `test_s_main_bound_hi`, and `test_csr_independence`
+in order, exiting immediately on a nonzero return value. Each test is a
+leaf function that returns `0` or a unique error code in `a0`, without a
+stack or nested calls.
 
 The first three, full-width CSR test functions each prepare
 `P = 0xFEDCBA9876543217` and `Q = 0x0123456789ABCDE3` independently.
 FReason separately checks low-three-bit read/write, zero reads of high bits,
 exchange, bit setting, and bit clearing. The independence check also uses
 `R = 0x89ABCDEF01234565` and sets FReason to `2`.
+MainBound exchange checks use aligned values `PA = 0xFEDCBA9876543210`
+and `QA = 0x0123456789ABCDE0`. This extension checks MainBound storage and
+alignment in M-mode; S/U permissions and PC trust checks are outside its
+scope.
 
 | Check | Expected result |
 | --- | --- |
-| Cold initialization | `test_csr_initial_values` reads all four initial values before any DASICS CSR write; each returns `0`. |
+| Cold initialization | `test_csr_initial_values` reads all eight initial values before any DASICS CSR write; each returns `0`. |
 | Full 64-bit readback | Writing P to each of the first three CSRs reads back P unchanged, including the high 32 bits, bit 63, and low three bits. |
 | CSRRW | Writing Q to each of the first three CSRs returns the old value P; a subsequent read returns Q. |
 | FReason masking and exchange | After writing `-1`, readback is `7`; exchanging it for `-6` returns old value `7` and leaves `2`. Writes of `0` and `-8` both read back `0`. |
 | FReason bit setting and clearing | Starting at `2`, CSRRS with source `-7` returns `2` and leaves `3`; CSRRC with the same source returns `3` and leaves `2`. |
-| Independent storage | `test_csr_independence` writes MainCallEntry=Q, ReturnPC=P, ActiveZoneReturnPC=R, and FReason=2 itself, then reads all four in order. They return Q, P, R, and 2, with distinct low-three-bit values (3, 7, 5, 2), independently of other test functions' state. |
+| MainBound read/write | Each of the four functions checks aligned and unaligned writes, high-bit preservation, exchange, and low-bits-only input. Low three bits read as zero, writes round down, and exchange returns the aligned old value; inputs and failure codes appear below. |
+| Independent storage | `test_csr_independence` prepares the original Q/P/R/2 values and writes `0x1000`, `0x2000`, `0x3000`, and `0x4000` to the four MainBounds, then reads all eight after all writes. Each matches its expected value without relying on other functions' state; the original Q/P/R/2 low-three-bit values remain distinct (3, 7, 5, 2). |
 
 ## Test exit codes
 
@@ -82,6 +93,20 @@ storage. Code 5 remains reserved for unexpected exceptions.
 | `27` | FReason was not `2` during the independence check. | Red `[FAIL]` |
 | `124` | The host timeout expired. | Red `[FAIL]` |
 
+The MainBound failure codes below all display red `[FAIL]`; original codes
+1–27 retain their meanings.
+
+| Check | UMainLo | UMainHi | SMainLo | SMainHi |
+| --- | --- | --- | --- | --- |
+| Initial value (read `0`) | `28` | `29` | `30` | `31` |
+| Aligned write (`0x1000` → `0x1000`) | `32` | `38` | `44` | `50` |
+| Unaligned write (`0x123F` → `0x1238`) | `33` | `39` | `45` | `51` |
+| High-bit preservation (P → PA) | `34` | `40` | `46` | `52` |
+| Exchange old value (write Q, return PA) | `35` | `41` | `47` | `53` |
+| Exchange new value (read QA) | `36` | `42` | `48` | `54` |
+| Low bits only (write `7`, read `0`) | `37` | `43` | `49` | `55` |
+| Independent storage (read `0x1000/0x2000/0x3000/0x4000` respectively) | `56` | `57` | `58` | `59` |
+
 ## Source links
 
 - [Assembly source](src/riscv-dasics-csr.S)
@@ -100,4 +125,5 @@ covers only the original MainCallEntry checks.
 | Exit code | `0` |
 | Result | Passed |
 
-The user confirmed validation of the current full test.
+The new MainBound tests passed cross-compilation checks. The user confirmed
+the build and runtime validation of the eight-CSR version.

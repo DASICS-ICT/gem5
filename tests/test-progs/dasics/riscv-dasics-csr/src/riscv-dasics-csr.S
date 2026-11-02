@@ -31,6 +31,10 @@
     .equ CSR_DASICS_RETURN_PC, 0x8B1
     .equ CSR_DASICS_ACTIVE_ZONE_RETURN_PC, 0x8B2
     .equ CSR_DASICS_FREASON, 0x8B3
+    .equ CSR_DASICS_U_MAIN_BOUND_LO, 0x9E2
+    .equ CSR_DASICS_U_MAIN_BOUND_HI, 0x9E3
+    .equ CSR_DASICS_S_MAIN_BOUND_LO, 0xBC2
+    .equ CSR_DASICS_S_MAIN_BOUND_HI, 0xBC3
 
     /* No runtime initializes gp or provides a dynamic linker. */
     .option norelax
@@ -52,6 +56,14 @@ _start:
     bnez    a0, .Lfinish_tests
     call    test_freason
     bnez    a0, .Lfinish_tests
+    call    test_u_main_bound_lo
+    bnez    a0, .Lfinish_tests
+    call    test_u_main_bound_hi
+    bnez    a0, .Lfinish_tests
+    call    test_s_main_bound_lo
+    bnez    a0, .Lfinish_tests
+    call    test_s_main_bound_hi
+    bnez    a0, .Lfinish_tests
     call    test_csr_independence
 
 .Lfinish_tests:
@@ -71,6 +83,18 @@ test_csr_initial_values:
     bnez    t0, .Linitial_values_done
     li      a0, 17
     csrr    t0, CSR_DASICS_FREASON
+    bnez    t0, .Linitial_values_done
+    li      a0, 28
+    csrr    t0, CSR_DASICS_U_MAIN_BOUND_LO
+    bnez    t0, .Linitial_values_done
+    li      a0, 29
+    csrr    t0, CSR_DASICS_U_MAIN_BOUND_HI
+    bnez    t0, .Linitial_values_done
+    li      a0, 30
+    csrr    t0, CSR_DASICS_S_MAIN_BOUND_LO
+    bnez    t0, .Linitial_values_done
+    li      a0, 31
+    csrr    t0, CSR_DASICS_S_MAIN_BOUND_HI
     bnez    t0, .Linitial_values_done
     li      a0, 0
 .Linitial_values_done:
@@ -187,6 +211,167 @@ test_freason:
 .Lfreason_done:
     ret
 
+    /* MainBound tests preserve high bits and discard low alignment bits. */
+test_u_main_bound_lo:
+    li      a0, 32
+    li      t0, 0x1000
+    csrw    CSR_DASICS_U_MAIN_BOUND_LO, t0
+    csrr    t1, CSR_DASICS_U_MAIN_BOUND_LO
+    bne     t1, t0, .Lu_main_bound_lo_done
+
+    li      a0, 33
+    li      t0, 0x123F
+    csrw    CSR_DASICS_U_MAIN_BOUND_LO, t0
+    li      t2, 0x1238
+    csrr    t1, CSR_DASICS_U_MAIN_BOUND_LO
+    bne     t1, t2, .Lu_main_bound_lo_done
+
+    li      a0, 34
+    li      t0, 0xFEDCBA9876543217
+    csrw    CSR_DASICS_U_MAIN_BOUND_LO, t0
+    li      t2, 0xFEDCBA9876543210
+    csrr    t1, CSR_DASICS_U_MAIN_BOUND_LO
+    bne     t1, t2, .Lu_main_bound_lo_done
+
+    li      a0, 35
+    li      t0, 0x0123456789ABCDE3
+    csrrw   t1, CSR_DASICS_U_MAIN_BOUND_LO, t0
+    bne     t1, t2, .Lu_main_bound_lo_done
+
+    li      a0, 36
+    li      t2, 0x0123456789ABCDE0
+    csrr    t1, CSR_DASICS_U_MAIN_BOUND_LO
+    bne     t1, t2, .Lu_main_bound_lo_done
+
+    li      a0, 37
+    li      t0, 7
+    csrw    CSR_DASICS_U_MAIN_BOUND_LO, t0
+    csrr    t1, CSR_DASICS_U_MAIN_BOUND_LO
+    bnez    t1, .Lu_main_bound_lo_done
+    li      a0, 0
+.Lu_main_bound_lo_done:
+    ret
+
+test_u_main_bound_hi:
+    li      a0, 38
+    li      t0, 0x1000
+    csrw    CSR_DASICS_U_MAIN_BOUND_HI, t0
+    csrr    t1, CSR_DASICS_U_MAIN_BOUND_HI
+    bne     t1, t0, .Lu_main_bound_hi_done
+
+    li      a0, 39
+    li      t0, 0x123F
+    csrw    CSR_DASICS_U_MAIN_BOUND_HI, t0
+    li      t2, 0x1238
+    csrr    t1, CSR_DASICS_U_MAIN_BOUND_HI
+    bne     t1, t2, .Lu_main_bound_hi_done
+
+    li      a0, 40
+    li      t0, 0xFEDCBA9876543217
+    csrw    CSR_DASICS_U_MAIN_BOUND_HI, t0
+    li      t2, 0xFEDCBA9876543210
+    csrr    t1, CSR_DASICS_U_MAIN_BOUND_HI
+    bne     t1, t2, .Lu_main_bound_hi_done
+
+    li      a0, 41
+    li      t0, 0x0123456789ABCDE3
+    csrrw   t1, CSR_DASICS_U_MAIN_BOUND_HI, t0
+    bne     t1, t2, .Lu_main_bound_hi_done
+
+    li      a0, 42
+    li      t2, 0x0123456789ABCDE0
+    csrr    t1, CSR_DASICS_U_MAIN_BOUND_HI
+    bne     t1, t2, .Lu_main_bound_hi_done
+
+    li      a0, 43
+    li      t0, 7
+    csrw    CSR_DASICS_U_MAIN_BOUND_HI, t0
+    csrr    t1, CSR_DASICS_U_MAIN_BOUND_HI
+    bnez    t1, .Lu_main_bound_hi_done
+    li      a0, 0
+.Lu_main_bound_hi_done:
+    ret
+
+test_s_main_bound_lo:
+    li      a0, 44
+    li      t0, 0x1000
+    csrw    CSR_DASICS_S_MAIN_BOUND_LO, t0
+    csrr    t1, CSR_DASICS_S_MAIN_BOUND_LO
+    bne     t1, t0, .Ls_main_bound_lo_done
+
+    li      a0, 45
+    li      t0, 0x123F
+    csrw    CSR_DASICS_S_MAIN_BOUND_LO, t0
+    li      t2, 0x1238
+    csrr    t1, CSR_DASICS_S_MAIN_BOUND_LO
+    bne     t1, t2, .Ls_main_bound_lo_done
+
+    li      a0, 46
+    li      t0, 0xFEDCBA9876543217
+    csrw    CSR_DASICS_S_MAIN_BOUND_LO, t0
+    li      t2, 0xFEDCBA9876543210
+    csrr    t1, CSR_DASICS_S_MAIN_BOUND_LO
+    bne     t1, t2, .Ls_main_bound_lo_done
+
+    li      a0, 47
+    li      t0, 0x0123456789ABCDE3
+    csrrw   t1, CSR_DASICS_S_MAIN_BOUND_LO, t0
+    bne     t1, t2, .Ls_main_bound_lo_done
+
+    li      a0, 48
+    li      t2, 0x0123456789ABCDE0
+    csrr    t1, CSR_DASICS_S_MAIN_BOUND_LO
+    bne     t1, t2, .Ls_main_bound_lo_done
+
+    li      a0, 49
+    li      t0, 7
+    csrw    CSR_DASICS_S_MAIN_BOUND_LO, t0
+    csrr    t1, CSR_DASICS_S_MAIN_BOUND_LO
+    bnez    t1, .Ls_main_bound_lo_done
+    li      a0, 0
+.Ls_main_bound_lo_done:
+    ret
+
+test_s_main_bound_hi:
+    li      a0, 50
+    li      t0, 0x1000
+    csrw    CSR_DASICS_S_MAIN_BOUND_HI, t0
+    csrr    t1, CSR_DASICS_S_MAIN_BOUND_HI
+    bne     t1, t0, .Ls_main_bound_hi_done
+
+    li      a0, 51
+    li      t0, 0x123F
+    csrw    CSR_DASICS_S_MAIN_BOUND_HI, t0
+    li      t2, 0x1238
+    csrr    t1, CSR_DASICS_S_MAIN_BOUND_HI
+    bne     t1, t2, .Ls_main_bound_hi_done
+
+    li      a0, 52
+    li      t0, 0xFEDCBA9876543217
+    csrw    CSR_DASICS_S_MAIN_BOUND_HI, t0
+    li      t2, 0xFEDCBA9876543210
+    csrr    t1, CSR_DASICS_S_MAIN_BOUND_HI
+    bne     t1, t2, .Ls_main_bound_hi_done
+
+    li      a0, 53
+    li      t0, 0x0123456789ABCDE3
+    csrrw   t1, CSR_DASICS_S_MAIN_BOUND_HI, t0
+    bne     t1, t2, .Ls_main_bound_hi_done
+
+    li      a0, 54
+    li      t2, 0x0123456789ABCDE0
+    csrr    t1, CSR_DASICS_S_MAIN_BOUND_HI
+    bne     t1, t2, .Ls_main_bound_hi_done
+
+    li      a0, 55
+    li      t0, 7
+    csrw    CSR_DASICS_S_MAIN_BOUND_HI, t0
+    csrr    t1, CSR_DASICS_S_MAIN_BOUND_HI
+    bnez    t1, .Ls_main_bound_hi_done
+    li      a0, 0
+.Ls_main_bound_hi_done:
+    ret
+
 test_csr_independence:
     /* Prepare distinct values without relying on earlier test results. */
     li      t0, 0x0123456789ABCDE3
@@ -198,6 +383,14 @@ test_csr_independence:
     /* Distinct low bits detect aliasing with the masked FReason register. */
     li      t3, 2
     csrw    CSR_DASICS_FREASON, t3
+    li      t5, 0x1000
+    csrw    CSR_DASICS_U_MAIN_BOUND_LO, t5
+    li      t5, 0x2000
+    csrw    CSR_DASICS_U_MAIN_BOUND_HI, t5
+    li      t5, 0x3000
+    csrw    CSR_DASICS_S_MAIN_BOUND_LO, t5
+    li      t5, 0x4000
+    csrw    CSR_DASICS_S_MAIN_BOUND_HI, t5
 
     li      a0, 8
     csrr    t4, CSR_DASICS_MAIN_CALL_ENTRY
@@ -211,6 +404,24 @@ test_csr_independence:
     li      a0, 27
     csrr    t4, CSR_DASICS_FREASON
     bne     t4, t3, .Lindependence_done
+
+    /* Reload bound expectations to keep the test free of stack storage. */
+    li      a0, 56
+    li      t5, 0x1000
+    csrr    t4, CSR_DASICS_U_MAIN_BOUND_LO
+    bne     t4, t5, .Lindependence_done
+    li      a0, 57
+    li      t5, 0x2000
+    csrr    t4, CSR_DASICS_U_MAIN_BOUND_HI
+    bne     t4, t5, .Lindependence_done
+    li      a0, 58
+    li      t5, 0x3000
+    csrr    t4, CSR_DASICS_S_MAIN_BOUND_LO
+    bne     t4, t5, .Lindependence_done
+    li      a0, 59
+    li      t5, 0x4000
+    csrr    t4, CSR_DASICS_S_MAIN_BOUND_HI
+    bne     t4, t5, .Lindependence_done
     li      a0, 0
 .Lindependence_done:
     ret
