@@ -5,6 +5,7 @@
  * Copyright (c) 2020 Barkhausen Institut
  * Copyright (c) 2021 StreamComputing Corp
  * Copyright (c) 2025 University of Athens
+ * Copyright (c) 2026 zengsy99
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -1469,6 +1470,23 @@ BitUnion64(JVT)
     Bitfield<63,6> base;
     Bitfield<5,0> mode;
 EndBitUnion(JVT)
+
+// DASICS CSR bitfields.
+// Named fields of the shared RV64 UMainCfg/SMainCfg value.
+BitUnion64(DasicsMainCfg)
+    Bitfield<0> sena; // Enable S-domain protection.
+    Bitfield<1> uena; // Enable U-domain protection.
+
+    // A set check-control bit disables the corresponding check.
+    Bitfield<2> cuet; // U-domain ECALL.
+    Bitfield<3> cust; // U-domain store.
+    Bitfield<4> cult; // U-domain load.
+    Bitfield<5> cuft; // U-domain control flow.
+    Bitfield<6> cset; // S-domain ECALL.
+    Bitfield<7> csst; // S-domain store.
+    Bitfield<8> cslt; // S-domain load.
+    Bitfield<9> csft; // S-domain control flow.
+EndBitUnion(DasicsMainCfg)
 
 const off_t MXL_OFFSETS[enums::Num_RiscvType] = {
     [RV32] = (sizeof(uint32_t) * 8 - 2),
