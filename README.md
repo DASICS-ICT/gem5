@@ -10,6 +10,11 @@ system software changes, and compile-time and run-time system optimizations.
 
 The main website can be found at <http://www.gem5.org>.
 
+## DASICS
+
+[中文：编译、测试与清理](docs/dasics.md) |
+[English: build, test, and cleanup](docs/dasics.en.md)
+
 ## Testing and code coverage status
 
 **Note**: These regard tests run on the develop branch of gem5:
