@@ -14,6 +14,11 @@
 | `DASICS_U_MAIN_BOUND_HI` | `0x9E3` |
 | `DASICS_S_MAIN_BOUND_LO` | `0xBC2` |
 | `DASICS_S_MAIN_BOUND_HI` | `0xBC3` |
+| `DASICS_U_MAIN_CFG` | `0x9E1` |
+| `DASICS_S_MAIN_CFG` | `0xBC0` |
+
+共 10 个 CSR 地址、9 份 DASICS 状态。UMainCfg/SMainCfg 共享 MainCfg，
+读写掩码分别为 `0x3E`、`0x3FF`；U 视图写入保留 S 专属字段 `0x3C1`。
 
 | 项目 | 值 |
 | --- | --- |
@@ -29,24 +34,28 @@
 `_start` 初始化 `mtvec` 后，依次调用 `test_csr_initial_values`、
 `test_main_call_entry`、`test_return_pc`、`test_active_zone_return_pc`、`test_freason`、
 `test_u_main_bound_lo`、`test_u_main_bound_hi`、`test_s_main_bound_lo`、
-`test_s_main_bound_hi`、`test_csr_independence`，遇非零返回值立即退出。
+`test_s_main_bound_hi`、`test_u_main_cfg`、`test_s_main_cfg`、
+`test_csr_independence`，遇非零返回值立即退出。
 各测试均为叶函数，通过 `a0` 返回 `0` 或唯一错误码，不使用栈或嵌套调用。
 
 前三个全 64 位 CSR 的测试函数各自准备 `P = 0xFEDCBA9876543217` 和 `Q = 0x0123456789ABCDE3`。
 FReason 单独验证低 3 位读写、高位读零及交换、置位和清位。
 独立性检查另用 `R = 0x89ABCDEF01234565`，并将 FReason 设为 `2`。
 MainBound 交换检查使用对齐值 `PA = 0xFEDCBA9876543210`、`QA = 0x0123456789ABCDE0`。
-MainBound 测试在 M 态验证存储与对齐，不覆盖 S/U 权限或 PC 可信检查。
+MainBound 和 MainCfg 均在 M 态测试，分别验证存储与对齐、共享视图与掩码。
+S/U 权限、保护使能的实际效果及 PC 可信检查不在本测试覆盖范围。
 
 | 用例 | 操作 | 预期结果 |
 | --- | --- | --- |
-| 冷初始化 | `test_csr_initial_values` 在任何 DASICS CSR 写入前读取八个初值 | 各自返回 `0` |
+| 冷初始化 | `test_csr_initial_values` 在任何 DASICS CSR 写入前读取十个地址的初值 | 各自返回 `0` |
 | 64 位读写 | 前三个 CSR 分别写入 P 后读回 | 各自完整返回 P，包含高 32 位、bit 63 和低 3 位 |
 | 读写交换 | 前三个 CSR 分别使用 `CSRRW` 写入 Q，随后读取 | 各自返回旧值 P，后续读取返回 Q |
 | FReason 掩码与交换 | 写入 `-1` 后读回，再用 `CSRRW` 写入 `-6`；另检查写入 `0` 和 `-8` | 初次读回 `7`，交换返回旧值 `7`、新值为 `2`；写入 `0` 和 `-8` 均读回 `0` |
 | FReason 置位与清位 | 值为 `2` 时以 `-7` 为源执行 `CSRRS`，随后用同一源执行 `CSRRC` | 置位返回旧值 `2`、新值 `3`；清位返回旧值 `3`、新值 `2` |
 | MainBound 读写 | 四个函数各自验证对齐、非对齐、高位保留、交换及仅低位写入 | 低 3 位读零，写入向下对齐；交换返回对齐后的旧值，具体输入与错误码见下表 |
-| 存储独立性 | `test_csr_independence` 自行准备原 Q/P/R/2，另将四个 MainBound 依次设为 `0x1000`、`0x2000`、`0x3000`、`0x4000`，完成全部写入后再读取八者 | 各自匹配预期，不依赖其他函数状态；原 Q/P/R/2 的低 3 位仍互异（3、7、5、2） |
+| UMainCfg 联动 | `test_u_main_cfg` 自行准备 S 视图初态，再经 U 视图读写、交换和置清位 | U 读写仅影响 `0x3E`，S 专属字段保持；具体值与错误码见下表 |
+| SMainCfg 联动 | `test_s_main_cfg` 自行准备共享初态，再经 S 视图读写、交换和置清位 | S 读写影响 `0x3FF`，U 读值始终为共享状态的 `0x3E` 视图 |
+| 存储独立性 | `test_csr_independence` 准备原 Q/P/R/2 和四个 MainBound 的 `0x1000/0x2000/0x3000/0x4000`，再写 S=`0x155`、U=`0x2A`；完成全部写入后先核对旧八个 CSR，再读 S/U | 旧八个可见值保持，S=`0x16B`、U=`0x2A`；MainCfg 按一份共享状态检查，不依赖其他函数状态 |
 
 ## 测试退出码
 
@@ -98,6 +107,25 @@ MainBound 测试在 M 态验证存储与对齐，不覆盖 S/U 权限或 PC 可�
 | 仅低位（写 `7`，读 `0`） | `37` | `43` | `49` | `55` |
 | 独立性（分别读 `0x1000/0x2000/0x3000/0x4000`） | `56` | `57` | `58` | `59` |
 
+MainCfg 的失败码及预期值如下，均显示红色 `[FAIL]`；原退出码 1–59 保持不变。
+`旧值` 指 CSR 指令返回值，U/S 指读取的视图。
+
+| 检查组 | 操作 | 失败码：预期值 |
+| --- | --- | --- |
+| 冷初始化 | 分别读取 U/S 初值 | `60`：U=`0`；`61`：S=`0` |
+| U 视图 | 先写 S=`0x3FF`，读取 U | `62`：U=`0x3E` |
+| U 视图 | 写 U=`0` | `63`：U=`0`；`64`：S=`0x3C1` |
+| U 视图 | 写 U=`-1` | `65`：U=`0x3E`；`66`：S=`0x3FF` |
+| U 视图 | 重设 S=`0x155`，`CSRRW` 写 U=`0xAAAAAAAAAAAAAAAB` | `67`：旧值=`0x14`；`68`：U=`0x2A`；`69`：S=`0x16B` |
+| U 视图 | `CSRRS` 源为 `-1` | `70`：旧值=`0x2A`；`71`：U=`0x3E`；`72`：S=`0x17F` |
+| U 视图 | `CSRRC` 源为 `-1` | `73`：旧值=`0x3E`；`74`：U=`0`；`75`：S=`0x141` |
+| S 视图 | 写 S=`-1` | `76`：S=`0x3FF`；`77`：U=`0x3E` |
+| S 视图 | `CSRRW` 写 S=P | `78`：旧值=`0x3FF`；`79`：S=`0x217`；`80`：U=`0x16` |
+| S 视图 | `CSRRS` 源为 `-1` | `81`：旧值=`0x217`；`82`：S=`0x3FF`；`83`：U=`0x3E` |
+| S 视图 | `CSRRC` 源为 `-63`（低 10 位为 `0x3C1`） | `84`：旧值=`0x3FF`；`85`：S=`0x3E`；`86`：U=`0x3E` |
+| S 视图 | 写 S=`0` | `87`：S=`0`；`88`：U=`0` |
+| 存储独立性 | 自行写 S=`0x155`、U=`0x2A` 后，核对两视图 | `89`：S=`0x16B`；`90`：U=`0x2A` |
+
 ## 源码
 
 - [汇编程序](src/riscv-dasics-csr.S)
@@ -115,4 +143,6 @@ MainBound 测试在 M 态验证存储与对齐，不覆盖 S/U 权限或 PC 可�
 | 退出码 | `0` |
 | 结果 | 通过 |
 
-新增 MainBound 测试已通过交叉编译检查；用户确认已完成八 CSR 版本的构建与运行验证。
+MainBound 测试已通过交叉编译检查；用户确认已完成旧八 CSR 版本的构建与运行验证。
+新增 MainCfg 测试已通过交叉编译检查；用户确认已完成十地址版本的构建与运行验证。
+已核对运行配置与统计记录：`finalTick=885000`、`simInsts=665`。

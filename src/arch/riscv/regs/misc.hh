@@ -293,6 +293,9 @@ enum MiscRegIndex
     MISCREG_JVT,
 
     // Dasics（RV64） CSRs
+
+    // Per-hart configuration state shared by the UMainCfg and SMainCfg views.
+    MISCREG_DASICS_MAIN_CFG,
     // Per-hart trusted-call entry shared by S and U modes.
     MISCREG_DASICS_MAIN_CALL_ENTRY,
     // Per-hart trusted return address shared by S and U modes.
@@ -562,10 +565,14 @@ enum CSRIndex
 
     // Dasics（RV64） CSRs
 
+    // U-domain view of shared DASICS configuration; minimum privilege is S.
+    CSR_DASICS_U_MAIN_CFG = 0x9E1,
     // Lower bound of the U-mode trusted code region; minimum privilege is S.
     CSR_DASICS_U_MAIN_BOUND_LO = 0x9E2,
     // Exclusive upper bound of U-mode trusted code; minimum privilege is S.
     CSR_DASICS_U_MAIN_BOUND_HI = 0x9E3,
+    // S-domain view of shared DASICS configuration; minimum privilege is M.
+    CSR_DASICS_S_MAIN_CFG = 0xBC0,
     // Lower bound of the S-mode trusted code region; minimum privilege is M.
     CSR_DASICS_S_MAIN_BOUND_LO = 0xBC2,
     // Exclusive upper bound of S-mode trusted code; minimum privilege is M.
@@ -1249,12 +1256,18 @@ const std::unordered_map<int, CSRMetadata> CSRData = {
     {CSR_JVT, {"jvt", MISCREG_JVT, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
 
     // DASICS CSR -> MISCREG mapping.
+    {CSR_DASICS_U_MAIN_CFG,
+     {"dasics_u_main_cfg", MISCREG_DASICS_MAIN_CFG, rvTypeFlags(RV64),
+      isaExtsFlags()}},
     {CSR_DASICS_U_MAIN_BOUND_LO,
      {"dasics_u_main_bound_lo", MISCREG_DASICS_U_MAIN_BOUND_LO,
       rvTypeFlags(RV64), isaExtsFlags()}},
     {CSR_DASICS_U_MAIN_BOUND_HI,
      {"dasics_u_main_bound_hi", MISCREG_DASICS_U_MAIN_BOUND_HI,
       rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_S_MAIN_CFG,
+     {"dasics_s_main_cfg", MISCREG_DASICS_MAIN_CFG, rvTypeFlags(RV64),
+      isaExtsFlags()}},
     {CSR_DASICS_S_MAIN_BOUND_LO,
      {"dasics_s_main_bound_lo", MISCREG_DASICS_S_MAIN_BOUND_LO,
       rvTypeFlags(RV64), isaExtsFlags()}},
@@ -1682,6 +1695,13 @@ const RegVal FFLAGS_MASK = (1 << FRM_OFFSET) - 1;
 const RegVal FRM_MASK = 0x7;
 
 // DASICS CSR masks.
+// UMainCfg bits [5:1] are readable and writable; other bits read as zero.
+// Writes through the U view preserve the S fields in the shared state.
+const RegVal DASICS_U_MAIN_CFG_MASK = 0x3E;
+
+// SMainCfg bits [9:0] are readable and writable; bits [63:10] read as zero.
+const RegVal DASICS_S_MAIN_CFG_MASK = 0x3FF;
+
 // MainBound bits [63:3] are readable and writable; bits [2:0] read as zero.
 const RegVal DASICS_MAIN_BOUND_MASK = mask(63, 3);
 
@@ -1758,8 +1778,10 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
             {CSR_MIP, MI_MASK[enums::M]},
 
             // DASICS CSR masks.
+            {CSR_DASICS_U_MAIN_CFG, DASICS_U_MAIN_CFG_MASK},
             {CSR_DASICS_U_MAIN_BOUND_LO, DASICS_MAIN_BOUND_MASK},
             {CSR_DASICS_U_MAIN_BOUND_HI, DASICS_MAIN_BOUND_MASK},
+            {CSR_DASICS_S_MAIN_CFG, DASICS_S_MAIN_CFG_MASK},
             {CSR_DASICS_S_MAIN_BOUND_LO, DASICS_MAIN_BOUND_MASK},
             {CSR_DASICS_S_MAIN_BOUND_HI, DASICS_MAIN_BOUND_MASK},
             {CSR_DASICS_FREASON, DASICS_FREASON_MASK},
@@ -1777,8 +1799,10 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
             {CSR_MIP, MI_MASK[enums::MU]},
 
             // DASICS CSR masks.
+            {CSR_DASICS_U_MAIN_CFG, DASICS_U_MAIN_CFG_MASK},
             {CSR_DASICS_U_MAIN_BOUND_LO, DASICS_MAIN_BOUND_MASK},
             {CSR_DASICS_U_MAIN_BOUND_HI, DASICS_MAIN_BOUND_MASK},
+            {CSR_DASICS_S_MAIN_CFG, DASICS_S_MAIN_CFG_MASK},
             {CSR_DASICS_S_MAIN_BOUND_LO, DASICS_MAIN_BOUND_MASK},
             {CSR_DASICS_S_MAIN_BOUND_HI, DASICS_MAIN_BOUND_MASK},
             {CSR_DASICS_FREASON, DASICS_FREASON_MASK},
@@ -1796,8 +1820,10 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
             {CSR_MIP, MI_MASK[enums::MSU]},
 
             // DASICS CSR masks.
+            {CSR_DASICS_U_MAIN_CFG, DASICS_U_MAIN_CFG_MASK},
             {CSR_DASICS_U_MAIN_BOUND_LO, DASICS_MAIN_BOUND_MASK},
             {CSR_DASICS_U_MAIN_BOUND_HI, DASICS_MAIN_BOUND_MASK},
+            {CSR_DASICS_S_MAIN_CFG, DASICS_S_MAIN_CFG_MASK},
             {CSR_DASICS_S_MAIN_BOUND_LO, DASICS_MAIN_BOUND_MASK},
             {CSR_DASICS_S_MAIN_BOUND_HI, DASICS_MAIN_BOUND_MASK},
             {CSR_DASICS_FREASON, DASICS_FREASON_MASK},
@@ -1822,11 +1848,13 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
             {CSR_MIP, MI_MASK[enums::MHSU]},
 
             // DASICS CSR masks.
+            {CSR_DASICS_U_MAIN_CFG     , DASICS_U_MAIN_CFG_MASK},
             {CSR_DASICS_U_MAIN_BOUND_LO, DASICS_MAIN_BOUND_MASK},
             {CSR_DASICS_U_MAIN_BOUND_HI, DASICS_MAIN_BOUND_MASK},
+            {CSR_DASICS_S_MAIN_CFG     , DASICS_S_MAIN_CFG_MASK},
             {CSR_DASICS_S_MAIN_BOUND_LO, DASICS_MAIN_BOUND_MASK},
             {CSR_DASICS_S_MAIN_BOUND_HI, DASICS_MAIN_BOUND_MASK},
-            {CSR_DASICS_FREASON, DASICS_FREASON_MASK},
+            {CSR_DASICS_FREASON        , DASICS_FREASON_MASK},
         },
     },
 };

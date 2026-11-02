@@ -14,6 +14,12 @@
 | `DASICS_U_MAIN_BOUND_HI` | `0x9E3` |
 | `DASICS_S_MAIN_BOUND_LO` | `0xBC2` |
 | `DASICS_S_MAIN_BOUND_HI` | `0xBC3` |
+| `DASICS_U_MAIN_CFG` | `0x9E1` |
+| `DASICS_S_MAIN_CFG` | `0xBC0` |
+
+There are 10 CSR addresses and 9 DASICS states. UMainCfg and SMainCfg share
+MainCfg state, with read/write masks `0x3E` and `0x3FF`. Writes through the U
+view preserve the S-only fields `0x3C1`.
 
 | Field | Value |
 | --- | --- |
@@ -28,8 +34,9 @@
 After initializing `mtvec`, `_start` calls `test_csr_initial_values`,
 `test_main_call_entry`, `test_return_pc`, `test_active_zone_return_pc`,
 `test_freason`, `test_u_main_bound_lo`, `test_u_main_bound_hi`,
-`test_s_main_bound_lo`, `test_s_main_bound_hi`, and `test_csr_independence`
-in order, exiting immediately on a nonzero return value. Each test is a
+`test_s_main_bound_lo`, `test_s_main_bound_hi`, `test_u_main_cfg`,
+`test_s_main_cfg`, and `test_csr_independence` in order, exiting immediately
+on a nonzero return value. Each test is a
 leaf function that returns `0` or a unique error code in `a0`, without a
 stack or nested calls.
 
@@ -39,19 +46,22 @@ FReason separately checks low-three-bit read/write, zero reads of high bits,
 exchange, bit setting, and bit clearing. The independence check also uses
 `R = 0x89ABCDEF01234565` and sets FReason to `2`.
 MainBound exchange checks use aligned values `PA = 0xFEDCBA9876543210`
-and `QA = 0x0123456789ABCDE0`. This extension checks MainBound storage and
-alignment in M-mode; S/U permissions and PC trust checks are outside its
-scope.
+and `QA = 0x0123456789ABCDE0`. MainBound and MainCfg tests run in M-mode,
+checking storage/alignment and shared views/masks respectively. S/U
+permissions, protection-enable effects, and PC trust checks are outside
+this test's scope.
 
 | Check | Expected result |
 | --- | --- |
-| Cold initialization | `test_csr_initial_values` reads all eight initial values before any DASICS CSR write; each returns `0`. |
+| Cold initialization | `test_csr_initial_values` reads all ten addresses before any DASICS CSR write; each returns `0`. |
 | Full 64-bit readback | Writing P to each of the first three CSRs reads back P unchanged, including the high 32 bits, bit 63, and low three bits. |
 | CSRRW | Writing Q to each of the first three CSRs returns the old value P; a subsequent read returns Q. |
 | FReason masking and exchange | After writing `-1`, readback is `7`; exchanging it for `-6` returns old value `7` and leaves `2`. Writes of `0` and `-8` both read back `0`. |
 | FReason bit setting and clearing | Starting at `2`, CSRRS with source `-7` returns `2` and leaves `3`; CSRRC with the same source returns `3` and leaves `2`. |
 | MainBound read/write | Each of the four functions checks aligned and unaligned writes, high-bit preservation, exchange, and low-bits-only input. Low three bits read as zero, writes round down, and exchange returns the aligned old value; inputs and failure codes appear below. |
-| Independent storage | `test_csr_independence` prepares the original Q/P/R/2 values and writes `0x1000`, `0x2000`, `0x3000`, and `0x4000` to the four MainBounds, then reads all eight after all writes. Each matches its expected value without relying on other functions' state; the original Q/P/R/2 low-three-bit values remain distinct (3, 7, 5, 2). |
+| UMainCfg view interaction | `test_u_main_cfg` prepares shared state through S, then reads, writes, exchanges, sets, and clears through U. Only `0x3E` changes through U; S-only fields remain intact. Values and failure codes appear below. |
+| SMainCfg view interaction | `test_s_main_cfg` prepares shared state independently, then reads, writes, exchanges, sets, and clears through S. S updates `0x3FF`; U always reads the `0x3E` view of shared state. |
+| Independent storage | `test_csr_independence` prepares the original Q/P/R/2 and four MainBound values `0x1000/0x2000/0x3000/0x4000`, then writes S=`0x155` and U=`0x2A`. After all writes, it checks the original eight CSRs before reading S/U. The original values remain intact, S reads `0x16B`, and U reads `0x2A`. MainCfg is checked as one shared state, and setup does not rely on other functions' state. |
 
 ## Test exit codes
 
@@ -107,6 +117,26 @@ The MainBound failure codes below all display red `[FAIL]`; original codes
 | Low bits only (write `7`, read `0`) | `37` | `43` | `49` | `55` |
 | Independent storage (read `0x1000/0x2000/0x3000/0x4000` respectively) | `56` | `57` | `58` | `59` |
 
+MainCfg failure codes and expected values follow; all display red `[FAIL]`.
+Original codes 1–59 retain their meanings. The old value is the CSR
+instruction's return value; U/S identifies the read view.
+
+| Group | Operation | Failure code: expected value |
+| --- | --- | --- |
+| Cold initialization | Read initial U/S values | `60`: U=`0`; `61`: S=`0` |
+| U view | Seed S=`0x3FF`, then read U | `62`: U=`0x3E` |
+| U view | Write U=`0` | `63`: U=`0`; `64`: S=`0x3C1` |
+| U view | Write U=`-1` | `65`: U=`0x3E`; `66`: S=`0x3FF` |
+| U view | Reset S=`0x155`, then CSRRW U=`0xAAAAAAAAAAAAAAAB` | `67`: old=`0x14`; `68`: U=`0x2A`; `69`: S=`0x16B` |
+| U view | CSRRS with source `-1` | `70`: old=`0x2A`; `71`: U=`0x3E`; `72`: S=`0x17F` |
+| U view | CSRRC with source `-1` | `73`: old=`0x3E`; `74`: U=`0`; `75`: S=`0x141` |
+| S view | Write S=`-1` | `76`: S=`0x3FF`; `77`: U=`0x3E` |
+| S view | CSRRW S=P | `78`: old=`0x3FF`; `79`: S=`0x217`; `80`: U=`0x16` |
+| S view | CSRRS with source `-1` | `81`: old=`0x217`; `82`: S=`0x3FF`; `83`: U=`0x3E` |
+| S view | CSRRC with source `-63` (low ten bits `0x3C1`) | `84`: old=`0x3FF`; `85`: S=`0x3E`; `86`: U=`0x3E` |
+| S view | Write S=`0` | `87`: S=`0`; `88`: U=`0` |
+| Independent storage | Prepare S=`0x155` and U=`0x2A`, then check both views | `89`: S=`0x16B`; `90`: U=`0x2A` |
+
 ## Source links
 
 - [Assembly source](src/riscv-dasics-csr.S)
@@ -125,5 +155,9 @@ covers only the original MainCallEntry checks.
 | Exit code | `0` |
 | Result | Passed |
 
-The new MainBound tests passed cross-compilation checks. The user confirmed
-the build and runtime validation of the eight-CSR version.
+The MainBound tests passed cross-compilation checks. The user confirmed the
+build and runtime validation of the previous eight-CSR version.
+The new MainCfg tests passed cross-compilation checks. The user confirmed
+the build and runtime validation of the ten-address version.
+The run configuration and statistics were checked: `finalTick=885000`,
+`simInsts=665`.

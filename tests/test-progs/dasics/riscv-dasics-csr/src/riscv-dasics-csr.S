@@ -31,8 +31,10 @@
     .equ CSR_DASICS_RETURN_PC, 0x8B1
     .equ CSR_DASICS_ACTIVE_ZONE_RETURN_PC, 0x8B2
     .equ CSR_DASICS_FREASON, 0x8B3
+    .equ CSR_DASICS_U_MAIN_CFG, 0x9E1
     .equ CSR_DASICS_U_MAIN_BOUND_LO, 0x9E2
     .equ CSR_DASICS_U_MAIN_BOUND_HI, 0x9E3
+    .equ CSR_DASICS_S_MAIN_CFG, 0xBC0
     .equ CSR_DASICS_S_MAIN_BOUND_LO, 0xBC2
     .equ CSR_DASICS_S_MAIN_BOUND_HI, 0xBC3
 
@@ -63,6 +65,10 @@ _start:
     call    test_s_main_bound_lo
     bnez    a0, .Lfinish_tests
     call    test_s_main_bound_hi
+    bnez    a0, .Lfinish_tests
+    call    test_u_main_cfg
+    bnez    a0, .Lfinish_tests
+    call    test_s_main_cfg
     bnez    a0, .Lfinish_tests
     call    test_csr_independence
 
@@ -95,6 +101,12 @@ test_csr_initial_values:
     bnez    t0, .Linitial_values_done
     li      a0, 31
     csrr    t0, CSR_DASICS_S_MAIN_BOUND_HI
+    bnez    t0, .Linitial_values_done
+    li      a0, 60
+    csrr    t0, CSR_DASICS_U_MAIN_CFG
+    bnez    t0, .Linitial_values_done
+    li      a0, 61
+    csrr    t0, CSR_DASICS_S_MAIN_CFG
     bnez    t0, .Linitial_values_done
     li      a0, 0
 .Linitial_values_done:
@@ -372,6 +384,145 @@ test_s_main_bound_hi:
 .Ls_main_bound_hi_done:
     ret
 
+test_u_main_cfg:
+    /* U writes must preserve S fields in the shared configuration state. */
+    li      t0, 0x3FF
+    csrw    CSR_DASICS_S_MAIN_CFG, t0
+    li      a0, 62
+    li      t2, 0x3E
+    csrr    t1, CSR_DASICS_U_MAIN_CFG
+    bne     t1, t2, .Lu_main_cfg_done
+
+    li      a0, 63
+    csrw    CSR_DASICS_U_MAIN_CFG, zero
+    csrr    t1, CSR_DASICS_U_MAIN_CFG
+    bnez    t1, .Lu_main_cfg_done
+    li      a0, 64
+    li      t2, 0x3C1
+    csrr    t1, CSR_DASICS_S_MAIN_CFG
+    bne     t1, t2, .Lu_main_cfg_done
+
+    li      a0, 65
+    li      t0, -1
+    csrw    CSR_DASICS_U_MAIN_CFG, t0
+    li      t2, 0x3E
+    csrr    t1, CSR_DASICS_U_MAIN_CFG
+    bne     t1, t2, .Lu_main_cfg_done
+    li      a0, 66
+    li      t2, 0x3FF
+    csrr    t1, CSR_DASICS_S_MAIN_CFG
+    bne     t1, t2, .Lu_main_cfg_done
+
+    /* A mixed S pattern tests preservation of both zero and one bits. */
+    li      t0, 0x155
+    csrw    CSR_DASICS_S_MAIN_CFG, t0
+    li      a0, 67
+    li      t0, 0xAAAAAAAAAAAAAAAB
+    li      t2, 0x14
+    csrrw   t1, CSR_DASICS_U_MAIN_CFG, t0
+    bne     t1, t2, .Lu_main_cfg_done
+    li      a0, 68
+    li      t2, 0x2A
+    csrr    t1, CSR_DASICS_U_MAIN_CFG
+    bne     t1, t2, .Lu_main_cfg_done
+    li      a0, 69
+    li      t2, 0x16B
+    csrr    t1, CSR_DASICS_S_MAIN_CFG
+    bne     t1, t2, .Lu_main_cfg_done
+
+    li      a0, 70
+    li      t0, -1
+    li      t2, 0x2A
+    csrrs   t1, CSR_DASICS_U_MAIN_CFG, t0
+    bne     t1, t2, .Lu_main_cfg_done
+    li      a0, 71
+    li      t2, 0x3E
+    csrr    t1, CSR_DASICS_U_MAIN_CFG
+    bne     t1, t2, .Lu_main_cfg_done
+    li      a0, 72
+    li      t2, 0x17F
+    csrr    t1, CSR_DASICS_S_MAIN_CFG
+    bne     t1, t2, .Lu_main_cfg_done
+
+    li      a0, 73
+    li      t2, 0x3E
+    csrrc   t1, CSR_DASICS_U_MAIN_CFG, t0
+    bne     t1, t2, .Lu_main_cfg_done
+    li      a0, 74
+    csrr    t1, CSR_DASICS_U_MAIN_CFG
+    bnez    t1, .Lu_main_cfg_done
+    li      a0, 75
+    li      t2, 0x141
+    csrr    t1, CSR_DASICS_S_MAIN_CFG
+    bne     t1, t2, .Lu_main_cfg_done
+    li      a0, 0
+.Lu_main_cfg_done:
+    ret
+
+test_s_main_cfg:
+    li      t0, -1
+    csrw    CSR_DASICS_S_MAIN_CFG, t0
+    li      a0, 76
+    li      t2, 0x3FF
+    csrr    t1, CSR_DASICS_S_MAIN_CFG
+    bne     t1, t2, .Ls_main_cfg_done
+    li      a0, 77
+    li      t2, 0x3E
+    csrr    t1, CSR_DASICS_U_MAIN_CFG
+    bne     t1, t2, .Ls_main_cfg_done
+
+    li      a0, 78
+    li      t0, 0xFEDCBA9876543217
+    li      t2, 0x3FF
+    csrrw   t1, CSR_DASICS_S_MAIN_CFG, t0
+    bne     t1, t2, .Ls_main_cfg_done
+    li      a0, 79
+    li      t2, 0x217
+    csrr    t1, CSR_DASICS_S_MAIN_CFG
+    bne     t1, t2, .Ls_main_cfg_done
+    li      a0, 80
+    li      t2, 0x16
+    csrr    t1, CSR_DASICS_U_MAIN_CFG
+    bne     t1, t2, .Ls_main_cfg_done
+
+    li      a0, 81
+    li      t0, -1
+    li      t2, 0x217
+    csrrs   t1, CSR_DASICS_S_MAIN_CFG, t0
+    bne     t1, t2, .Ls_main_cfg_done
+    li      a0, 82
+    li      t2, 0x3FF
+    csrr    t1, CSR_DASICS_S_MAIN_CFG
+    bne     t1, t2, .Ls_main_cfg_done
+    li      a0, 83
+    li      t2, 0x3E
+    csrr    t1, CSR_DASICS_U_MAIN_CFG
+    bne     t1, t2, .Ls_main_cfg_done
+
+    li      a0, 84
+    li      t0, -63
+    li      t2, 0x3FF
+    csrrc   t1, CSR_DASICS_S_MAIN_CFG, t0
+    bne     t1, t2, .Ls_main_cfg_done
+    li      a0, 85
+    li      t2, 0x3E
+    csrr    t1, CSR_DASICS_S_MAIN_CFG
+    bne     t1, t2, .Ls_main_cfg_done
+    li      a0, 86
+    csrr    t1, CSR_DASICS_U_MAIN_CFG
+    bne     t1, t2, .Ls_main_cfg_done
+
+    li      a0, 87
+    csrw    CSR_DASICS_S_MAIN_CFG, zero
+    csrr    t1, CSR_DASICS_S_MAIN_CFG
+    bnez    t1, .Ls_main_cfg_done
+    li      a0, 88
+    csrr    t1, CSR_DASICS_U_MAIN_CFG
+    bnez    t1, .Ls_main_cfg_done
+    li      a0, 0
+.Ls_main_cfg_done:
+    ret
+
 test_csr_independence:
     /* Prepare distinct values without relying on earlier test results. */
     li      t0, 0x0123456789ABCDE3
@@ -391,6 +542,11 @@ test_csr_independence:
     csrw    CSR_DASICS_S_MAIN_BOUND_LO, t5
     li      t5, 0x4000
     csrw    CSR_DASICS_S_MAIN_BOUND_HI, t5
+    /* MainCfg is one state with two views, separate from the other CSRs. */
+    li      t5, 0x155
+    csrw    CSR_DASICS_S_MAIN_CFG, t5
+    li      t5, 0x2A
+    csrw    CSR_DASICS_U_MAIN_CFG, t5
 
     li      a0, 8
     csrr    t4, CSR_DASICS_MAIN_CALL_ENTRY
@@ -421,6 +577,14 @@ test_csr_independence:
     li      a0, 59
     li      t5, 0x4000
     csrr    t4, CSR_DASICS_S_MAIN_BOUND_HI
+    bne     t4, t5, .Lindependence_done
+    li      a0, 89
+    li      t5, 0x16B
+    csrr    t4, CSR_DASICS_S_MAIN_CFG
+    bne     t4, t5, .Lindependence_done
+    li      a0, 90
+    li      t5, 0x2A
+    csrr    t4, CSR_DASICS_U_MAIN_CFG
     bne     t4, t5, .Lindependence_done
     li      a0, 0
 .Lindependence_done:
