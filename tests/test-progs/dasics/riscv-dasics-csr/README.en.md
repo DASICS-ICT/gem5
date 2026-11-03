@@ -33,9 +33,28 @@ view preserve the S-only fields `0x3C1`.
 | Simulator | `build/RISCV_DASICS/gem5.opt` |
 | ISA | RV64 |
 | Execution | Single hart, M-mode |
-| CPU | `RiscvAtomicSimpleCPU` |
+| CPU | `RiscvO3CPU` |
+| Memory mode | `timing` |
+| Model selection | `CPU=V2_minimal`, `V2_nanhug`, `V2_default`, `v5_full`, or `v5_stress`; default `v5_full` |
+| Model parameters | [O3 model reference](../../../../configs/dasics/README.en.md) |
+| Output directory | `build/m5out-o3/<CPU>/` under this test directory |
 | System | Full-system bare metal |
 | Exit mechanism | Semihosting |
+
+`CPU=all` tests all models sequentially in the order above and prints
+`-------------------------------` between models. After each model is
+instantiated and before test execution, a list from the newly generated
+`config.ini` shows the CPU type, frequency, VLEN, pipeline widths,
+ROB/IQ/LQ/SQ capacities, and each cache level's capacity and associativity.
+Detailed parameters remain in the model reference and `config.ini`.
+
+Each model reports `system.cpu.numCycles` from the final statistics dump in
+that run's `stats.txt`. Failed or timed-out runs and unavailable current
+statistics show `N/A`, without using earlier runs' statistics. The count
+includes startup and the entire CSR test; it does not represent DASICS
+application performance overhead. A failed model does not stop the remaining
+models. A final `CPU / Result / Cycles` table is printed, and any failure
+makes Make return nonzero.
 
 ## Checks
 
@@ -65,9 +84,10 @@ and `QA = 0x0123456789ABCDE0`. LibCfg and JumpCfg also use
 `~P = 0x0123456789ABCDE8` and preserve all 64 bits. JumpCfg V bits are at
 positions 0/16/32/48; all other bits also read back unchanged. This test
 does not check how validity bits are consumed. All checks run in
-M-mode and cover storage, access masks, shared views, and independent
-state. Authorization, privilege transitions, protection-enable effects,
-PC trust checks, and region enforcement are outside this test's scope.
+M-mode on `RiscvO3CPU` and cover existing CSR storage, access masks,
+shared views, and independent state. Authorization, privilege transitions,
+protection-enable effects, PC trust checks, and region enforcement are
+outside this test's scope.
 
 | Check | Expected result |
 | --- | --- |
@@ -124,7 +144,7 @@ storage. Code 5 remains reserved for unexpected exceptions.
 | `25` | FReason readback after writing `0` was nonzero. | Red `[FAIL]` |
 | `26` | FReason readback after writing `-8` was nonzero. | Red `[FAIL]` |
 | `27` | FReason was not `2` during the independence check. | Red `[FAIL]` |
-| `124` | The host timeout expired. | Red `[FAIL]` |
+| `124` | The host timeout expired. | Red `[TIMEOUT]` |
 
 The MainBound failure codes below all display red `[FAIL]`; original codes
 1–27 retain their meanings.
@@ -219,5 +239,6 @@ four assertions, identifying the CSR only.
 
 ## Source links
 
+- [O3 models and parameters](../../../../configs/dasics/README.en.md)
 - [Assembly source](src/riscv-dasics-csr.S)
 - [Makefile](src/Makefile)

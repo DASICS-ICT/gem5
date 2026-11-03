@@ -4,6 +4,8 @@
 
 All commands run from the repository root.
 
+[O3 models and parameters](../configs/dasics/README.en.md)
+
 ## Build
 
 ### Standard (`build/RISCV/gem5.opt`)
@@ -44,7 +46,18 @@ make clean-riscv-dasics
 
 ```bash
 make riscv-dasics &&
-  make dasics-test TEST=riscv-dasics-csr
+  make dasics-test TEST=riscv-dasics-csr CPU=v5_full
+```
+
+```bash
+make dasics-test TEST=riscv-dasics-csr CPU=V2_minimal
+make dasics-test TEST=riscv-dasics-csr CPU=V2_nanhug
+make dasics-test TEST=riscv-dasics-csr CPU=V2_default
+make dasics-test TEST=riscv-dasics-csr CPU=v5_stress
+```
+
+```bash
+make dasics-test TEST=riscv-dasics-csr CPU=all
 ```
 
 #### Clean software

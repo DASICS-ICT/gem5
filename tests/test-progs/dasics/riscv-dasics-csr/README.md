@@ -33,9 +33,25 @@
 | 架构 | RV64 |
 | hart 数量 | 1 |
 | 特权级 | M 态 |
-| CPU | `RiscvAtomicSimpleCPU` |
+| CPU | `RiscvO3CPU` |
+| 内存模式 | `timing` |
+| 模型选型 | `CPU=V2_minimal`、`V2_nanhug`、`V2_default`、`v5_full`、`v5_stress`；默认 `v5_full` |
+| 模型参数 | [O3 模型说明](../../../../configs/dasics/README.md) |
+| 输出目录 | 本测试目录下的 `build/m5out-o3/<CPU>/` |
 | 运行方式 | 裸机全系统 |
 | 退出接口 | Semihosting |
+
+`CPU=all` 按上述顺序串行测试全部模型，各模型之间打印
+`-------------------------------`。每个模型实例化后、执行测试前，从本次生成的
+`config.ini` 以列表打印 CPU 类型、频率、VLEN、流水线宽度、
+ROB/IQ/LQ/SQ 容量，以及各级缓存容量和相联度；详细参数见模型说明和
+`config.ini`。
+
+每个模型结束后打印本次 `stats.txt` 最后一次统计输出中的
+`system.cpu.numCycles`；失败、超时或当前统计不可用时显示 `N/A`，不使用
+旧运行统计。周期数包含启动和整个 CSR 用例，不代表 DASICS 应用性能开销。
+单个模型失败不阻止其余模型运行；全部结束后打印 `CPU / Result / Cycles`
+汇总表，任一失败使 Make 返回非零。
 
 ## 检查项
 
@@ -58,7 +74,7 @@ FReason 单独验证低 3 位读写、高位读零及交换、置位和清位。
 MainBound 交换检查使用对齐值 `PA = 0xFEDCBA9876543210`、`QA = 0x0123456789ABCDE0`。
 LibCfg/JumpCfg 另用 `~P = 0x0123456789ABCDE8`，完整保存全部 64 位。
 JumpCfg 的 V 位位于 0/16/32/48，其余位同样保存读回；本测试不验证有效性消费。
-本测试仅在 M 态验证存储、读写掩码、共享视图和独立性；
+本测试在 `RiscvO3CPU` 的 M 态验证已有 CSR 的存储、读写掩码、共享视图和独立性；
 不覆盖授权、特权切换、保护使能效果、PC 可信检查或区间生效。
 
 | 用例 | 操作 | 预期结果 |
@@ -113,7 +129,7 @@ JumpCfg 的 V 位位于 0/16/32/48，其余位同样保存读回；本测试不�
 | `25` | FReason 写入 `0` 后读回非零 | 红色 `[FAIL]` |
 | `26` | FReason 写入 `-8` 后读回非零 | 红色 `[FAIL]` |
 | `27` | 独立性检查中，FReason 不等于 `2` | 红色 `[FAIL]` |
-| `124` | 宿主运行超时 | 红色 `[FAIL]` |
+| `124` | 宿主运行超时 | 红色 `[TIMEOUT]` |
 
 四个 MainBound 的失败退出码如下，均显示红色 `[FAIL]`；原退出码 1–27 保持不变。
 
@@ -203,5 +219,6 @@ JumpBound 的 `i=0..3`；以下失败码均显示红色 `[FAIL]`。
 
 ## 源码
 
+- [O3 模型与参数](../../../../configs/dasics/README.md)
 - [汇编程序](src/riscv-dasics-csr.S)
 - [Makefile](src/Makefile)

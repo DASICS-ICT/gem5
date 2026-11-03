@@ -4,6 +4,8 @@
 
 命令均在仓库根目录执行。
 
+[O3 模型与参数](../configs/dasics/README.md)
+
 ## 编译
 
 ### 普通版（`build/RISCV/gem5.opt`）
@@ -44,7 +46,18 @@ make clean-riscv-dasics
 
 ```bash
 make riscv-dasics &&
-  make dasics-test TEST=riscv-dasics-csr
+  make dasics-test TEST=riscv-dasics-csr CPU=v5_full
+```
+
+```bash
+make dasics-test TEST=riscv-dasics-csr CPU=V2_minimal
+make dasics-test TEST=riscv-dasics-csr CPU=V2_nanhug
+make dasics-test TEST=riscv-dasics-csr CPU=V2_default
+make dasics-test TEST=riscv-dasics-csr CPU=v5_stress
+```
+
+```bash
+make dasics-test TEST=riscv-dasics-csr CPU=all
 ```
 
 #### 清理软件

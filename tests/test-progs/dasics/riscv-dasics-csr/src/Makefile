@@ -38,9 +38,11 @@ $(OUT): riscv-dasics-csr.S Makefile
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $<
 
-# The root dispatcher supplies the repository and simulator paths.
+# The root dispatcher selects the model and supplies shared paths.
 run: $(OUT)
-	@test -n "$(GEM5_REPO_DIR)" && test -n "$(GEM5_BINARY)" || { \
+	@test -n "$(GEM5_REPO_DIR)" && test -n "$(GEM5_BINARY)" && \
+		test -n "$(GEM5_CONFIG)" && test -n "$(GEM5_OUTDIR)" && \
+		test -n "$(CPU)" || { \
 		printf 'Use the root dasics-test target to run this test.\n' >&2; \
 		exit 2; \
 	}
@@ -48,13 +50,37 @@ run: $(OUT)
 		printf 'Missing gem5 binary; run make riscv-dasics first.\n' \
 			>&2; exit 2; \
 	}
-	@cd "$(GEM5_REPO_DIR)" && \
+	@test -f "$(GEM5_CONFIG)" || { \
+		printf '\033[1;31m[FAIL] Missing CPU config: %s\033[0m\n' \
+			"$(GEM5_CONFIG)" >&2; exit 2; \
+	}
+	@mkdir -p "$(GEM5_OUTDIR)" || exit; \
+		rm -f "$(GEM5_OUTDIR)/stats.txt" \
+			"$(GEM5_OUTDIR)/run-result.txt" || exit; \
+		cd "$(GEM5_REPO_DIR)" || exit; \
 		timeout 60s "$(GEM5_BINARY)" \
-		--outdir="$(abspath $(dir $(OUT)))/m5out" \
-		tests/gem5/riscv-unittests/riscv_baremetal/configs/riscv_baremetal.py \
+		--outdir="$(GEM5_OUTDIR)" \
+		"$(GEM5_CONFIG)" \
 		"$(abspath $(OUT))"; \
 		dasics_rc=$$?; \
+		cycles=N/A; \
+		if [ "$$dasics_rc" -eq 0 ] && \
+			[ -f "$(GEM5_OUTDIR)/stats.txt" ]; then \
+			cycles=$$(awk '$$1 == "system.cpu.numCycles" {value=$$2} \
+				END {print (value ~ /^[0-9]+$$/ ? value : "N/A")}' \
+				"$(GEM5_OUTDIR)/stats.txt") || cycles=N/A; \
+		fi; \
+		printf '%s %s\n' "$$dasics_rc" "$$cycles" \
+			> "$(GEM5_OUTDIR)/run-result.txt" || exit; \
 		printf 'Exit code: %s\n' "$$dasics_rc"; \
+		printf 'CPU cycles: %s\n' "$$cycles"; \
+		if [ "$$dasics_rc" -eq 0 ]; then \
+			printf '\033[1;32m[OK] %s\033[0m\n' "$(CPU)"; \
+		elif [ "$$dasics_rc" -eq 124 ]; then \
+			printf '\033[1;31m[TIMEOUT] %s\033[0m\n' "$(CPU)" >&2; \
+		else \
+			printf '\033[1;31m[FAIL] %s\033[0m\n' "$(CPU)" >&2; \
+		fi; \
 		exit "$$dasics_rc"
 
 clean:
