@@ -1,4 +1,5 @@
 # Copyright 2022 Google LLC
+# Copyright (c) 2026 zengsy99
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are
@@ -25,3 +26,11 @@
 
 config USE_RISCV_ISA
     bool "RISC-V ISA support"
+
+config USE_DASICS
+    bool "DASICS extension support"
+    depends on USE_RISCV_ISA
+    default n
+    help
+        Build the DASICS extension for RV64 systems. Runtime protection
+        is enabled through the DASICS configuration CSRs.

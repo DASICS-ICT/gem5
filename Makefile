@@ -12,28 +12,50 @@ JOBS ?= $(shell /usr/bin/awk -v n="$$(/usr/bin/nproc)" \
 	'/MemAvailable:/ {j=int($$2/2097152); print (j<1 ? 1 : (j<n ? j : n))}' \
 	/proc/meminfo)
 
-.PHONY: riscv clean dasics-test dasics-clean dasics-check
+.PHONY: riscv riscv-dasics clean clean-riscv-dasics \
+	dasics-test dasics-clean dasics-check
 # SCons owns build parallelism; serialize the build and cleanup targets.
 .NOTPARALLEL:
 
+# Keep each build target tied to its own configuration and extension state.
+riscv: override BUILD_CONFIG := RISCV
+riscv: override DASICS_CONFIG := n
+riscv-dasics: override BUILD_CONFIG := RISCV_DASICS
+riscv-dasics: override DASICS_CONFIG := y
+
 # Always invoke SCons so it can check source, header, and command dependencies.
 # Keep system Python and Protobuf together to avoid Conda library conflicts.
-riscv:
+riscv riscv-dasics:
 	@mkdir -p "$(LOG_DIR)"
 	@set -o pipefail; \
 	cd "$(GEM5_REPO_DIR)" || exit; \
-	log="$(LOG_DIR)/riscv-$$(TZ=Asia/Shanghai date +%Y%m%d-%H%M%S)-$$$$.log"; \
+	log="$(LOG_DIR)/$@-$$(TZ=Asia/Shanghai date +%Y%m%d-%H%M%S)-$$$$.log"; \
 	printf 'Build log: %s\n' "$$log"; \
-	{ \
-		printf 'Started: %s\nJobs: %s\n' \
-			"$$(TZ=Asia/Shanghai date -Iseconds)" "$(JOBS)"; \
+	run_scons() { \
 		env -u PYTHONPATH -u LD_LIBRARY_PATH -u LIBRARY_PATH \
 			-u PKG_CONFIG_PATH -u CPATH \
 			PATH=/usr/bin:/bin \
 			PYTHON_CONFIG=/usr/bin/python3-config \
 			PROTOC=/usr/bin/protoc \
-			/usr/bin/scons build/RISCV/gem5.opt -j "$(JOBS)"; \
-		status=$$?; \
+			/usr/bin/scons "$$@"; \
+	}; \
+	{ \
+		printf 'Started: %s\nJobs: %s\nDASICS: %s\n' \
+			"$$(TZ=Asia/Shanghai date -Iseconds)" "$(JOBS)" \
+			"$(DASICS_CONFIG)"; \
+		status=0; \
+		if [ ! -f "build/$(BUILD_CONFIG)/gem5.build/config" ]; then \
+			run_scons defconfig "build/$(BUILD_CONFIG)" \
+				"build_opts/$(BUILD_CONFIG)" || status=$$?; \
+		fi; \
+		if [ "$$status" -eq 0 ]; then \
+			run_scons setconfig "build/$(BUILD_CONFIG)" \
+				"USE_DASICS=$(DASICS_CONFIG)" || status=$$?; \
+		fi; \
+		if [ "$$status" -eq 0 ]; then \
+			run_scons "build/$(BUILD_CONFIG)/gem5.opt" -j "$(JOBS)"; \
+			status=$$?; \
+		fi; \
 		printf 'Finished: %s\nExit code: %s\n' \
 			"$$(TZ=Asia/Shanghai date -Iseconds)" "$$status"; \
 		exit "$$status"; \
@@ -42,11 +64,17 @@ riscv:
 clean:
 	rm -rf -- "$(GEM5_REPO_DIR)/build/RISCV"
 
+clean-riscv-dasics:
+	rm -rf -- "$(GEM5_REPO_DIR)/build/RISCV_DASICS"
+
 # Each test owns its run target and output layout.
+dasics-test: override GEM5_BINARY := \
+	$(GEM5_REPO_DIR)/build/RISCV_DASICS/gem5.opt
 dasics-test: dasics-check
 	@$(MAKE) --no-print-directory \
 		-C "$(GEM5_REPO_DIR)/tests/test-progs/dasics/$(TEST)/src" \
-		GEM5_REPO_DIR="$(GEM5_REPO_DIR)" run; \
+		GEM5_REPO_DIR="$(GEM5_REPO_DIR)" \
+		GEM5_BINARY="$(GEM5_BINARY)" run; \
 		dasics_rc=$$?; \
 		if [ "$$dasics_rc" -ne 0 ]; then \
 			printf '\n\033[1;31m[FAIL] %s\033[0m\n' "$(TEST)" >&2; \

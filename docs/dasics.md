@@ -6,14 +6,30 @@
 
 ## 编译
 
+### 普通版（`build/RISCV/gem5.opt`）
+
 ```bash
 make riscv
 ```
 
+### DASICS 版（`build/RISCV_DASICS/gem5.opt`）
+
+```bash
+make riscv-dasics
+```
+
 ## 清理
+
+### 普通版（`build/RISCV/`）
 
 ```bash
 make clean
+```
+
+### DASICS 版（`build/RISCV_DASICS/`）
+
+```bash
+make clean-riscv-dasics
 ```
 
 ## 测试名单
@@ -27,7 +43,8 @@ make clean
 ### riscv-dasics-csr
 
 ```bash
-make dasics-test TEST=riscv-dasics-csr
+make riscv-dasics &&
+  make dasics-test TEST=riscv-dasics-csr
 ```
 
 #### 清理软件

@@ -53,6 +53,7 @@
 #include "base/compiler.hh"
 #include "base/logging.hh"
 #include "base/trace.hh"
+#include "config/use_dasics.hh"
 #include "cpu/base.hh"
 #include "debug/Checkpoint.hh"
 #include "debug/LLSC.hh"
@@ -285,6 +286,7 @@ const std::array<const char *, NUM_MISCREGS> MiscRegNames = {{
 
     [MISCREG_JVT] = "JVT",
 
+#if USE_DASICS
     // Dasics（RV64） CSRs
     [MISCREG_DASICS_MAIN_CFG] = "DASICS_MAIN_CFG",
     [MISCREG_DASICS_MAIN_CALL_ENTRY] = "DASICS_MAIN_CALL_ENTRY",
@@ -295,6 +297,7 @@ const std::array<const char *, NUM_MISCREGS> MiscRegNames = {{
     [MISCREG_DASICS_U_MAIN_BOUND_HI] = "DASICS_U_MAIN_BOUND_HI",
     [MISCREG_DASICS_S_MAIN_BOUND_LO] = "DASICS_S_MAIN_BOUND_LO",
     [MISCREG_DASICS_S_MAIN_BOUND_HI] = "DASICS_S_MAIN_BOUND_HI",
+#endif // USE_DASICS
 
     [MISCREG_FFLAGS_EXE] = "FFLAGS_EXE",
 }};

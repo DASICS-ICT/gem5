@@ -38,17 +38,18 @@ $(OUT): riscv-dasics-csr.S Makefile
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $<
 
-# The root dispatcher supplies GEM5_REPO_DIR for the run target.
+# The root dispatcher supplies the repository and simulator paths.
 run: $(OUT)
-	@test -n "$(GEM5_REPO_DIR)" || { \
+	@test -n "$(GEM5_REPO_DIR)" && test -n "$(GEM5_BINARY)" || { \
 		printf 'Use the root dasics-test target to run this test.\n' >&2; \
 		exit 2; \
 	}
-	@test -x "$(GEM5_REPO_DIR)/build/RISCV/gem5.opt" || { \
-		printf 'Missing gem5 binary; run make riscv first.\n' >&2; exit 2; \
+	@test -x "$(GEM5_BINARY)" || { \
+		printf 'Missing gem5 binary; run make riscv-dasics first.\n' \
+			>&2; exit 2; \
 	}
 	@cd "$(GEM5_REPO_DIR)" && \
-		timeout 60s build/RISCV/gem5.opt \
+		timeout 60s "$(GEM5_BINARY)" \
 		--outdir="$(abspath $(dir $(OUT)))/m5out" \
 		tests/gem5/riscv-unittests/riscv_baremetal/configs/riscv_baremetal.py \
 		"$(abspath $(OUT))"; \

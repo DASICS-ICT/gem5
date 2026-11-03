@@ -23,6 +23,8 @@ view preserve the S-only fields `0x3C1`.
 
 | Field | Value |
 | --- | --- |
+| Build configuration | `USE_DASICS=y` |
+| Simulator | `build/RISCV_DASICS/gem5.opt` |
 | ISA | RV64 |
 | Execution | Single hart, M-mode |
 | CPU | `RiscvAtomicSimpleCPU` |
@@ -141,23 +143,3 @@ instruction's return value; U/S identifies the read view.
 
 - [Assembly source](src/riscv-dasics-csr.S)
 - [Makefile](src/Makefile)
-
-## Verified result
-
-The historical result below comes from run output provided by the user and
-covers only the original MainCallEntry checks.
-
-| Field | Result |
-| --- | --- |
-| Date | 2026-11-02 |
-| gem5 version | `26.0.0.0` |
-| Final tick | `55000` |
-| Exit code | `0` |
-| Result | Passed |
-
-The MainBound tests passed cross-compilation checks. The user confirmed the
-build and runtime validation of the previous eight-CSR version.
-The new MainCfg tests passed cross-compilation checks. The user confirmed
-the build and runtime validation of the ten-address version.
-The run configuration and statistics were checked: `finalTick=885000`,
-`simInsts=665`.

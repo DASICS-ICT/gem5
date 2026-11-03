@@ -12,6 +12,11 @@ The main website can be found at <http://www.gem5.org>.
 
 ## DASICS
 
+| Configuration | Build command |
+| --- | --- |
+| RISC-V | `make riscv` |
+| RISC-V with DASICS | `make riscv-dasics` |
+
 [中文：编译、测试与清理](docs/dasics.md) |
 [English: build, test, and cleanup](docs/dasics.en.md)
 
