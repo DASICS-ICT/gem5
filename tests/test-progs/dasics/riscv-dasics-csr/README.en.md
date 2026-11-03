@@ -19,8 +19,11 @@
 | `DASICS_LIB_CFG` | `0x880` |
 | `DASICS_LIB_BOUND_LOi` (`i=0..15`) | `0x890 + 2*i` |
 | `DASICS_LIB_BOUND_HIi` (`i=0..15`) | `0x891 + 2*i` |
+| `DASICS_JUMP_CFG` | `0x8C8` |
+| `DASICS_JUMP_BOUND_LOi` (`i=0..3`) | `0x8C0 + 2*i` |
+| `DASICS_JUMP_BOUND_HIi` (`i=0..3`) | `0x8C1 + 2*i` |
 
-There are 43 CSR addresses and 42 DASICS states. UMainCfg and SMainCfg share
+There are 52 CSR addresses and 51 DASICS states. UMainCfg and SMainCfg share
 MainCfg state, with read/write masks `0x3E` and `0x3FF`. Writes through the U
 view preserve the S-only fields `0x3C1`.
 
@@ -42,12 +45,15 @@ After initializing `mtvec`, `_start` calls `test_csr_initial_values`,
 `test_s_main_bound_lo`, `test_s_main_bound_hi`, `test_u_main_cfg`,
 `test_s_main_cfg`, and `test_lib_cfg` in order, then 32 functions from
 `test_lib_bound_lo0`, `test_lib_bound_hi0` through `test_lib_bound_lo15`,
-`test_lib_bound_hi15` in interleaved Lo/Hi order, and finally
-`test_csr_independence`. A nonzero return exits
-immediately. Each test is a leaf function returning `0` or a failure code
+`test_lib_bound_hi15` in interleaved Lo/Hi order, followed by
+`test_jump_cfg` and eight interleaved functions from `test_jump_bound_lo0`,
+`test_jump_bound_hi0` through `test_jump_bound_lo3`, `test_jump_bound_hi3`.
+Finally it calls `test_csr_independence`. A nonzero return exits immediately.
+Each test is a leaf function returning `0` or a failure code
 in `a0`; the single ELF, stack-free structure has no nested calls.
-`DEFINE_LIB_BOUND_TEST` expands the 32 LibBound functions at assembly time,
-with compile-time constant CSR numbers.
+`DEFINE_BOUND_TEST` expands the 32 LibBound and eight JumpBound functions
+at assembly time, with compile-time constant CSR numbers. The four
+MainBound functions remain explicitly defined.
 
 The first three, full-width CSR test functions each prepare
 `P = 0xFEDCBA9876543217` and `Q = 0x0123456789ABCDE3` independently.
@@ -55,15 +61,17 @@ FReason separately checks low-three-bit read/write, zero reads of high bits,
 exchange, bit setting, and bit clearing. The independence check also uses
 `R = 0x89ABCDEF01234565` and sets FReason to `2`.
 MainBound exchange checks use aligned values `PA = 0xFEDCBA9876543210`
-and `QA = 0x0123456789ABCDE0`. LibCfg also uses
-`~P = 0x0123456789ABCDE8` and preserves all 64 bits. All checks run in
+and `QA = 0x0123456789ABCDE0`. LibCfg and JumpCfg also use
+`~P = 0x0123456789ABCDE8` and preserve all 64 bits. JumpCfg V bits are at
+positions 0/16/32/48; all other bits also read back unchanged. This test
+does not check how validity bits are consumed. All checks run in
 M-mode and cover storage, access masks, shared views, and independent
 state. Authorization, privilege transitions, protection-enable effects,
 PC trust checks, and region enforcement are outside this test's scope.
 
 | Check | Expected result |
 | --- | --- |
-| Cold initialization | `test_csr_initial_values` reads all 43 addresses before any DASICS CSR write; each returns `0`. |
+| Cold initialization | `test_csr_initial_values` reads all 52 addresses before any DASICS CSR write; each returns `0`. |
 | Full 64-bit readback | Writing P to each of the first three CSRs reads back P unchanged, including the high 32 bits, bit 63, and low three bits. |
 | CSRRW | Writing Q to each of the first three CSRs returns the old value P; a subsequent read returns Q. |
 | FReason masking and exchange | After writing `-1`, readback is `7`; exchanging it for `-6` returns old value `7` and leaves `2`. Writes of `0` and `-8` both read back `0`. |
@@ -74,7 +82,9 @@ PC trust checks, and region enforcement are outside this test's scope.
 | LibCfg read/write and exchange | Write P, exchange it for `~P`, and also write `0` and `-1`. Readback preserves P/`~P` in full, exchange returns old P, and writes of `0`/`-1` read back unchanged. |
 | LibCfg bit setting and clearing | Starting at `~P`, CSRRS with source P returns `~P` and leaves `-1`; CSRRC with the same source returns `-1` and leaves `~P`. |
 | LibBound read/write | Each of the 32 functions prepares its data: writing P reads PA; exchanging it for Q returns PA, followed by readback QA; writing `7` reads `0`. |
-| Independent storage | `test_csr_independence` prepares the original Q/P/R/2, four MainBound values `0x1000/0x2000/0x3000/0x4000`, and S=`0x155` plus U=`0x2A`. It also writes LibCfg=`0x13579BDF2468ACE1`, Lo_i=`0x10000 + 0x100*i`, and Hi_i=`0x10080 + 0x100*i`. Only after all 42 states have been written does it read the original ten addresses, LibCfg, and all 32 LibBounds. Values remain intact, S reads `0x16B`, U reads `0x2A`, and setup does not rely on other functions' state. |
+| JumpCfg read/write, exchange, and bit operations | Use the same P/`~P`, CSRRW, CSRRS, CSRRC, and writes of `0`/`-1` as LibCfg. All 64 bits are preserved, and old/new values match the corresponding LibCfg checks. |
+| JumpBound read/write | Each of the eight functions prepares its data: writing P reads PA; exchanging it for Q returns PA, followed by readback QA; writing `7` reads `0`. |
+| Independent storage | `test_csr_independence` prepares the original Q/P/R/2, four MainBound values `0x1000/0x2000/0x3000/0x4000`, and S=`0x155` plus U=`0x2A`. LibCfg=`0x13579BDF2468ACE1`, LibBound Lo_i=`0x10000 + 0x100*i`, and Hi_i=`0x10080 + 0x100*i`; JumpCfg=`0x2468ACE113579BD5`, JumpBound Lo_i=`0x20000 + 0x100*i`, and Hi_i=`0x20080 + 0x100*i`. Only after all 51 states have been written does it read all 52 views. Values remain intact, S reads `0x16B`, U reads `0x2A`, and setup does not rely on other functions' state. |
 
 ## Test exit codes
 
@@ -178,6 +188,34 @@ display red `[FAIL]`.
 
 Each LibBound read/write function shares one failure code across its four
 assertions. The code identifies the CSR but not the individual assertion.
+
+JumpCfg failure codes follow; all display red `[FAIL]`. Original codes
+1–198 retain their meanings, and `124` remains exclusive to the host timeout.
+
+| Check | Failure code | Expected value |
+| --- | --- | --- |
+| Cold initialization | `199` | `0` |
+| Readback after writing P | `208` | P |
+| Old value from CSRRW writing `~P` | `209` | P |
+| Readback after exchange | `210` | `~P` |
+| Old value from CSRRS with source P | `211` | `~P` |
+| Readback after setting bits | `212` | `-1` |
+| Old value from CSRRC with source P | `213` | `-1` |
+| Readback after clearing bits | `214` | `~P` |
+| Readback after writing `0` | `215` | `0` |
+| Readback after writing `-1` | `216` | `-1` |
+| Independent storage | `225` | `0x2468ACE113579BD5` |
+
+For JumpBound, `i=0..3`. All failure codes below display red `[FAIL]`.
+
+| Check | Lo_i | Hi_i | Range |
+| --- | --- | --- | --- |
+| Cold initialization (read `0`) | `200 + 2*i` | `201 + 2*i` | 200–207 |
+| Read/write (P→PA, exchange Q returning PA, read QA, write `7` reading `0`) | `217 + 2*i` | `218 + 2*i` | 217–224 |
+| Independent storage (read each Lo_i/Hi_i expected value) | `226 + 2*i` | `227 + 2*i` | 226–233 |
+
+Each JumpBound read/write function also shares one failure code across its
+four assertions, identifying the CSR only.
 
 ## Source links
 

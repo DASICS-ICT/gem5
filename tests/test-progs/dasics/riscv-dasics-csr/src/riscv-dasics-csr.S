@@ -73,6 +73,16 @@
     .equ CSR_DASICS_LIB_BOUND_LO15, 0x8AE
     .equ CSR_DASICS_LIB_BOUND_HI15, 0x8AF
 
+    .equ CSR_DASICS_JUMP_CFG      , 0x8C8
+    .equ CSR_DASICS_JUMP_BOUND_LO0, 0x8C0
+    .equ CSR_DASICS_JUMP_BOUND_HI0, 0x8C1
+    .equ CSR_DASICS_JUMP_BOUND_LO1, 0x8C2
+    .equ CSR_DASICS_JUMP_BOUND_HI1, 0x8C3
+    .equ CSR_DASICS_JUMP_BOUND_LO2, 0x8C4
+    .equ CSR_DASICS_JUMP_BOUND_HI2, 0x8C5
+    .equ CSR_DASICS_JUMP_BOUND_LO3, 0x8C6
+    .equ CSR_DASICS_JUMP_BOUND_HI3, 0x8C7
+
     /* No runtime initializes gp or provides a dynamic linker. */
     .option norelax
     .option nopic
@@ -170,6 +180,24 @@ _start:
     call    test_lib_bound_lo15
     bnez    a0, .Lfinish_tests
     call    test_lib_bound_hi15
+    bnez    a0, .Lfinish_tests
+    call    test_jump_cfg
+    bnez    a0, .Lfinish_tests
+    call    test_jump_bound_lo0
+    bnez    a0, .Lfinish_tests
+    call    test_jump_bound_hi0
+    bnez    a0, .Lfinish_tests
+    call    test_jump_bound_lo1
+    bnez    a0, .Lfinish_tests
+    call    test_jump_bound_hi1
+    bnez    a0, .Lfinish_tests
+    call    test_jump_bound_lo2
+    bnez    a0, .Lfinish_tests
+    call    test_jump_bound_hi2
+    bnez    a0, .Lfinish_tests
+    call    test_jump_bound_lo3
+    bnez    a0, .Lfinish_tests
+    call    test_jump_bound_hi3
     bnez    a0, .Lfinish_tests
     call    test_csr_independence
 
@@ -307,6 +335,33 @@ test_csr_initial_values:
     bnez    t0, .Linitial_values_done
     li      a0, 123
     csrr    t0, CSR_DASICS_LIB_BOUND_HI15
+    bnez    t0, .Linitial_values_done
+    li      a0, 199
+    csrr    t0, CSR_DASICS_JUMP_CFG
+    bnez    t0, .Linitial_values_done
+    li      a0, 200
+    csrr    t0, CSR_DASICS_JUMP_BOUND_LO0
+    bnez    t0, .Linitial_values_done
+    li      a0, 201
+    csrr    t0, CSR_DASICS_JUMP_BOUND_HI0
+    bnez    t0, .Linitial_values_done
+    li      a0, 202
+    csrr    t0, CSR_DASICS_JUMP_BOUND_LO1
+    bnez    t0, .Linitial_values_done
+    li      a0, 203
+    csrr    t0, CSR_DASICS_JUMP_BOUND_HI1
+    bnez    t0, .Linitial_values_done
+    li      a0, 204
+    csrr    t0, CSR_DASICS_JUMP_BOUND_LO2
+    bnez    t0, .Linitial_values_done
+    li      a0, 205
+    csrr    t0, CSR_DASICS_JUMP_BOUND_HI2
+    bnez    t0, .Linitial_values_done
+    li      a0, 206
+    csrr    t0, CSR_DASICS_JUMP_BOUND_LO3
+    bnez    t0, .Linitial_values_done
+    li      a0, 207
+    csrr    t0, CSR_DASICS_JUMP_BOUND_HI3
     bnez    t0, .Linitial_values_done
     li      a0, 0
 .Linitial_values_done:
@@ -772,66 +827,124 @@ test_lib_cfg:
 .Llib_cfg_done:
     ret
 
+test_jump_cfg:
+    /* Preserve all 64 bits, including bits outside the valid fields. */
+    li      a0, 208
+    li      t0, 0xFEDCBA9876543217
+    csrw    CSR_DASICS_JUMP_CFG, t0
+    csrr    t1, CSR_DASICS_JUMP_CFG
+    bne     t1, t0, .Ljump_cfg_done
+
+    li      a0, 209
+    not     t2, t0
+    csrrw   t1, CSR_DASICS_JUMP_CFG, t2
+    bne     t1, t0, .Ljump_cfg_done
+
+    li      a0, 210
+    csrr    t1, CSR_DASICS_JUMP_CFG
+    bne     t1, t2, .Ljump_cfg_done
+
+    li      a0, 211
+    csrrs   t1, CSR_DASICS_JUMP_CFG, t0
+    bne     t1, t2, .Ljump_cfg_done
+
+    li      a0, 212
+    li      t2, -1
+    csrr    t1, CSR_DASICS_JUMP_CFG
+    bne     t1, t2, .Ljump_cfg_done
+
+    li      a0, 213
+    csrrc   t1, CSR_DASICS_JUMP_CFG, t0
+    bne     t1, t2, .Ljump_cfg_done
+
+    li      a0, 214
+    not     t2, t0
+    csrr    t1, CSR_DASICS_JUMP_CFG
+    bne     t1, t2, .Ljump_cfg_done
+
+    li      a0, 215
+    csrw    CSR_DASICS_JUMP_CFG, zero
+    csrr    t1, CSR_DASICS_JUMP_CFG
+    bnez    t1, .Ljump_cfg_done
+
+    li      a0, 216
+    li      t0, -1
+    csrw    CSR_DASICS_JUMP_CFG, t0
+    csrr    t1, CSR_DASICS_JUMP_CFG
+    bne     t1, t0, .Ljump_cfg_done
+    li      a0, 0
+.Ljump_cfg_done:
+    ret
+
     /* Expand one leaf per CSR; CSR numbers must be assembly constants. */
     /* Each leaf shares one failure code across its read/write checks. */
-    .macro DEFINE_LIB_BOUND_TEST name, csr, failure
+    .macro DEFINE_BOUND_TEST name, csr, failure
 \name:
     li      a0, \failure
     li      t0, 0xFEDCBA9876543217
     csrw    \csr, t0
     li      t2, 0xFEDCBA9876543210
     csrr    t1, \csr
-    bne     t1, t2, .Llib_bound_done\@
+    bne     t1, t2, .Lbound_done\@
 
     li      t0, 0x0123456789ABCDE3
     csrrw   t1, \csr, t0
-    bne     t1, t2, .Llib_bound_done\@
+    bne     t1, t2, .Lbound_done\@
 
     li      t2, 0x0123456789ABCDE0
     csrr    t1, \csr
-    bne     t1, t2, .Llib_bound_done\@
+    bne     t1, t2, .Lbound_done\@
 
     li      t0, 7
     csrw    \csr, t0
     csrr    t1, \csr
-    bnez    t1, .Llib_bound_done\@
+    bnez    t1, .Lbound_done\@
     li      a0, 0
-.Llib_bound_done\@:
+.Lbound_done\@:
     ret
     .endm
 
-    DEFINE_LIB_BOUND_TEST test_lib_bound_lo0 , CSR_DASICS_LIB_BOUND_LO0 , 134
-    DEFINE_LIB_BOUND_TEST test_lib_bound_hi0 , CSR_DASICS_LIB_BOUND_HI0 , 135
-    DEFINE_LIB_BOUND_TEST test_lib_bound_lo1 , CSR_DASICS_LIB_BOUND_LO1 , 136
-    DEFINE_LIB_BOUND_TEST test_lib_bound_hi1 , CSR_DASICS_LIB_BOUND_HI1 , 137
-    DEFINE_LIB_BOUND_TEST test_lib_bound_lo2 , CSR_DASICS_LIB_BOUND_LO2 , 138
-    DEFINE_LIB_BOUND_TEST test_lib_bound_hi2 , CSR_DASICS_LIB_BOUND_HI2 , 139
-    DEFINE_LIB_BOUND_TEST test_lib_bound_lo3 , CSR_DASICS_LIB_BOUND_LO3 , 140
-    DEFINE_LIB_BOUND_TEST test_lib_bound_hi3 , CSR_DASICS_LIB_BOUND_HI3 , 141
-    DEFINE_LIB_BOUND_TEST test_lib_bound_lo4 , CSR_DASICS_LIB_BOUND_LO4 , 142
-    DEFINE_LIB_BOUND_TEST test_lib_bound_hi4 , CSR_DASICS_LIB_BOUND_HI4 , 143
-    DEFINE_LIB_BOUND_TEST test_lib_bound_lo5 , CSR_DASICS_LIB_BOUND_LO5 , 144
-    DEFINE_LIB_BOUND_TEST test_lib_bound_hi5 , CSR_DASICS_LIB_BOUND_HI5 , 145
-    DEFINE_LIB_BOUND_TEST test_lib_bound_lo6 , CSR_DASICS_LIB_BOUND_LO6 , 146
-    DEFINE_LIB_BOUND_TEST test_lib_bound_hi6 , CSR_DASICS_LIB_BOUND_HI6 , 147
-    DEFINE_LIB_BOUND_TEST test_lib_bound_lo7 , CSR_DASICS_LIB_BOUND_LO7 , 148
-    DEFINE_LIB_BOUND_TEST test_lib_bound_hi7 , CSR_DASICS_LIB_BOUND_HI7 , 149
-    DEFINE_LIB_BOUND_TEST test_lib_bound_lo8 , CSR_DASICS_LIB_BOUND_LO8 , 150
-    DEFINE_LIB_BOUND_TEST test_lib_bound_hi8 , CSR_DASICS_LIB_BOUND_HI8 , 151
-    DEFINE_LIB_BOUND_TEST test_lib_bound_lo9 , CSR_DASICS_LIB_BOUND_LO9 , 152
-    DEFINE_LIB_BOUND_TEST test_lib_bound_hi9 , CSR_DASICS_LIB_BOUND_HI9 , 153
-    DEFINE_LIB_BOUND_TEST test_lib_bound_lo10, CSR_DASICS_LIB_BOUND_LO10, 154
-    DEFINE_LIB_BOUND_TEST test_lib_bound_hi10, CSR_DASICS_LIB_BOUND_HI10, 155
-    DEFINE_LIB_BOUND_TEST test_lib_bound_lo11, CSR_DASICS_LIB_BOUND_LO11, 156
-    DEFINE_LIB_BOUND_TEST test_lib_bound_hi11, CSR_DASICS_LIB_BOUND_HI11, 157
-    DEFINE_LIB_BOUND_TEST test_lib_bound_lo12, CSR_DASICS_LIB_BOUND_LO12, 158
-    DEFINE_LIB_BOUND_TEST test_lib_bound_hi12, CSR_DASICS_LIB_BOUND_HI12, 159
-    DEFINE_LIB_BOUND_TEST test_lib_bound_lo13, CSR_DASICS_LIB_BOUND_LO13, 160
-    DEFINE_LIB_BOUND_TEST test_lib_bound_hi13, CSR_DASICS_LIB_BOUND_HI13, 161
-    DEFINE_LIB_BOUND_TEST test_lib_bound_lo14, CSR_DASICS_LIB_BOUND_LO14, 162
-    DEFINE_LIB_BOUND_TEST test_lib_bound_hi14, CSR_DASICS_LIB_BOUND_HI14, 163
-    DEFINE_LIB_BOUND_TEST test_lib_bound_lo15, CSR_DASICS_LIB_BOUND_LO15, 164
-    DEFINE_LIB_BOUND_TEST test_lib_bound_hi15, CSR_DASICS_LIB_BOUND_HI15, 165
+    DEFINE_BOUND_TEST test_lib_bound_lo0 , CSR_DASICS_LIB_BOUND_LO0 , 134
+    DEFINE_BOUND_TEST test_lib_bound_hi0 , CSR_DASICS_LIB_BOUND_HI0 , 135
+    DEFINE_BOUND_TEST test_lib_bound_lo1 , CSR_DASICS_LIB_BOUND_LO1 , 136
+    DEFINE_BOUND_TEST test_lib_bound_hi1 , CSR_DASICS_LIB_BOUND_HI1 , 137
+    DEFINE_BOUND_TEST test_lib_bound_lo2 , CSR_DASICS_LIB_BOUND_LO2 , 138
+    DEFINE_BOUND_TEST test_lib_bound_hi2 , CSR_DASICS_LIB_BOUND_HI2 , 139
+    DEFINE_BOUND_TEST test_lib_bound_lo3 , CSR_DASICS_LIB_BOUND_LO3 , 140
+    DEFINE_BOUND_TEST test_lib_bound_hi3 , CSR_DASICS_LIB_BOUND_HI3 , 141
+    DEFINE_BOUND_TEST test_lib_bound_lo4 , CSR_DASICS_LIB_BOUND_LO4 , 142
+    DEFINE_BOUND_TEST test_lib_bound_hi4 , CSR_DASICS_LIB_BOUND_HI4 , 143
+    DEFINE_BOUND_TEST test_lib_bound_lo5 , CSR_DASICS_LIB_BOUND_LO5 , 144
+    DEFINE_BOUND_TEST test_lib_bound_hi5 , CSR_DASICS_LIB_BOUND_HI5 , 145
+    DEFINE_BOUND_TEST test_lib_bound_lo6 , CSR_DASICS_LIB_BOUND_LO6 , 146
+    DEFINE_BOUND_TEST test_lib_bound_hi6 , CSR_DASICS_LIB_BOUND_HI6 , 147
+    DEFINE_BOUND_TEST test_lib_bound_lo7 , CSR_DASICS_LIB_BOUND_LO7 , 148
+    DEFINE_BOUND_TEST test_lib_bound_hi7 , CSR_DASICS_LIB_BOUND_HI7 , 149
+    DEFINE_BOUND_TEST test_lib_bound_lo8 , CSR_DASICS_LIB_BOUND_LO8 , 150
+    DEFINE_BOUND_TEST test_lib_bound_hi8 , CSR_DASICS_LIB_BOUND_HI8 , 151
+    DEFINE_BOUND_TEST test_lib_bound_lo9 , CSR_DASICS_LIB_BOUND_LO9 , 152
+    DEFINE_BOUND_TEST test_lib_bound_hi9 , CSR_DASICS_LIB_BOUND_HI9 , 153
+    DEFINE_BOUND_TEST test_lib_bound_lo10, CSR_DASICS_LIB_BOUND_LO10, 154
+    DEFINE_BOUND_TEST test_lib_bound_hi10, CSR_DASICS_LIB_BOUND_HI10, 155
+    DEFINE_BOUND_TEST test_lib_bound_lo11, CSR_DASICS_LIB_BOUND_LO11, 156
+    DEFINE_BOUND_TEST test_lib_bound_hi11, CSR_DASICS_LIB_BOUND_HI11, 157
+    DEFINE_BOUND_TEST test_lib_bound_lo12, CSR_DASICS_LIB_BOUND_LO12, 158
+    DEFINE_BOUND_TEST test_lib_bound_hi12, CSR_DASICS_LIB_BOUND_HI12, 159
+    DEFINE_BOUND_TEST test_lib_bound_lo13, CSR_DASICS_LIB_BOUND_LO13, 160
+    DEFINE_BOUND_TEST test_lib_bound_hi13, CSR_DASICS_LIB_BOUND_HI13, 161
+    DEFINE_BOUND_TEST test_lib_bound_lo14, CSR_DASICS_LIB_BOUND_LO14, 162
+    DEFINE_BOUND_TEST test_lib_bound_hi14, CSR_DASICS_LIB_BOUND_HI14, 163
+    DEFINE_BOUND_TEST test_lib_bound_lo15, CSR_DASICS_LIB_BOUND_LO15, 164
+    DEFINE_BOUND_TEST test_lib_bound_hi15, CSR_DASICS_LIB_BOUND_HI15, 165
+
+    DEFINE_BOUND_TEST test_jump_bound_lo0, CSR_DASICS_JUMP_BOUND_LO0, 217
+    DEFINE_BOUND_TEST test_jump_bound_hi0, CSR_DASICS_JUMP_BOUND_HI0, 218
+    DEFINE_BOUND_TEST test_jump_bound_lo1, CSR_DASICS_JUMP_BOUND_LO1, 219
+    DEFINE_BOUND_TEST test_jump_bound_hi1, CSR_DASICS_JUMP_BOUND_HI1, 220
+    DEFINE_BOUND_TEST test_jump_bound_lo2, CSR_DASICS_JUMP_BOUND_LO2, 221
+    DEFINE_BOUND_TEST test_jump_bound_hi2, CSR_DASICS_JUMP_BOUND_HI2, 222
+    DEFINE_BOUND_TEST test_jump_bound_lo3, CSR_DASICS_JUMP_BOUND_LO3, 223
+    DEFINE_BOUND_TEST test_jump_bound_hi3, CSR_DASICS_JUMP_BOUND_HI3, 224
 
 test_csr_independence:
     /* Prepare distinct values without relying on earlier test results. */
@@ -925,6 +1038,26 @@ test_csr_independence:
     csrw    CSR_DASICS_LIB_BOUND_LO15, t5
     li      t5, 0x10F80
     csrw    CSR_DASICS_LIB_BOUND_HI15, t5
+
+    /* Keep jump-region state distinct from every existing CSR seed. */
+    li      t5, 0x2468ACE113579BD5
+    csrw    CSR_DASICS_JUMP_CFG, t5
+    li      t5, 0x20000
+    csrw    CSR_DASICS_JUMP_BOUND_LO0, t5
+    li      t5, 0x20080
+    csrw    CSR_DASICS_JUMP_BOUND_HI0, t5
+    li      t5, 0x20100
+    csrw    CSR_DASICS_JUMP_BOUND_LO1, t5
+    li      t5, 0x20180
+    csrw    CSR_DASICS_JUMP_BOUND_HI1, t5
+    li      t5, 0x20200
+    csrw    CSR_DASICS_JUMP_BOUND_LO2, t5
+    li      t5, 0x20280
+    csrw    CSR_DASICS_JUMP_BOUND_HI2, t5
+    li      t5, 0x20300
+    csrw    CSR_DASICS_JUMP_BOUND_LO3, t5
+    li      t5, 0x20380
+    csrw    CSR_DASICS_JUMP_BOUND_HI3, t5
 
     li      a0, 8
     csrr    t4, CSR_DASICS_MAIN_CALL_ENTRY
@@ -1095,6 +1228,42 @@ test_csr_independence:
     li      a0, 198
     li      t5, 0x10F80
     csrr    t4, CSR_DASICS_LIB_BOUND_HI15
+    bne     t4, t5, .Lindependence_done
+    li      a0, 225
+    li      t5, 0x2468ACE113579BD5
+    csrr    t4, CSR_DASICS_JUMP_CFG
+    bne     t4, t5, .Lindependence_done
+    li      a0, 226
+    li      t5, 0x20000
+    csrr    t4, CSR_DASICS_JUMP_BOUND_LO0
+    bne     t4, t5, .Lindependence_done
+    li      a0, 227
+    li      t5, 0x20080
+    csrr    t4, CSR_DASICS_JUMP_BOUND_HI0
+    bne     t4, t5, .Lindependence_done
+    li      a0, 228
+    li      t5, 0x20100
+    csrr    t4, CSR_DASICS_JUMP_BOUND_LO1
+    bne     t4, t5, .Lindependence_done
+    li      a0, 229
+    li      t5, 0x20180
+    csrr    t4, CSR_DASICS_JUMP_BOUND_HI1
+    bne     t4, t5, .Lindependence_done
+    li      a0, 230
+    li      t5, 0x20200
+    csrr    t4, CSR_DASICS_JUMP_BOUND_LO2
+    bne     t4, t5, .Lindependence_done
+    li      a0, 231
+    li      t5, 0x20280
+    csrr    t4, CSR_DASICS_JUMP_BOUND_HI2
+    bne     t4, t5, .Lindependence_done
+    li      a0, 232
+    li      t5, 0x20300
+    csrr    t4, CSR_DASICS_JUMP_BOUND_LO3
+    bne     t4, t5, .Lindependence_done
+    li      a0, 233
+    li      t5, 0x20380
+    csrr    t4, CSR_DASICS_JUMP_BOUND_HI3
     bne     t4, t5, .Lindependence_done
     li      a0, 0
 .Lindependence_done:

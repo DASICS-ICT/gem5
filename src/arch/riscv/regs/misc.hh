@@ -384,6 +384,27 @@ enum MiscRegIndex
     MISCREG_DASICS_LIB_BOUND_LO15,
     // Per-hart exclusive upper bound of data region 15.
     MISCREG_DASICS_LIB_BOUND_HI15,
+
+    // Per-hart jump-bound configuration shared by S and U modes.
+    // All bits are stored; bits 0, 16, 32 and 48 encode region validity.
+    MISCREG_DASICS_JUMP_CFG      ,
+
+    // Per-hart lower bound of jump region 0.
+    MISCREG_DASICS_JUMP_BOUND_LO0,
+    // Per-hart exclusive upper bound of jump region 0.
+    MISCREG_DASICS_JUMP_BOUND_HI0,
+    // Per-hart lower bound of jump region 1.
+    MISCREG_DASICS_JUMP_BOUND_LO1,
+    // Per-hart exclusive upper bound of jump region 1.
+    MISCREG_DASICS_JUMP_BOUND_HI1,
+    // Per-hart lower bound of jump region 2.
+    MISCREG_DASICS_JUMP_BOUND_LO2,
+    // Per-hart exclusive upper bound of jump region 2.
+    MISCREG_DASICS_JUMP_BOUND_HI2,
+    // Per-hart lower bound of jump region 3.
+    MISCREG_DASICS_JUMP_BOUND_LO3,
+    // Per-hart exclusive upper bound of jump region 3.
+    MISCREG_DASICS_JUMP_BOUND_HI3,
 // clang-format on
 #endif // USE_DASICS
 
@@ -729,6 +750,26 @@ enum CSRIndex
     CSR_DASICS_LIB_BOUND_LO15 = 0x8AE,
     // Exclusive upper bound of data region 15; minimum privilege is U.
     CSR_DASICS_LIB_BOUND_HI15 = 0x8AF,
+
+    // Jump-bound configuration; minimum privilege is U.
+    CSR_DASICS_JUMP_CFG       = 0x8C8,
+
+    // Lower bound of jump region 0; minimum privilege is U.
+    CSR_DASICS_JUMP_BOUND_LO0 = 0x8C0,
+    // Exclusive upper bound of jump region 0; minimum privilege is U.
+    CSR_DASICS_JUMP_BOUND_HI0 = 0x8C1,
+    // Lower bound of jump region 1; minimum privilege is U.
+    CSR_DASICS_JUMP_BOUND_LO1 = 0x8C2,
+    // Exclusive upper bound of jump region 1; minimum privilege is U.
+    CSR_DASICS_JUMP_BOUND_HI1 = 0x8C3,
+    // Lower bound of jump region 2; minimum privilege is U.
+    CSR_DASICS_JUMP_BOUND_LO2 = 0x8C4,
+    // Exclusive upper bound of jump region 2; minimum privilege is U.
+    CSR_DASICS_JUMP_BOUND_HI2 = 0x8C5,
+    // Lower bound of jump region 3; minimum privilege is U.
+    CSR_DASICS_JUMP_BOUND_LO3 = 0x8C6,
+    // Exclusive upper bound of jump region 3; minimum privilege is U.
+    CSR_DASICS_JUMP_BOUND_HI3 = 0x8C7,
 // clang-format on
 #endif // USE_DASICS
 
@@ -1535,6 +1576,35 @@ const std::unordered_map<int, CSRMetadata> CSRData = {
     {CSR_DASICS_LIB_BOUND_HI15,
      {"dasics_lib_bound_hi15", MISCREG_DASICS_LIB_BOUND_HI15,
       rvTypeFlags(RV64), isaExtsFlags()}},
+
+    {CSR_DASICS_JUMP_CFG      ,
+     {"dasics_jump_cfg"      , MISCREG_DASICS_JUMP_CFG      ,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+
+    {CSR_DASICS_JUMP_BOUND_LO0,
+     {"dasics_jump_bound_lo0", MISCREG_DASICS_JUMP_BOUND_LO0,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_JUMP_BOUND_HI0,
+     {"dasics_jump_bound_hi0", MISCREG_DASICS_JUMP_BOUND_HI0,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_JUMP_BOUND_LO1,
+     {"dasics_jump_bound_lo1", MISCREG_DASICS_JUMP_BOUND_LO1,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_JUMP_BOUND_HI1,
+     {"dasics_jump_bound_hi1", MISCREG_DASICS_JUMP_BOUND_HI1,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_JUMP_BOUND_LO2,
+     {"dasics_jump_bound_lo2", MISCREG_DASICS_JUMP_BOUND_LO2,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_JUMP_BOUND_HI2,
+     {"dasics_jump_bound_hi2", MISCREG_DASICS_JUMP_BOUND_HI2,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_JUMP_BOUND_LO3,
+     {"dasics_jump_bound_lo3", MISCREG_DASICS_JUMP_BOUND_LO3,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_JUMP_BOUND_HI3,
+     {"dasics_jump_bound_hi3", MISCREG_DASICS_JUMP_BOUND_HI3,
+      rvTypeFlags(RV64), isaExtsFlags()}},
 // clang-format on
 #endif // USE_DASICS
 
@@ -1973,7 +2043,7 @@ const RegVal DASICS_U_MAIN_CFG_MASK = 0x3E;
 // SMainCfg bits [9:0] are readable and writable; bits [63:10] read as zero.
 const RegVal DASICS_S_MAIN_CFG_MASK = 0x3FF;
 
-// MainBound and LibBound bits [63:3] are readable and writable.
+// MainBound, LibBound and JumpBound bits [63:3] are readable and writable.
 // Bits [2:0] read as zero.
 const RegVal DASICS_BOUND_MASK = mask(63, 3);
 
@@ -2092,6 +2162,15 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
             {CSR_DASICS_LIB_BOUND_HI14 , DASICS_BOUND_MASK     },
             {CSR_DASICS_LIB_BOUND_LO15 , DASICS_BOUND_MASK     },
             {CSR_DASICS_LIB_BOUND_HI15 , DASICS_BOUND_MASK     },
+
+            {CSR_DASICS_JUMP_BOUND_LO0 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_HI0 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_LO1 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_HI1 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_LO2 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_HI2 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_LO3 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_HI3 , DASICS_BOUND_MASK     },
 #endif // USE_DASICS
         },
         [enums::MU] = {
@@ -2148,6 +2227,15 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
             {CSR_DASICS_LIB_BOUND_HI14 , DASICS_BOUND_MASK     },
             {CSR_DASICS_LIB_BOUND_LO15 , DASICS_BOUND_MASK     },
             {CSR_DASICS_LIB_BOUND_HI15 , DASICS_BOUND_MASK     },
+
+            {CSR_DASICS_JUMP_BOUND_LO0 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_HI0 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_LO1 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_HI1 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_LO2 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_HI2 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_LO3 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_HI3 , DASICS_BOUND_MASK     },
 #endif // USE_DASICS
         },
         [enums::MSU] = {
@@ -2204,6 +2292,15 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
             {CSR_DASICS_LIB_BOUND_HI14 , DASICS_BOUND_MASK     },
             {CSR_DASICS_LIB_BOUND_LO15 , DASICS_BOUND_MASK     },
             {CSR_DASICS_LIB_BOUND_HI15 , DASICS_BOUND_MASK     },
+
+            {CSR_DASICS_JUMP_BOUND_LO0 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_HI0 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_LO1 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_HI1 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_LO2 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_HI2 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_LO3 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_HI3 , DASICS_BOUND_MASK     },
 #endif // USE_DASICS
         },
         [enums::MHSU] = {
@@ -2267,6 +2364,15 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
             {CSR_DASICS_LIB_BOUND_HI14 , DASICS_BOUND_MASK     },
             {CSR_DASICS_LIB_BOUND_LO15 , DASICS_BOUND_MASK     },
             {CSR_DASICS_LIB_BOUND_HI15 , DASICS_BOUND_MASK     },
+
+            {CSR_DASICS_JUMP_BOUND_LO0 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_HI0 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_LO1 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_HI1 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_LO2 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_HI2 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_LO3 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_JUMP_BOUND_HI3 , DASICS_BOUND_MASK     },
 #endif // USE_DASICS
         },
     },
