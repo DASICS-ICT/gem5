@@ -315,6 +315,76 @@ enum MiscRegIndex
     MISCREG_DASICS_S_MAIN_BOUND_LO,
     // Per-hart exclusive upper bound of the S-mode trusted code region.
     MISCREG_DASICS_S_MAIN_BOUND_HI,
+
+    // clang-format off
+    // Per-hart data-bound configuration shared by S and U modes.
+    MISCREG_DASICS_LIB_CFG       ,
+
+    // Per-hart lower bound of data region 0.
+    MISCREG_DASICS_LIB_BOUND_LO0 ,
+    // Per-hart exclusive upper bound of data region 0.
+    MISCREG_DASICS_LIB_BOUND_HI0 ,
+    // Per-hart lower bound of data region 1.
+    MISCREG_DASICS_LIB_BOUND_LO1 ,
+    // Per-hart exclusive upper bound of data region 1.
+    MISCREG_DASICS_LIB_BOUND_HI1 ,
+    // Per-hart lower bound of data region 2.
+    MISCREG_DASICS_LIB_BOUND_LO2 ,
+    // Per-hart exclusive upper bound of data region 2.
+    MISCREG_DASICS_LIB_BOUND_HI2 ,
+    // Per-hart lower bound of data region 3.
+    MISCREG_DASICS_LIB_BOUND_LO3 ,
+    // Per-hart exclusive upper bound of data region 3.
+    MISCREG_DASICS_LIB_BOUND_HI3 ,
+    // Per-hart lower bound of data region 4.
+    MISCREG_DASICS_LIB_BOUND_LO4 ,
+    // Per-hart exclusive upper bound of data region 4.
+    MISCREG_DASICS_LIB_BOUND_HI4 ,
+    // Per-hart lower bound of data region 5.
+    MISCREG_DASICS_LIB_BOUND_LO5 ,
+    // Per-hart exclusive upper bound of data region 5.
+    MISCREG_DASICS_LIB_BOUND_HI5 ,
+    // Per-hart lower bound of data region 6.
+    MISCREG_DASICS_LIB_BOUND_LO6 ,
+    // Per-hart exclusive upper bound of data region 6.
+    MISCREG_DASICS_LIB_BOUND_HI6 ,
+    // Per-hart lower bound of data region 7.
+    MISCREG_DASICS_LIB_BOUND_LO7 ,
+    // Per-hart exclusive upper bound of data region 7.
+    MISCREG_DASICS_LIB_BOUND_HI7 ,
+    // Per-hart lower bound of data region 8.
+    MISCREG_DASICS_LIB_BOUND_LO8 ,
+    // Per-hart exclusive upper bound of data region 8.
+    MISCREG_DASICS_LIB_BOUND_HI8 ,
+    // Per-hart lower bound of data region 9.
+    MISCREG_DASICS_LIB_BOUND_LO9 ,
+    // Per-hart exclusive upper bound of data region 9.
+    MISCREG_DASICS_LIB_BOUND_HI9 ,
+    // Per-hart lower bound of data region 10.
+    MISCREG_DASICS_LIB_BOUND_LO10,
+    // Per-hart exclusive upper bound of data region 10.
+    MISCREG_DASICS_LIB_BOUND_HI10,
+    // Per-hart lower bound of data region 11.
+    MISCREG_DASICS_LIB_BOUND_LO11,
+    // Per-hart exclusive upper bound of data region 11.
+    MISCREG_DASICS_LIB_BOUND_HI11,
+    // Per-hart lower bound of data region 12.
+    MISCREG_DASICS_LIB_BOUND_LO12,
+    // Per-hart exclusive upper bound of data region 12.
+    MISCREG_DASICS_LIB_BOUND_HI12,
+    // Per-hart lower bound of data region 13.
+    MISCREG_DASICS_LIB_BOUND_LO13,
+    // Per-hart exclusive upper bound of data region 13.
+    MISCREG_DASICS_LIB_BOUND_HI13,
+    // Per-hart lower bound of data region 14.
+    MISCREG_DASICS_LIB_BOUND_LO14,
+    // Per-hart exclusive upper bound of data region 14.
+    MISCREG_DASICS_LIB_BOUND_HI14,
+    // Per-hart lower bound of data region 15.
+    MISCREG_DASICS_LIB_BOUND_LO15,
+    // Per-hart exclusive upper bound of data region 15.
+    MISCREG_DASICS_LIB_BOUND_HI15,
+// clang-format on
 #endif // USE_DASICS
 
     NUM_PHYS_MISCREGS,
@@ -590,6 +660,76 @@ enum CSRIndex
     CSR_DASICS_ACTIVE_ZONE_RETURN_PC = 0x8B2,
     // DASICS fault reason.
     CSR_DASICS_FREASON = 0x8B3,
+
+    // clang-format off
+    // Configuration for 16 data-bound regions; minimum privilege is U.
+    CSR_DASICS_LIB_CFG        = 0x880,
+
+    // Lower bound of data region 0; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_LO0  = 0x890,
+    // Exclusive upper bound of data region 0; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_HI0  = 0x891,
+    // Lower bound of data region 1; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_LO1  = 0x892,
+    // Exclusive upper bound of data region 1; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_HI1  = 0x893,
+    // Lower bound of data region 2; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_LO2  = 0x894,
+    // Exclusive upper bound of data region 2; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_HI2  = 0x895,
+    // Lower bound of data region 3; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_LO3  = 0x896,
+    // Exclusive upper bound of data region 3; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_HI3  = 0x897,
+    // Lower bound of data region 4; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_LO4  = 0x898,
+    // Exclusive upper bound of data region 4; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_HI4  = 0x899,
+    // Lower bound of data region 5; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_LO5  = 0x89A,
+    // Exclusive upper bound of data region 5; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_HI5  = 0x89B,
+    // Lower bound of data region 6; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_LO6  = 0x89C,
+    // Exclusive upper bound of data region 6; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_HI6  = 0x89D,
+    // Lower bound of data region 7; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_LO7  = 0x89E,
+    // Exclusive upper bound of data region 7; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_HI7  = 0x89F,
+    // Lower bound of data region 8; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_LO8  = 0x8A0,
+    // Exclusive upper bound of data region 8; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_HI8  = 0x8A1,
+    // Lower bound of data region 9; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_LO9  = 0x8A2,
+    // Exclusive upper bound of data region 9; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_HI9  = 0x8A3,
+    // Lower bound of data region 10; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_LO10 = 0x8A4,
+    // Exclusive upper bound of data region 10; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_HI10 = 0x8A5,
+    // Lower bound of data region 11; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_LO11 = 0x8A6,
+    // Exclusive upper bound of data region 11; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_HI11 = 0x8A7,
+    // Lower bound of data region 12; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_LO12 = 0x8A8,
+    // Exclusive upper bound of data region 12; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_HI12 = 0x8A9,
+    // Lower bound of data region 13; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_LO13 = 0x8AA,
+    // Exclusive upper bound of data region 13; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_HI13 = 0x8AB,
+    // Lower bound of data region 14; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_LO14 = 0x8AC,
+    // Exclusive upper bound of data region 14; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_HI14 = 0x8AD,
+    // Lower bound of data region 15; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_LO15 = 0x8AE,
+    // Exclusive upper bound of data region 15; minimum privilege is U.
+    CSR_DASICS_LIB_BOUND_HI15 = 0x8AF,
+// clang-format on
 #endif // USE_DASICS
 
     // H-extension (RV64) CSRs
@@ -1293,6 +1433,109 @@ const std::unordered_map<int, CSRMetadata> CSRData = {
     {CSR_DASICS_FREASON,
      {"dasics_freason", MISCREG_DASICS_FREASON, rvTypeFlags(RV64),
       isaExtsFlags()}},
+
+    // clang-format off
+    {CSR_DASICS_LIB_CFG       ,
+     {"dasics_lib_cfg"       , MISCREG_DASICS_LIB_CFG       ,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+
+    {CSR_DASICS_LIB_BOUND_LO0 ,
+     {"dasics_lib_bound_lo0" , MISCREG_DASICS_LIB_BOUND_LO0 ,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_HI0 ,
+     {"dasics_lib_bound_hi0" , MISCREG_DASICS_LIB_BOUND_HI0 ,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_LO1 ,
+     {"dasics_lib_bound_lo1" , MISCREG_DASICS_LIB_BOUND_LO1 ,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_HI1 ,
+     {"dasics_lib_bound_hi1" , MISCREG_DASICS_LIB_BOUND_HI1 ,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_LO2 ,
+     {"dasics_lib_bound_lo2" , MISCREG_DASICS_LIB_BOUND_LO2 ,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_HI2 ,
+     {"dasics_lib_bound_hi2" , MISCREG_DASICS_LIB_BOUND_HI2 ,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_LO3 ,
+     {"dasics_lib_bound_lo3" , MISCREG_DASICS_LIB_BOUND_LO3 ,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_HI3 ,
+     {"dasics_lib_bound_hi3" , MISCREG_DASICS_LIB_BOUND_HI3 ,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_LO4 ,
+     {"dasics_lib_bound_lo4" , MISCREG_DASICS_LIB_BOUND_LO4 ,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_HI4 ,
+     {"dasics_lib_bound_hi4" , MISCREG_DASICS_LIB_BOUND_HI4 ,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_LO5 ,
+     {"dasics_lib_bound_lo5" , MISCREG_DASICS_LIB_BOUND_LO5 ,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_HI5 ,
+     {"dasics_lib_bound_hi5" , MISCREG_DASICS_LIB_BOUND_HI5 ,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_LO6 ,
+     {"dasics_lib_bound_lo6" , MISCREG_DASICS_LIB_BOUND_LO6 ,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_HI6 ,
+     {"dasics_lib_bound_hi6" , MISCREG_DASICS_LIB_BOUND_HI6 ,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_LO7 ,
+     {"dasics_lib_bound_lo7" , MISCREG_DASICS_LIB_BOUND_LO7 ,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_HI7 ,
+     {"dasics_lib_bound_hi7" , MISCREG_DASICS_LIB_BOUND_HI7 ,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_LO8 ,
+     {"dasics_lib_bound_lo8" , MISCREG_DASICS_LIB_BOUND_LO8 ,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_HI8 ,
+     {"dasics_lib_bound_hi8" , MISCREG_DASICS_LIB_BOUND_HI8 ,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_LO9 ,
+     {"dasics_lib_bound_lo9" , MISCREG_DASICS_LIB_BOUND_LO9 ,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_HI9 ,
+     {"dasics_lib_bound_hi9" , MISCREG_DASICS_LIB_BOUND_HI9 ,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_LO10,
+     {"dasics_lib_bound_lo10", MISCREG_DASICS_LIB_BOUND_LO10,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_HI10,
+     {"dasics_lib_bound_hi10", MISCREG_DASICS_LIB_BOUND_HI10,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_LO11,
+     {"dasics_lib_bound_lo11", MISCREG_DASICS_LIB_BOUND_LO11,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_HI11,
+     {"dasics_lib_bound_hi11", MISCREG_DASICS_LIB_BOUND_HI11,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_LO12,
+     {"dasics_lib_bound_lo12", MISCREG_DASICS_LIB_BOUND_LO12,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_HI12,
+     {"dasics_lib_bound_hi12", MISCREG_DASICS_LIB_BOUND_HI12,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_LO13,
+     {"dasics_lib_bound_lo13", MISCREG_DASICS_LIB_BOUND_LO13,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_HI13,
+     {"dasics_lib_bound_hi13", MISCREG_DASICS_LIB_BOUND_HI13,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_LO14,
+     {"dasics_lib_bound_lo14", MISCREG_DASICS_LIB_BOUND_LO14,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_HI14,
+     {"dasics_lib_bound_hi14", MISCREG_DASICS_LIB_BOUND_HI14,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_LO15,
+     {"dasics_lib_bound_lo15", MISCREG_DASICS_LIB_BOUND_LO15,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+    {CSR_DASICS_LIB_BOUND_HI15,
+     {"dasics_lib_bound_hi15", MISCREG_DASICS_LIB_BOUND_HI15,
+      rvTypeFlags(RV64), isaExtsFlags()}},
+// clang-format on
 #endif // USE_DASICS
 
     // H-extension CSR -> MISCREG mappings
@@ -1730,8 +1973,9 @@ const RegVal DASICS_U_MAIN_CFG_MASK = 0x3E;
 // SMainCfg bits [9:0] are readable and writable; bits [63:10] read as zero.
 const RegVal DASICS_S_MAIN_CFG_MASK = 0x3FF;
 
-// MainBound bits [63:3] are readable and writable; bits [2:0] read as zero.
-const RegVal DASICS_MAIN_BOUND_MASK = mask(63, 3);
+// MainBound and LibBound bits [63:3] are readable and writable.
+// Bits [2:0] read as zero.
+const RegVal DASICS_BOUND_MASK = mask(63, 3);
 
 // FReason bits [2:0] are readable and writable; bits [63:3] read as zero.
 const RegVal DASICS_FREASON_MASK = 0x7;
@@ -1808,13 +2052,46 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
 
 #if USE_DASICS
             // DASICS CSR masks.
-            {CSR_DASICS_U_MAIN_CFG, DASICS_U_MAIN_CFG_MASK},
-            {CSR_DASICS_U_MAIN_BOUND_LO, DASICS_MAIN_BOUND_MASK},
-            {CSR_DASICS_U_MAIN_BOUND_HI, DASICS_MAIN_BOUND_MASK},
-            {CSR_DASICS_S_MAIN_CFG, DASICS_S_MAIN_CFG_MASK},
-            {CSR_DASICS_S_MAIN_BOUND_LO, DASICS_MAIN_BOUND_MASK},
-            {CSR_DASICS_S_MAIN_BOUND_HI, DASICS_MAIN_BOUND_MASK},
-            {CSR_DASICS_FREASON, DASICS_FREASON_MASK},
+            {CSR_DASICS_U_MAIN_CFG     , DASICS_U_MAIN_CFG_MASK},
+            {CSR_DASICS_U_MAIN_BOUND_LO, DASICS_BOUND_MASK     },
+            {CSR_DASICS_U_MAIN_BOUND_HI, DASICS_BOUND_MASK     },
+            {CSR_DASICS_S_MAIN_CFG     , DASICS_S_MAIN_CFG_MASK},
+            {CSR_DASICS_S_MAIN_BOUND_LO, DASICS_BOUND_MASK     },
+            {CSR_DASICS_S_MAIN_BOUND_HI, DASICS_BOUND_MASK     },
+            {CSR_DASICS_FREASON        , DASICS_FREASON_MASK   },
+
+            {CSR_DASICS_LIB_BOUND_LO0  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI0  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO1  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI1  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO2  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI2  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO3  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI3  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO4  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI4  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO5  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI5  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO6  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI6  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO7  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI7  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO8  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI8  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO9  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI9  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO10 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI10 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO11 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI11 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO12 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI12 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO13 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI13 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO14 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI14 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO15 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI15 , DASICS_BOUND_MASK     },
 #endif // USE_DASICS
         },
         [enums::MU] = {
@@ -1831,13 +2108,46 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
 
 #if USE_DASICS
             // DASICS CSR masks.
-            {CSR_DASICS_U_MAIN_CFG, DASICS_U_MAIN_CFG_MASK},
-            {CSR_DASICS_U_MAIN_BOUND_LO, DASICS_MAIN_BOUND_MASK},
-            {CSR_DASICS_U_MAIN_BOUND_HI, DASICS_MAIN_BOUND_MASK},
-            {CSR_DASICS_S_MAIN_CFG, DASICS_S_MAIN_CFG_MASK},
-            {CSR_DASICS_S_MAIN_BOUND_LO, DASICS_MAIN_BOUND_MASK},
-            {CSR_DASICS_S_MAIN_BOUND_HI, DASICS_MAIN_BOUND_MASK},
-            {CSR_DASICS_FREASON, DASICS_FREASON_MASK},
+            {CSR_DASICS_U_MAIN_CFG     , DASICS_U_MAIN_CFG_MASK},
+            {CSR_DASICS_U_MAIN_BOUND_LO, DASICS_BOUND_MASK     },
+            {CSR_DASICS_U_MAIN_BOUND_HI, DASICS_BOUND_MASK     },
+            {CSR_DASICS_S_MAIN_CFG     , DASICS_S_MAIN_CFG_MASK},
+            {CSR_DASICS_S_MAIN_BOUND_LO, DASICS_BOUND_MASK     },
+            {CSR_DASICS_S_MAIN_BOUND_HI, DASICS_BOUND_MASK     },
+            {CSR_DASICS_FREASON        , DASICS_FREASON_MASK   },
+
+            {CSR_DASICS_LIB_BOUND_LO0  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI0  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO1  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI1  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO2  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI2  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO3  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI3  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO4  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI4  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO5  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI5  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO6  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI6  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO7  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI7  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO8  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI8  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO9  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI9  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO10 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI10 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO11 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI11 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO12 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI12 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO13 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI13 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO14 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI14 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO15 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI15 , DASICS_BOUND_MASK     },
 #endif // USE_DASICS
         },
         [enums::MSU] = {
@@ -1854,13 +2164,46 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
 
 #if USE_DASICS
             // DASICS CSR masks.
-            {CSR_DASICS_U_MAIN_CFG, DASICS_U_MAIN_CFG_MASK},
-            {CSR_DASICS_U_MAIN_BOUND_LO, DASICS_MAIN_BOUND_MASK},
-            {CSR_DASICS_U_MAIN_BOUND_HI, DASICS_MAIN_BOUND_MASK},
-            {CSR_DASICS_S_MAIN_CFG, DASICS_S_MAIN_CFG_MASK},
-            {CSR_DASICS_S_MAIN_BOUND_LO, DASICS_MAIN_BOUND_MASK},
-            {CSR_DASICS_S_MAIN_BOUND_HI, DASICS_MAIN_BOUND_MASK},
-            {CSR_DASICS_FREASON, DASICS_FREASON_MASK},
+            {CSR_DASICS_U_MAIN_CFG     , DASICS_U_MAIN_CFG_MASK},
+            {CSR_DASICS_U_MAIN_BOUND_LO, DASICS_BOUND_MASK     },
+            {CSR_DASICS_U_MAIN_BOUND_HI, DASICS_BOUND_MASK     },
+            {CSR_DASICS_S_MAIN_CFG     , DASICS_S_MAIN_CFG_MASK},
+            {CSR_DASICS_S_MAIN_BOUND_LO, DASICS_BOUND_MASK     },
+            {CSR_DASICS_S_MAIN_BOUND_HI, DASICS_BOUND_MASK     },
+            {CSR_DASICS_FREASON        , DASICS_FREASON_MASK   },
+
+            {CSR_DASICS_LIB_BOUND_LO0  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI0  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO1  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI1  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO2  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI2  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO3  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI3  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO4  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI4  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO5  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI5  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO6  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI6  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO7  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI7  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO8  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI8  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO9  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI9  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO10 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI10 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO11 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI11 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO12 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI12 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO13 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI13 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO14 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI14 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO15 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI15 , DASICS_BOUND_MASK     },
 #endif // USE_DASICS
         },
         [enums::MHSU] = {
@@ -1885,12 +2228,45 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
 #if USE_DASICS
             // DASICS CSR masks.
             {CSR_DASICS_U_MAIN_CFG     , DASICS_U_MAIN_CFG_MASK},
-            {CSR_DASICS_U_MAIN_BOUND_LO, DASICS_MAIN_BOUND_MASK},
-            {CSR_DASICS_U_MAIN_BOUND_HI, DASICS_MAIN_BOUND_MASK},
+            {CSR_DASICS_U_MAIN_BOUND_LO, DASICS_BOUND_MASK     },
+            {CSR_DASICS_U_MAIN_BOUND_HI, DASICS_BOUND_MASK     },
             {CSR_DASICS_S_MAIN_CFG     , DASICS_S_MAIN_CFG_MASK},
-            {CSR_DASICS_S_MAIN_BOUND_LO, DASICS_MAIN_BOUND_MASK},
-            {CSR_DASICS_S_MAIN_BOUND_HI, DASICS_MAIN_BOUND_MASK},
-            {CSR_DASICS_FREASON        , DASICS_FREASON_MASK},
+            {CSR_DASICS_S_MAIN_BOUND_LO, DASICS_BOUND_MASK     },
+            {CSR_DASICS_S_MAIN_BOUND_HI, DASICS_BOUND_MASK     },
+            {CSR_DASICS_FREASON        , DASICS_FREASON_MASK   },
+
+            {CSR_DASICS_LIB_BOUND_LO0  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI0  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO1  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI1  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO2  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI2  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO3  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI3  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO4  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI4  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO5  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI5  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO6  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI6  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO7  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI7  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO8  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI8  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO9  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI9  , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO10 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI10 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO11 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI11 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO12 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI12 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO13 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI13 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO14 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI14 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_LO15 , DASICS_BOUND_MASK     },
+            {CSR_DASICS_LIB_BOUND_HI15 , DASICS_BOUND_MASK     },
 #endif // USE_DASICS
         },
     },

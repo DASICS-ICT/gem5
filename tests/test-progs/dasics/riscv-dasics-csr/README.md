@@ -16,8 +16,11 @@
 | `DASICS_S_MAIN_BOUND_HI` | `0xBC3` |
 | `DASICS_U_MAIN_CFG` | `0x9E1` |
 | `DASICS_S_MAIN_CFG` | `0xBC0` |
+| `DASICS_LIB_CFG` | `0x880` |
+| `DASICS_LIB_BOUND_LOi`（`i=0..15`） | `0x890 + 2*i` |
+| `DASICS_LIB_BOUND_HIi`（`i=0..15`） | `0x891 + 2*i` |
 
-共 10 个 CSR 地址、9 份 DASICS 状态。UMainCfg/SMainCfg 共享 MainCfg，
+共 43 个 CSR 地址、42 份 DASICS 状态。UMainCfg/SMainCfg 共享 MainCfg，
 读写掩码分别为 `0x3E`、`0x3FF`；U 视图写入保留 S 专属字段 `0x3C1`。
 
 | 项目 | 值 |
@@ -36,20 +39,24 @@
 `_start` 初始化 `mtvec` 后，依次调用 `test_csr_initial_values`、
 `test_main_call_entry`、`test_return_pc`、`test_active_zone_return_pc`、`test_freason`、
 `test_u_main_bound_lo`、`test_u_main_bound_hi`、`test_s_main_bound_lo`、
-`test_s_main_bound_hi`、`test_u_main_cfg`、`test_s_main_cfg`、
-`test_csr_independence`，遇非零返回值立即退出。
-各测试均为叶函数，通过 `a0` 返回 `0` 或唯一错误码，不使用栈或嵌套调用。
+`test_s_main_bound_hi`、`test_u_main_cfg`、`test_s_main_cfg`、`test_lib_cfg`，
+再按 Lo/Hi 交错顺序调用 `test_lib_bound_lo0`、`test_lib_bound_hi0`，
+直到 `test_lib_bound_lo15`、`test_lib_bound_hi15`（共 32 个函数），
+最后调用 `test_csr_independence`，遇非零返回值立即退出。
+各测试均为叶函数，通过 `a0` 返回 `0` 或失败码，沿用单 ELF、无栈和无嵌套调用结构。
+32 个 LibBound 函数由 `DEFINE_LIB_BOUND_TEST` 在汇编期展开，CSR 号为编译期常量。
 
 前三个全 64 位 CSR 的测试函数各自准备 `P = 0xFEDCBA9876543217` 和 `Q = 0x0123456789ABCDE3`。
 FReason 单独验证低 3 位读写、高位读零及交换、置位和清位。
 独立性检查另用 `R = 0x89ABCDEF01234565`，并将 FReason 设为 `2`。
 MainBound 交换检查使用对齐值 `PA = 0xFEDCBA9876543210`、`QA = 0x0123456789ABCDE0`。
-MainBound 和 MainCfg 均在 M 态测试，分别验证存储与对齐、共享视图与掩码。
-S/U 权限、保护使能的实际效果及 PC 可信检查不在本测试覆盖范围。
+LibCfg 另用 `~P = 0x0123456789ABCDE8`，完整保存全部 64 位。
+本测试仅在 M 态验证存储、读写掩码、共享视图和独立性；
+不覆盖授权、特权切换、保护使能效果、PC 可信检查或区间生效。
 
 | 用例 | 操作 | 预期结果 |
 | --- | --- | --- |
-| 冷初始化 | `test_csr_initial_values` 在任何 DASICS CSR 写入前读取十个地址的初值 | 各自返回 `0` |
+| 冷初始化 | `test_csr_initial_values` 在任何 DASICS CSR 写入前读取 43 个地址的初值 | 各自返回 `0` |
 | 64 位读写 | 前三个 CSR 分别写入 P 后读回 | 各自完整返回 P，包含高 32 位、bit 63 和低 3 位 |
 | 读写交换 | 前三个 CSR 分别使用 `CSRRW` 写入 Q，随后读取 | 各自返回旧值 P，后续读取返回 Q |
 | FReason 掩码与交换 | 写入 `-1` 后读回，再用 `CSRRW` 写入 `-6`；另检查写入 `0` 和 `-8` | 初次读回 `7`，交换返回旧值 `7`、新值为 `2`；写入 `0` 和 `-8` 均读回 `0` |
@@ -57,7 +64,10 @@ S/U 权限、保护使能的实际效果及 PC 可信检查不在本测试覆盖
 | MainBound 读写 | 四个函数各自验证对齐、非对齐、高位保留、交换及仅低位写入 | 低 3 位读零，写入向下对齐；交换返回对齐后的旧值，具体输入与错误码见下表 |
 | UMainCfg 联动 | `test_u_main_cfg` 自行准备 S 视图初态，再经 U 视图读写、交换和置清位 | U 读写仅影响 `0x3E`，S 专属字段保持；具体值与错误码见下表 |
 | SMainCfg 联动 | `test_s_main_cfg` 自行准备共享初态，再经 S 视图读写、交换和置清位 | S 读写影响 `0x3FF`，U 读值始终为共享状态的 `0x3E` 视图 |
-| 存储独立性 | `test_csr_independence` 准备原 Q/P/R/2 和四个 MainBound 的 `0x1000/0x2000/0x3000/0x4000`，再写 S=`0x155`、U=`0x2A`；完成全部写入后先核对旧八个 CSR，再读 S/U | 旧八个可见值保持，S=`0x16B`、U=`0x2A`；MainCfg 按一份共享状态检查，不依赖其他函数状态 |
+| LibCfg 读写与交换 | 写 P、`CSRRW` 写 `~P`，另检查写 `0` 和 `-1` | 完整读回 P/`~P`，交换返回旧 P，`0`/`-1` 也完整读回 |
+| LibCfg 置位与清位 | 值为 `~P` 时以 P 为源执行 `CSRRS`，随后用同一源执行 `CSRRC` | 先返回旧 `~P`、新值 `-1`；再返回旧 `-1`、新值 `~P` |
+| LibBound 读写 | 32 个函数各自写 P、交换写 Q、再写 `7` | P 读回 PA；交换返回 PA，随后读 QA；写 `7` 读 `0` |
+| 存储独立性 | `test_csr_independence` 保留原 Q/P/R/2、四个 MainBound 的 `0x1000/0x2000/0x3000/0x4000` 和 S=`0x155`、U=`0x2A` 的自备数据；另写 LibCfg=`0x13579BDF2468ACE1`，Lo_i=`0x10000 + 0x100*i`、Hi_i=`0x10080 + 0x100*i` | 全部 42 份状态写完后，先核对旧十地址，再读 LibCfg 和 32 个 LibBound；各值保持，S=`0x16B`、U=`0x2A`，不依赖其他函数状态 |
 
 ## 测试退出码
 
@@ -127,6 +137,33 @@ MainCfg 的失败码及预期值如下，均显示红色 `[FAIL]`；原退出码
 | S 视图 | `CSRRC` 源为 `-63`（低 10 位为 `0x3C1`） | `84`：旧值=`0x3FF`；`85`：S=`0x3E`；`86`：U=`0x3E` |
 | S 视图 | 写 S=`0` | `87`：S=`0`；`88`：U=`0` |
 | 存储独立性 | 自行写 S=`0x155`、U=`0x2A` 后，核对两视图 | `89`：S=`0x16B`；`90`：U=`0x2A` |
+
+新增 LibCfg 失败码如下，均显示红色 `[FAIL]`；原退出码 1–90 保持不变，
+`124` 仍仅表示宿主超时。
+
+| 检查 | 失败码 | 预期值 |
+| --- | --- | --- |
+| 冷初始化 | `91` | `0` |
+| 写 P 后读回 | `125` | P |
+| `CSRRW` 写 `~P` 的旧值 | `126` | P |
+| 交换后读回 | `127` | `~P` |
+| `CSRRS` 使用 P 的旧值 | `128` | `~P` |
+| 置位后读回 | `129` | `-1` |
+| `CSRRC` 使用 P 的旧值 | `130` | `-1` |
+| 清位后读回 | `131` | `~P` |
+| 写 `0` 后读回 | `132` | `0` |
+| 写 `-1` 后读回 | `133` | `-1` |
+| 存储独立性 | `166` | `0x13579BDF2468ACE1` |
+
+LibBound 的 `i=0..15`；表内公式为各 CSR 的失败退出码，均显示红色 `[FAIL]`。
+
+| 检查 | Lo_i | Hi_i | 范围 |
+| --- | --- | --- | --- |
+| 冷初始化（读 `0`） | `92 + 2*i` | `93 + 2*i` | 92–123 |
+| 读写（P→PA，交换 Q 返回 PA，读 QA，写 `7` 读 `0`） | `134 + 2*i` | `135 + 2*i` | 134–165 |
+| 独立性（读各自的 Lo_i/Hi_i 预期值） | `167 + 2*i` | `168 + 2*i` | 167–198 |
+
+每个 LibBound 读写函数的四个断言共用一个失败码，只能定位到 CSR，不能区分具体断言。
 
 ## 源码
 
