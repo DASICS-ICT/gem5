@@ -1,0 +1,80 @@
+{
+    "benchmark": "435.gromacs",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [
+                        "-silent",
+                        "-deffnm",
+                        "gromacs",
+                        "-nice",
+                        "0"
+                    ],
+                    "stdout": "gromacs.stdout",
+                    "stderr": "gromacs.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "gromacs.out",
+                    "args": [
+                        "--reltol",
+                        "0.0125"
+                    ]
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [
+                        "-silent",
+                        "-deffnm",
+                        "gromacs",
+                        "-nice",
+                        "0"
+                    ],
+                    "stdout": "gromacs.stdout",
+                    "stderr": "gromacs.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "gromacs.out",
+                    "args": [
+                        "--reltol",
+                        "0.0125"
+                    ]
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [
+                        "-silent",
+                        "-deffnm",
+                        "gromacs",
+                        "-nice",
+                        "0"
+                    ],
+                    "stdout": "gromacs.stdout",
+                    "stderr": "gromacs.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "gromacs.out",
+                    "args": [
+                        "--reltol",
+                        "0.0125"
+                    ]
+                }
+            ]
+        }
+    }
+}

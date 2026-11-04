@@ -1,0 +1,71 @@
+{
+    "benchmark": "459.GemsFDTD",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [],
+                    "stdout": "test.log",
+                    "stderr": "test.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "sphere_td.nft",
+                    "args": [
+                        "--abstol",
+                        "1e-10",
+                        "--reltol",
+                        "1e-9",
+                        "--obiwan"
+                    ]
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [],
+                    "stdout": "train.log",
+                    "stderr": "train.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "sphere_td.nft",
+                    "args": [
+                        "--abstol",
+                        "1e-10",
+                        "--reltol",
+                        "1e-9",
+                        "--obiwan"
+                    ]
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [],
+                    "stdout": "ref.log",
+                    "stderr": "ref.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "sphere_td.nft",
+                    "args": [
+                        "--abstol",
+                        "1e-10",
+                        "--reltol",
+                        "1e-9",
+                        "--obiwan"
+                    ]
+                }
+            ]
+        }
+    }
+}

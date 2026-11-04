@@ -1,0 +1,68 @@
+{
+    "benchmark": "462.libquantum",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [
+                        "33",
+                        "5"
+                    ],
+                    "stdout": "test.out",
+                    "stderr": "test.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "test.out",
+                    "args": [
+                        "--obiwan"
+                    ]
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [
+                        "143",
+                        "25"
+                    ],
+                    "stdout": "train.out",
+                    "stderr": "train.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "train.out",
+                    "args": [
+                        "--obiwan"
+                    ]
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [
+                        "1397",
+                        "8"
+                    ],
+                    "stdout": "ref.out",
+                    "stderr": "ref.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "ref.out",
+                    "args": [
+                        "--obiwan"
+                    ]
+                }
+            ]
+        }
+    }
+}

@@ -1,0 +1,104 @@
+{
+    "benchmark": "471.omnetpp",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [
+                        "omnetpp.ini"
+                    ],
+                    "stdout": "omnetpp.log",
+                    "stderr": "omnetpp.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "omnetpp.log",
+                    "args": [
+                        "--abstol",
+                        "1e-6",
+                        "--reltol",
+                        "1e-5"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "omnetpp.sca",
+                    "args": [
+                        "--abstol",
+                        "1e-6",
+                        "--reltol",
+                        "1e-5"
+                    ]
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [
+                        "omnetpp.ini"
+                    ],
+                    "stdout": "omnetpp.log",
+                    "stderr": "omnetpp.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "omnetpp.log",
+                    "args": [
+                        "--abstol",
+                        "1e-6",
+                        "--reltol",
+                        "1e-5"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "omnetpp.sca",
+                    "args": [
+                        "--abstol",
+                        "1e-6",
+                        "--reltol",
+                        "1e-5"
+                    ]
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [
+                        "omnetpp.ini"
+                    ],
+                    "stdout": "omnetpp.log",
+                    "stderr": "omnetpp.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "omnetpp.log",
+                    "args": [
+                        "--abstol",
+                        "1e-6",
+                        "--reltol",
+                        "1e-5"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "omnetpp.sca",
+                    "args": [
+                        "--abstol",
+                        "1e-6",
+                        "--reltol",
+                        "1e-5"
+                    ]
+                }
+            ]
+        }
+    }
+}

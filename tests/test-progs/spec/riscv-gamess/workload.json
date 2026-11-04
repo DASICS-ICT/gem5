@@ -1,0 +1,108 @@
+{
+    "benchmark": "416.gamess",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [],
+                    "stdin": "exam29.config",
+                    "stdout": "exam29.out",
+                    "stderr": "exam29.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "exam29.out",
+                    "args": [
+                        "--abstol",
+                        "1e-5",
+                        "--reltol",
+                        "0.0001",
+                        "--ignorecase"
+                    ]
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [],
+                    "stdin": "h2ocu2+.energy.config",
+                    "stdout": "h2ocu2+.energy.out",
+                    "stderr": "h2ocu2+.energy.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "h2ocu2+.energy.out",
+                    "args": [
+                        "--abstol",
+                        "1e-5",
+                        "--reltol",
+                        "0.0001",
+                        "--ignorecase"
+                    ]
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [],
+                    "stdin": "cytosine.2.config",
+                    "stdout": "cytosine.2.out",
+                    "stderr": "cytosine.2.err"
+                },
+                {
+                    "argv": [],
+                    "stdin": "h2ocu2+.gradient.config",
+                    "stdout": "h2ocu2+.gradient.out",
+                    "stderr": "h2ocu2+.gradient.err"
+                },
+                {
+                    "argv": [],
+                    "stdin": "triazolium.config",
+                    "stdout": "triazolium.out",
+                    "stderr": "triazolium.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "cytosine.2.out",
+                    "args": [
+                        "--abstol",
+                        "1e-5",
+                        "--reltol",
+                        "0.0001",
+                        "--ignorecase"
+                    ]
+                },
+                {
+                    "run": 2,
+                    "file": "h2ocu2+.gradient.out",
+                    "args": [
+                        "--abstol",
+                        "1e-5",
+                        "--reltol",
+                        "0.0001",
+                        "--ignorecase"
+                    ]
+                },
+                {
+                    "run": 3,
+                    "file": "triazolium.out",
+                    "args": [
+                        "--abstol",
+                        "1e-5",
+                        "--reltol",
+                        "0.0001",
+                        "--ignorecase"
+                    ]
+                }
+            ]
+        }
+    }
+}

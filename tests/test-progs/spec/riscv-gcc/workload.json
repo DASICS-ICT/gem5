@@ -1,0 +1,177 @@
+{
+    "benchmark": "403.gcc",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [
+                        "cccp.i",
+                        "-o",
+                        "cccp.s"
+                    ],
+                    "stdout": "cccp.out",
+                    "stderr": "cccp.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "cccp.s",
+                    "args": []
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [
+                        "integrate.i",
+                        "-o",
+                        "integrate.s"
+                    ],
+                    "stdout": "integrate.out",
+                    "stderr": "integrate.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "integrate.s",
+                    "args": []
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [
+                        "166.i",
+                        "-o",
+                        "166.s"
+                    ],
+                    "stdout": "166.out",
+                    "stderr": "166.err"
+                },
+                {
+                    "argv": [
+                        "200.i",
+                        "-o",
+                        "200.s"
+                    ],
+                    "stdout": "200.out",
+                    "stderr": "200.err"
+                },
+                {
+                    "argv": [
+                        "c-typeck.i",
+                        "-o",
+                        "c-typeck.s"
+                    ],
+                    "stdout": "c-typeck.out",
+                    "stderr": "c-typeck.err"
+                },
+                {
+                    "argv": [
+                        "cp-decl.i",
+                        "-o",
+                        "cp-decl.s"
+                    ],
+                    "stdout": "cp-decl.out",
+                    "stderr": "cp-decl.err"
+                },
+                {
+                    "argv": [
+                        "expr.i",
+                        "-o",
+                        "expr.s"
+                    ],
+                    "stdout": "expr.out",
+                    "stderr": "expr.err"
+                },
+                {
+                    "argv": [
+                        "expr2.i",
+                        "-o",
+                        "expr2.s"
+                    ],
+                    "stdout": "expr2.out",
+                    "stderr": "expr2.err"
+                },
+                {
+                    "argv": [
+                        "g23.i",
+                        "-o",
+                        "g23.s"
+                    ],
+                    "stdout": "g23.out",
+                    "stderr": "g23.err"
+                },
+                {
+                    "argv": [
+                        "s04.i",
+                        "-o",
+                        "s04.s"
+                    ],
+                    "stdout": "s04.out",
+                    "stderr": "s04.err"
+                },
+                {
+                    "argv": [
+                        "scilab.i",
+                        "-o",
+                        "scilab.s"
+                    ],
+                    "stdout": "scilab.out",
+                    "stderr": "scilab.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "166.s",
+                    "args": []
+                },
+                {
+                    "run": 2,
+                    "file": "200.s",
+                    "args": []
+                },
+                {
+                    "run": 3,
+                    "file": "c-typeck.s",
+                    "args": []
+                },
+                {
+                    "run": 4,
+                    "file": "cp-decl.s",
+                    "args": []
+                },
+                {
+                    "run": 5,
+                    "file": "expr.s",
+                    "args": []
+                },
+                {
+                    "run": 6,
+                    "file": "expr2.s",
+                    "args": []
+                },
+                {
+                    "run": 7,
+                    "file": "g23.s",
+                    "args": []
+                },
+                {
+                    "run": 8,
+                    "file": "s04.s",
+                    "args": []
+                },
+                {
+                    "run": 9,
+                    "file": "scilab.s",
+                    "args": []
+                }
+            ]
+        }
+    }
+}

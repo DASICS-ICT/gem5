@@ -1,0 +1,98 @@
+{
+    "benchmark": "473.astar",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [
+                        "lake.cfg"
+                    ],
+                    "stdout": "lake.out",
+                    "stderr": "lake.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "lake.out",
+                    "args": [
+                        "--reltol",
+                        "0.001"
+                    ]
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [
+                        "BigLakes1024.cfg"
+                    ],
+                    "stdout": "BigLakes1024.out",
+                    "stderr": "BigLakes1024.err"
+                },
+                {
+                    "argv": [
+                        "rivers1.cfg"
+                    ],
+                    "stdout": "rivers1.out",
+                    "stderr": "rivers1.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "BigLakes1024.out",
+                    "args": [
+                        "--reltol",
+                        "0.001"
+                    ]
+                },
+                {
+                    "run": 2,
+                    "file": "rivers1.out",
+                    "args": [
+                        "--reltol",
+                        "0.001"
+                    ]
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [
+                        "BigLakes2048.cfg"
+                    ],
+                    "stdout": "BigLakes2048.out",
+                    "stderr": "BigLakes2048.err"
+                },
+                {
+                    "argv": [
+                        "rivers.cfg"
+                    ],
+                    "stdout": "rivers.out",
+                    "stderr": "rivers.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "BigLakes2048.out",
+                    "args": [
+                        "--reltol",
+                        "0.001"
+                    ]
+                },
+                {
+                    "run": 2,
+                    "file": "rivers.out",
+                    "args": [
+                        "--reltol",
+                        "0.001"
+                    ]
+                }
+            ]
+        }
+    }
+}

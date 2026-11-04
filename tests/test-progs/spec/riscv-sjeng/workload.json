@@ -1,0 +1,59 @@
+{
+    "benchmark": "458.sjeng",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [
+                        "test.txt"
+                    ],
+                    "stdout": "test.out",
+                    "stderr": "test.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "test.out",
+                    "args": []
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [
+                        "train.txt"
+                    ],
+                    "stdout": "train.out",
+                    "stderr": "train.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "train.out",
+                    "args": []
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [
+                        "ref.txt"
+                    ],
+                    "stdout": "ref.out",
+                    "stderr": "ref.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "ref.out",
+                    "args": []
+                }
+            ]
+        }
+    }
+}

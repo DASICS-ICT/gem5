@@ -1,0 +1,130 @@
+{
+    "benchmark": "456.hmmer",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [
+                        "--fixed",
+                        "0",
+                        "--mean",
+                        "325",
+                        "--num",
+                        "45000",
+                        "--sd",
+                        "200",
+                        "--seed",
+                        "0",
+                        "bombesin.hmm"
+                    ],
+                    "stdout": "bombesin.out",
+                    "stderr": "bombesin.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "bombesin.out",
+                    "args": [
+                        "--abstol",
+                        "1e-5",
+                        "--reltol",
+                        "0.002",
+                        "--skiptol",
+                        "10"
+                    ]
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [
+                        "--fixed",
+                        "0",
+                        "--mean",
+                        "425",
+                        "--num",
+                        "85000",
+                        "--sd",
+                        "300",
+                        "--seed",
+                        "0",
+                        "leng100.hmm"
+                    ],
+                    "stdout": "leng100.out",
+                    "stderr": "leng100.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "leng100.out",
+                    "args": [
+                        "--abstol",
+                        "1e-5",
+                        "--reltol",
+                        "0.002",
+                        "--skiptol",
+                        "10"
+                    ]
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [
+                        "nph3.hmm",
+                        "swiss41"
+                    ],
+                    "stdout": "nph3.out",
+                    "stderr": "nph3.err"
+                },
+                {
+                    "argv": [
+                        "--fixed",
+                        "0",
+                        "--mean",
+                        "500",
+                        "--num",
+                        "500000",
+                        "--sd",
+                        "350",
+                        "--seed",
+                        "0",
+                        "retro.hmm"
+                    ],
+                    "stdout": "retro.out",
+                    "stderr": "retro.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "nph3.out",
+                    "args": [
+                        "--abstol",
+                        "1e-5",
+                        "--reltol",
+                        "0.002",
+                        "--skiptol",
+                        "10"
+                    ]
+                },
+                {
+                    "run": 2,
+                    "file": "retro.out",
+                    "args": [
+                        "--abstol",
+                        "1e-5",
+                        "--reltol",
+                        "0.002",
+                        "--skiptol",
+                        "10"
+                    ]
+                }
+            ]
+        }
+    }
+}

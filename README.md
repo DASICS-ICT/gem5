@@ -20,6 +20,17 @@ The main website can be found at <http://www.gem5.org>.
 [中文：编译、测试与清理](docs/dasics.md) |
 [English: build, test, and cleanup](docs/dasics.en.md)
 
+## SPEC CPU2006
+
+[29 项测试：构建、运行与校验](tests/test-progs/spec/README.md) |
+[gem5 SE 配置](configs/spec/README.md)
+
+```bash
+make spec06-test TEST=riscv-calculix input=test \
+  config="riscv_se_V2_default.py riscv_se_v5_full.py"
+make spec06-test TEST=riscv-calculix input=test config=all
+```
+
 ## Testing and code coverage status
 
 **Note**: These regard tests run on the develop branch of gem5:

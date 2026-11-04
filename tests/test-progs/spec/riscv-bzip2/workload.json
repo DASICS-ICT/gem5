@@ -1,0 +1,166 @@
+{
+    "benchmark": "401.bzip2",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [
+                        "input.program",
+                        "5"
+                    ],
+                    "stdout": "input.program.out",
+                    "stderr": "input.program.err"
+                },
+                {
+                    "argv": [
+                        "dryer.jpg",
+                        "2"
+                    ],
+                    "stdout": "dryer.jpg.out",
+                    "stderr": "dryer.jpg.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 2,
+                    "file": "dryer.jpg.out",
+                    "args": []
+                },
+                {
+                    "run": 1,
+                    "file": "input.program.out",
+                    "args": []
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [
+                        "input.program",
+                        "10"
+                    ],
+                    "stdout": "input.program.out",
+                    "stderr": "input.program.err"
+                },
+                {
+                    "argv": [
+                        "byoudoin.jpg",
+                        "5"
+                    ],
+                    "stdout": "byoudoin.jpg.out",
+                    "stderr": "byoudoin.jpg.err"
+                },
+                {
+                    "argv": [
+                        "input.combined",
+                        "80"
+                    ],
+                    "stdout": "input.combined.out",
+                    "stderr": "input.combined.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 2,
+                    "file": "byoudoin.jpg.out",
+                    "args": []
+                },
+                {
+                    "run": 3,
+                    "file": "input.combined.out",
+                    "args": []
+                },
+                {
+                    "run": 1,
+                    "file": "input.program.out",
+                    "args": []
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [
+                        "input.source",
+                        "280"
+                    ],
+                    "stdout": "input.source.out",
+                    "stderr": "input.source.err"
+                },
+                {
+                    "argv": [
+                        "chicken.jpg",
+                        "30"
+                    ],
+                    "stdout": "chicken.jpg.out",
+                    "stderr": "chicken.jpg.err"
+                },
+                {
+                    "argv": [
+                        "liberty.jpg",
+                        "30"
+                    ],
+                    "stdout": "liberty.jpg.out",
+                    "stderr": "liberty.jpg.err"
+                },
+                {
+                    "argv": [
+                        "input.program",
+                        "280"
+                    ],
+                    "stdout": "input.program.out",
+                    "stderr": "input.program.err"
+                },
+                {
+                    "argv": [
+                        "text.html",
+                        "280"
+                    ],
+                    "stdout": "text.html.out",
+                    "stderr": "text.html.err"
+                },
+                {
+                    "argv": [
+                        "input.combined",
+                        "200"
+                    ],
+                    "stdout": "input.combined.out",
+                    "stderr": "input.combined.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 2,
+                    "file": "chicken.jpg.out",
+                    "args": []
+                },
+                {
+                    "run": 6,
+                    "file": "input.combined.out",
+                    "args": []
+                },
+                {
+                    "run": 4,
+                    "file": "input.program.out",
+                    "args": []
+                },
+                {
+                    "run": 1,
+                    "file": "input.source.out",
+                    "args": []
+                },
+                {
+                    "run": 3,
+                    "file": "liberty.jpg.out",
+                    "args": []
+                },
+                {
+                    "run": 5,
+                    "file": "text.html.out",
+                    "args": []
+                }
+            ]
+        }
+    }
+}

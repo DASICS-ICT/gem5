@@ -1,0 +1,132 @@
+{
+    "benchmark": "482.sphinx3",
+    "prepare": "sphinx3",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [
+                        "ctlfile",
+                        ".",
+                        "args.an4"
+                    ],
+                    "stdout": "an4.log",
+                    "stderr": "an4.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "an4.log",
+                    "args": [
+                        "--reltol",
+                        "0.001",
+                        "--floatcompare"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "considered.out",
+                    "args": [
+                        "--reltol",
+                        "0.0004",
+                        "--floatcompare"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "total_considered.out",
+                    "args": [
+                        "--reltol",
+                        "1e-6",
+                        "--floatcompare"
+                    ]
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [
+                        "ctlfile",
+                        ".",
+                        "args.an4"
+                    ],
+                    "stdout": "an4.log",
+                    "stderr": "an4.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "an4.log",
+                    "args": [
+                        "--reltol",
+                        "0.001",
+                        "--floatcompare"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "considered.out",
+                    "args": [
+                        "--reltol",
+                        "0.0004",
+                        "--floatcompare"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "total_considered.out",
+                    "args": [
+                        "--reltol",
+                        "1e-6",
+                        "--floatcompare"
+                    ]
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [
+                        "ctlfile",
+                        ".",
+                        "args.an4"
+                    ],
+                    "stdout": "an4.log",
+                    "stderr": "an4.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "an4.log",
+                    "args": [
+                        "--reltol",
+                        "0.001",
+                        "--floatcompare"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "considered.out",
+                    "args": [
+                        "--reltol",
+                        "0.0004",
+                        "--floatcompare"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "total_considered.out",
+                    "args": [
+                        "--reltol",
+                        "1e-6",
+                        "--floatcompare"
+                    ]
+                }
+            ]
+        }
+    }
+}

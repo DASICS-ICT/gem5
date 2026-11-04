@@ -1,0 +1,177 @@
+{
+    "benchmark": "450.soplex",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [
+                        "-m10000",
+                        "test.mps"
+                    ],
+                    "stdout": "test.out",
+                    "stderr": "test.stderr"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "test.out",
+                    "args": [
+                        "--abstol",
+                        "1e-5",
+                        "--reltol",
+                        "0.0001",
+                        "--obiwan"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "test.stderr",
+                    "args": [
+                        "--abstol",
+                        "20",
+                        "--reltol",
+                        "10",
+                        "--obiwan"
+                    ]
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [
+                        "-s1",
+                        "-e",
+                        "-m5000",
+                        "pds-20.mps"
+                    ],
+                    "stdout": "pds-20.mps.out",
+                    "stderr": "pds-20.mps.stderr"
+                },
+                {
+                    "argv": [
+                        "-m1200",
+                        "train.mps"
+                    ],
+                    "stdout": "train.out",
+                    "stderr": "train.stderr"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "pds-20.mps.out",
+                    "args": [
+                        "--abstol",
+                        "1e-5",
+                        "--reltol",
+                        "20",
+                        "--obiwan"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "pds-20.mps.stderr",
+                    "args": [
+                        "--abstol",
+                        "20",
+                        "--reltol",
+                        "0.0001",
+                        "--obiwan"
+                    ]
+                },
+                {
+                    "run": 2,
+                    "file": "train.out",
+                    "args": [
+                        "--abstol",
+                        "1e-5",
+                        "--reltol",
+                        "20",
+                        "--obiwan"
+                    ]
+                },
+                {
+                    "run": 2,
+                    "file": "train.stderr",
+                    "args": [
+                        "--abstol",
+                        "20",
+                        "--reltol",
+                        "0.0001",
+                        "--obiwan"
+                    ]
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [
+                        "-s1",
+                        "-e",
+                        "-m45000",
+                        "pds-50.mps"
+                    ],
+                    "stdout": "pds-50.mps.out",
+                    "stderr": "pds-50.mps.stderr"
+                },
+                {
+                    "argv": [
+                        "-m3500",
+                        "ref.mps"
+                    ],
+                    "stdout": "ref.out",
+                    "stderr": "ref.stderr"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "pds-50.mps.out",
+                    "args": [
+                        "--abstol",
+                        "1e-5",
+                        "--reltol",
+                        "0.02",
+                        "--obiwan"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "pds-50.mps.stderr",
+                    "args": [
+                        "--abstol",
+                        "20",
+                        "--reltol",
+                        "0.0001",
+                        "--obiwan"
+                    ]
+                },
+                {
+                    "run": 2,
+                    "file": "ref.out",
+                    "args": [
+                        "--abstol",
+                        "1e-5",
+                        "--reltol",
+                        "0.02",
+                        "--obiwan"
+                    ]
+                },
+                {
+                    "run": 2,
+                    "file": "ref.stderr",
+                    "args": [
+                        "--abstol",
+                        "20",
+                        "--reltol",
+                        "0.0001",
+                        "--obiwan"
+                    ]
+                }
+            ]
+        }
+    }
+}

@@ -1,0 +1,80 @@
+{
+    "benchmark": "470.lbm",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [
+                        "20",
+                        "reference.dat",
+                        "0",
+                        "1",
+                        "100_100_130_cf_a.of"
+                    ],
+                    "stdout": "lbm.out",
+                    "stderr": "lbm.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "lbm.out",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [
+                        "300",
+                        "reference.dat",
+                        "0",
+                        "1",
+                        "100_100_130_cf_b.of"
+                    ],
+                    "stdout": "lbm.out",
+                    "stderr": "lbm.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "lbm.out",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [
+                        "3000",
+                        "reference.dat",
+                        "0",
+                        "0",
+                        "100_100_130_ldc.of"
+                    ],
+                    "stdout": "lbm.out",
+                    "stderr": "lbm.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "lbm.out",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                }
+            ]
+        }
+    }
+}

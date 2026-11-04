@@ -1,0 +1,11 @@
+--- a/src/PUGH/PughUtils.c
++++ b/src/PUGH/PughUtils.c
+@@ -112,7 +112,7 @@ void PUGH_Report (const cGH *GH)
+       sprintf(mess,"  Size:");
+       for (i=0;i<dim+1;i++)
+       {
+-        sprintf(mess,"%s %d",mess,pughGH->GFExtras[dim]->nsize[i]);
++        sprintf(mess+strlen(mess)," %d",pughGH->GFExtras[dim]->nsize[i]);
+       }
+       CCTK_INFO(mess);
+ #ifdef CCTK_MPI

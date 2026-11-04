@@ -25,7 +25,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-"""Shared bare-metal wiring and explicit timing assumptions for DASICS."""
+"""Shared O3 model and bare-metal wiring with explicit timing assumptions."""
 
 import argparse
 import configparser
@@ -489,41 +489,8 @@ def _print_config(profile):
     print(f"Beginning simulation: {profile['name']}", flush=True)
 
 
-def run_model(profile):
-    parser = argparse.ArgumentParser(description=profile["name"])
-    parser.add_argument("binary", help="RV64 bare-metal ELF")
-    args = parser.parse_args()
-
-    system = RiscvSystem(mem_mode="timing", cache_line_size=64)
-    system.mem_ranges = [AddrRange(0x80000000, size="8GiB")]
-    system.voltage_domain = VoltageDomain(voltage="1V")
-    system.clk_domain = SrcClockDomain(
-        clock="2GHz", voltage_domain=system.voltage_domain
-    )
-    system.workload = RiscvBareMetal(
-        bootloader=args.binary,
-        semihosting=RiscvSemihosting(cmd_line=args.binary),
-    )
-    system.iobus = IOXBar()
-    system.membus = _xbar(SystemXBar)
-    system.system_port = system.membus.cpu_side_ports
-    system.platform = HiFive()
-    system.platform.rtc = RiscvRTC(frequency="10MHz")
-    system.platform.clint.int_pin = system.platform.rtc.int_pin
-    system.platform.pci_host.internal_connect()
-    system.platform.pci_host.connect_upper_bus(system.iobus, True)
-    system.platform.attachOnChipIO(system.membus)
-    system.platform.attachOffChipIO(system.iobus)
-    system.platform.attachPlic()
-    system.platform.setNumCores(1)
-    system.bridge = Bridge(delay="50ns")
-    system.bridge.mem_side_port = system.iobus.cpu_side_ports
-    system.bridge.cpu_side_port = system.membus.mem_side_ports
-    system.bridge.ranges = system.platform._off_chip_ranges()
-    system.iobridge = Bridge(delay="50ns", ranges=system.mem_ranges)
-    system.iobridge.cpu_side_port = system.iobus.mem_side_ports
-    system.iobridge.mem_side_port = system.membus.cpu_side_ports
-
+def configure_cpu_caches(system, profile):
+    """Attach the reference O3 core and caches to an existing memory bus."""
     system.cpu = RiscvO3CPU(**CPU_TIMING, **CPU_POLICY, **profile["cpu"])
     system.cpu.dispatchWidth = profile["cpu"]["renameWidth"]
     system.cpu.fetchTargetWidth = profile["cpu"]["fetchBufferSize"]
@@ -567,20 +534,10 @@ def run_model(profile):
             cache.cpu_side = upstream.mem_side_ports
             cache.mem_side = downstream.cpu_side_ports
         upstream = downstream
-    system.cpu.mmu.pma_checker = PMAChecker(
-        uncacheable=[
-            *system.platform._on_chip_ranges(),
-            *system.platform._off_chip_ranges(),
-        ]
-    )
-    # The reset page is outside DRAM, keeping the DIMM capacity exact.
-    system.reset_mem = SimpleMemory(
-        range=AddrRange(0x7FFFF000, size="4KiB"),
-        latency="1ns",
-        latency_dist="None",
-        bandwidth="32GiB/s",
-    )
-    system.reset_mem.port = system.membus.mem_side_ports
+
+
+def configure_memory(system):
+    """Attach the shared DDR4 controller to the system memory range."""
     system.mem_ctrl = MemCtrl(
         mem_sched_policy="frfcfs",
         write_high_thresh_perc=85,
@@ -595,6 +552,59 @@ def run_model(profile):
         ),
     )
     system.mem_ctrl.port = system.membus.mem_side_ports
+
+
+def run_model(profile):
+    parser = argparse.ArgumentParser(description=profile["name"])
+    parser.add_argument("binary", help="RV64 bare-metal ELF")
+    args = parser.parse_args()
+
+    system = RiscvSystem(mem_mode="timing", cache_line_size=64)
+    system.mem_ranges = [AddrRange(0x80000000, size="8GiB")]
+    system.voltage_domain = VoltageDomain(voltage="1V")
+    system.clk_domain = SrcClockDomain(
+        clock="2GHz", voltage_domain=system.voltage_domain
+    )
+    system.workload = RiscvBareMetal(
+        bootloader=args.binary,
+        semihosting=RiscvSemihosting(cmd_line=args.binary),
+    )
+    system.iobus = IOXBar()
+    system.membus = _xbar(SystemXBar)
+    system.system_port = system.membus.cpu_side_ports
+    system.platform = HiFive()
+    system.platform.rtc = RiscvRTC(frequency="10MHz")
+    system.platform.clint.int_pin = system.platform.rtc.int_pin
+    system.platform.pci_host.internal_connect()
+    system.platform.pci_host.connect_upper_bus(system.iobus, True)
+    system.platform.attachOnChipIO(system.membus)
+    system.platform.attachOffChipIO(system.iobus)
+    system.platform.attachPlic()
+    system.platform.setNumCores(1)
+    system.bridge = Bridge(delay="50ns")
+    system.bridge.mem_side_port = system.iobus.cpu_side_ports
+    system.bridge.cpu_side_port = system.membus.mem_side_ports
+    system.bridge.ranges = system.platform._off_chip_ranges()
+    system.iobridge = Bridge(delay="50ns", ranges=system.mem_ranges)
+    system.iobridge.cpu_side_port = system.iobus.mem_side_ports
+    system.iobridge.mem_side_port = system.membus.cpu_side_ports
+
+    configure_cpu_caches(system, profile)
+    system.cpu.mmu.pma_checker = PMAChecker(
+        uncacheable=[
+            *system.platform._on_chip_ranges(),
+            *system.platform._off_chip_ranges(),
+        ]
+    )
+    # The reset page is outside DRAM, keeping the DIMM capacity exact.
+    system.reset_mem = SimpleMemory(
+        range=AddrRange(0x7FFFF000, size="4KiB"),
+        latency="1ns",
+        latency_dist="None",
+        bandwidth="32GiB/s",
+    )
+    system.reset_mem.port = system.membus.mem_side_ports
+    configure_memory(system)
     root = Root(full_system=True, system=system)
     m5.instantiate()
     _print_config(profile)

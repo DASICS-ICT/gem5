@@ -1,0 +1,83 @@
+{
+    "benchmark": "444.namd",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [
+                        "--input",
+                        "namd.input",
+                        "--iterations",
+                        "1",
+                        "--output",
+                        "namd.out"
+                    ],
+                    "stdout": "namd.stdout",
+                    "stderr": "namd.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "namd.out",
+                    "args": [
+                        "--abstol",
+                        "1e-5"
+                    ]
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [
+                        "--input",
+                        "namd.input",
+                        "--iterations",
+                        "1",
+                        "--output",
+                        "namd.out"
+                    ],
+                    "stdout": "namd.stdout",
+                    "stderr": "namd.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "namd.out",
+                    "args": [
+                        "--abstol",
+                        "1e-5"
+                    ]
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [
+                        "--input",
+                        "namd.input",
+                        "--iterations",
+                        "38",
+                        "--output",
+                        "namd.out"
+                    ],
+                    "stdout": "namd.stdout",
+                    "stderr": "namd.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "namd.out",
+                    "args": [
+                        "--abstol",
+                        "1e-5"
+                    ]
+                }
+            ]
+        }
+    }
+}

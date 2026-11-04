@@ -1,0 +1,113 @@
+{
+    "benchmark": "453.povray",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [
+                        "SPEC-benchmark-test.ini"
+                    ],
+                    "stdout": "SPEC-benchmark-test.stdout",
+                    "stderr": "SPEC-benchmark-test.stderr"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "SPEC-benchmark.log",
+                    "args": [
+                        "--abstol",
+                        "0",
+                        "--reltol",
+                        "0.0002"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "SPEC-benchmark.tga",
+                    "args": [
+                        "--abstol",
+                        "0",
+                        "--reltol",
+                        "0.0002",
+                        "--skiptol",
+                        "50",
+                        "--binary"
+                    ]
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [
+                        "SPEC-benchmark-train.ini"
+                    ],
+                    "stdout": "SPEC-benchmark-train.stdout",
+                    "stderr": "SPEC-benchmark-train.stderr"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "SPEC-benchmark.log",
+                    "args": [
+                        "--abstol",
+                        "0",
+                        "--reltol",
+                        "0.00005"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "SPEC-benchmark.tga",
+                    "args": [
+                        "--abstol",
+                        "0",
+                        "--reltol",
+                        "0.00005",
+                        "--skiptol",
+                        "50",
+                        "--binary"
+                    ]
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [
+                        "SPEC-benchmark-ref.ini"
+                    ],
+                    "stdout": "SPEC-benchmark-ref.stdout",
+                    "stderr": "SPEC-benchmark-ref.stderr"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "SPEC-benchmark.log",
+                    "args": [
+                        "--abstol",
+                        "0",
+                        "--reltol",
+                        "0.00005"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "SPEC-benchmark.tga",
+                    "args": [
+                        "--abstol",
+                        "0",
+                        "--reltol",
+                        "0.00005",
+                        "--skiptol",
+                        "50",
+                        "--binary"
+                    ]
+                }
+            ]
+        }
+    }
+}

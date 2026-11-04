@@ -1,0 +1,74 @@
+{
+    "benchmark": "429.mcf",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [
+                        "inp.in"
+                    ],
+                    "stdout": "inp.out",
+                    "stderr": "inp.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "inp.out",
+                    "args": []
+                },
+                {
+                    "run": 1,
+                    "file": "mcf.out",
+                    "args": []
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [
+                        "inp.in"
+                    ],
+                    "stdout": "inp.out",
+                    "stderr": "inp.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "inp.out",
+                    "args": []
+                },
+                {
+                    "run": 1,
+                    "file": "mcf.out",
+                    "args": []
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [
+                        "inp.in"
+                    ],
+                    "stdout": "inp.out",
+                    "stderr": "inp.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "inp.out",
+                    "args": []
+                },
+                {
+                    "run": 1,
+                    "file": "mcf.out",
+                    "args": []
+                }
+            ]
+        }
+    }
+}

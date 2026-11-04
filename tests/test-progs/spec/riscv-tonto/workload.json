@@ -1,0 +1,62 @@
+{
+    "benchmark": "465.tonto",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [],
+                    "stdout": "tonto.out",
+                    "stderr": "tonto.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "stdout",
+                    "args": [
+                        "--reltol",
+                        "0.006"
+                    ]
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [],
+                    "stdout": "tonto.out",
+                    "stderr": "tonto.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "stdout",
+                    "args": [
+                        "--reltol",
+                        "0.006"
+                    ]
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [],
+                    "stdout": "tonto.out",
+                    "stderr": "tonto.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "stdout",
+                    "args": [
+                        "--reltol",
+                        "0.006"
+                    ]
+                }
+            ]
+        }
+    }
+}

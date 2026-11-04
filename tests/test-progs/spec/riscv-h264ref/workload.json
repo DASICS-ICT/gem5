@@ -1,0 +1,148 @@
+{
+    "benchmark": "464.h264ref",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [
+                        "-d",
+                        "foreman_test_encoder_baseline.cfg"
+                    ],
+                    "stdout": "foreman_test_baseline_encodelog.out",
+                    "stderr": "foreman_test_baseline_encodelog.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "foreman_test_baseline_encodelog.out",
+                    "args": [
+                        "--cw",
+                        "--floatcompare"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "foreman_test_baseline_leakybucketparam.cfg",
+                    "args": [
+                        "--cw",
+                        "--floatcompare",
+                        "--binary"
+                    ]
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [
+                        "-d",
+                        "foreman_train_encoder_baseline.cfg"
+                    ],
+                    "stdout": "foreman_train_baseline_encodelog.out",
+                    "stderr": "foreman_train_baseline_encodelog.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "foreman_train_baseline_encodelog.out",
+                    "args": [
+                        "--cw",
+                        "--floatcompare"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "foreman_train_baseline_leakybucketparam.cfg",
+                    "args": [
+                        "--cw",
+                        "--floatcompare",
+                        "--binary"
+                    ]
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [
+                        "-d",
+                        "foreman_ref_encoder_baseline.cfg"
+                    ],
+                    "stdout": "foreman_ref_baseline_encodelog.out",
+                    "stderr": "foreman_ref_baseline_encodelog.err"
+                },
+                {
+                    "argv": [
+                        "-d",
+                        "foreman_ref_encoder_main.cfg"
+                    ],
+                    "stdout": "foreman_ref_main_encodelog.out",
+                    "stderr": "foreman_ref_main_encodelog.err"
+                },
+                {
+                    "argv": [
+                        "-d",
+                        "sss_encoder_main.cfg"
+                    ],
+                    "stdout": "sss_main_encodelog.out",
+                    "stderr": "sss_main_encodelog.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "foreman_ref_baseline_encodelog.out",
+                    "args": [
+                        "--cw",
+                        "--floatcompare"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "foreman_ref_baseline_leakybucketparam.cfg",
+                    "args": [
+                        "--cw",
+                        "--floatcompare",
+                        "--binary"
+                    ]
+                },
+                {
+                    "run": 2,
+                    "file": "foreman_ref_main_encodelog.out",
+                    "args": [
+                        "--cw",
+                        "--floatcompare"
+                    ]
+                },
+                {
+                    "run": 2,
+                    "file": "foreman_ref_main_leakybucketparam.cfg",
+                    "args": [
+                        "--cw",
+                        "--floatcompare",
+                        "--binary"
+                    ]
+                },
+                {
+                    "run": 3,
+                    "file": "sss_main_encodelog.out",
+                    "args": [
+                        "--cw",
+                        "--floatcompare"
+                    ]
+                },
+                {
+                    "run": 3,
+                    "file": "sss_main_leakybucketparam.cfg",
+                    "args": [
+                        "--cw",
+                        "--floatcompare",
+                        "--binary"
+                    ]
+                }
+            ]
+        }
+    }
+}

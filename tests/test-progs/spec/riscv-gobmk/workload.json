@@ -1,0 +1,323 @@
+{
+    "benchmark": "445.gobmk",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [
+                        "--quiet",
+                        "--mode",
+                        "gtp"
+                    ],
+                    "stdin": "capture.tst",
+                    "stdout": "capture.out",
+                    "stderr": "capture.err"
+                },
+                {
+                    "argv": [
+                        "--quiet",
+                        "--mode",
+                        "gtp"
+                    ],
+                    "stdin": "connect.tst",
+                    "stdout": "connect.out",
+                    "stderr": "connect.err"
+                },
+                {
+                    "argv": [
+                        "--quiet",
+                        "--mode",
+                        "gtp"
+                    ],
+                    "stdin": "connect_rot.tst",
+                    "stdout": "connect_rot.out",
+                    "stderr": "connect_rot.err"
+                },
+                {
+                    "argv": [
+                        "--quiet",
+                        "--mode",
+                        "gtp"
+                    ],
+                    "stdin": "connection.tst",
+                    "stdout": "connection.out",
+                    "stderr": "connection.err"
+                },
+                {
+                    "argv": [
+                        "--quiet",
+                        "--mode",
+                        "gtp"
+                    ],
+                    "stdin": "connection_rot.tst",
+                    "stdout": "connection_rot.out",
+                    "stderr": "connection_rot.err"
+                },
+                {
+                    "argv": [
+                        "--quiet",
+                        "--mode",
+                        "gtp"
+                    ],
+                    "stdin": "cutstone.tst",
+                    "stdout": "cutstone.out",
+                    "stderr": "cutstone.err"
+                },
+                {
+                    "argv": [
+                        "--quiet",
+                        "--mode",
+                        "gtp"
+                    ],
+                    "stdin": "dniwog.tst",
+                    "stdout": "dniwog.out",
+                    "stderr": "dniwog.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "capture.out",
+                    "args": []
+                },
+                {
+                    "run": 2,
+                    "file": "connect.out",
+                    "args": []
+                },
+                {
+                    "run": 3,
+                    "file": "connect_rot.out",
+                    "args": []
+                },
+                {
+                    "run": 4,
+                    "file": "connection.out",
+                    "args": []
+                },
+                {
+                    "run": 5,
+                    "file": "connection_rot.out",
+                    "args": []
+                },
+                {
+                    "run": 6,
+                    "file": "cutstone.out",
+                    "args": []
+                },
+                {
+                    "run": 7,
+                    "file": "dniwog.out",
+                    "args": []
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [
+                        "--quiet",
+                        "--mode",
+                        "gtp"
+                    ],
+                    "stdin": "arb.tst",
+                    "stdout": "arb.out",
+                    "stderr": "arb.err"
+                },
+                {
+                    "argv": [
+                        "--quiet",
+                        "--mode",
+                        "gtp"
+                    ],
+                    "stdin": "arend.tst",
+                    "stdout": "arend.out",
+                    "stderr": "arend.err"
+                },
+                {
+                    "argv": [
+                        "--quiet",
+                        "--mode",
+                        "gtp"
+                    ],
+                    "stdin": "arion.tst",
+                    "stdout": "arion.out",
+                    "stderr": "arion.err"
+                },
+                {
+                    "argv": [
+                        "--quiet",
+                        "--mode",
+                        "gtp"
+                    ],
+                    "stdin": "atari_atari.tst",
+                    "stdout": "atari_atari.out",
+                    "stderr": "atari_atari.err"
+                },
+                {
+                    "argv": [
+                        "--quiet",
+                        "--mode",
+                        "gtp"
+                    ],
+                    "stdin": "blunder.tst",
+                    "stdout": "blunder.out",
+                    "stderr": "blunder.err"
+                },
+                {
+                    "argv": [
+                        "--quiet",
+                        "--mode",
+                        "gtp"
+                    ],
+                    "stdin": "buzco.tst",
+                    "stdout": "buzco.out",
+                    "stderr": "buzco.err"
+                },
+                {
+                    "argv": [
+                        "--quiet",
+                        "--mode",
+                        "gtp"
+                    ],
+                    "stdin": "nicklas2.tst",
+                    "stdout": "nicklas2.out",
+                    "stderr": "nicklas2.err"
+                },
+                {
+                    "argv": [
+                        "--quiet",
+                        "--mode",
+                        "gtp"
+                    ],
+                    "stdin": "nicklas4.tst",
+                    "stdout": "nicklas4.out",
+                    "stderr": "nicklas4.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "arb.out",
+                    "args": []
+                },
+                {
+                    "run": 2,
+                    "file": "arend.out",
+                    "args": []
+                },
+                {
+                    "run": 3,
+                    "file": "arion.out",
+                    "args": []
+                },
+                {
+                    "run": 4,
+                    "file": "atari_atari.out",
+                    "args": []
+                },
+                {
+                    "run": 5,
+                    "file": "blunder.out",
+                    "args": []
+                },
+                {
+                    "run": 6,
+                    "file": "buzco.out",
+                    "args": []
+                },
+                {
+                    "run": 7,
+                    "file": "nicklas2.out",
+                    "args": []
+                },
+                {
+                    "run": 8,
+                    "file": "nicklas4.out",
+                    "args": []
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [
+                        "--quiet",
+                        "--mode",
+                        "gtp"
+                    ],
+                    "stdin": "13x13.tst",
+                    "stdout": "13x13.out",
+                    "stderr": "13x13.err"
+                },
+                {
+                    "argv": [
+                        "--quiet",
+                        "--mode",
+                        "gtp"
+                    ],
+                    "stdin": "nngs.tst",
+                    "stdout": "nngs.out",
+                    "stderr": "nngs.err"
+                },
+                {
+                    "argv": [
+                        "--quiet",
+                        "--mode",
+                        "gtp"
+                    ],
+                    "stdin": "score2.tst",
+                    "stdout": "score2.out",
+                    "stderr": "score2.err"
+                },
+                {
+                    "argv": [
+                        "--quiet",
+                        "--mode",
+                        "gtp"
+                    ],
+                    "stdin": "trevorc.tst",
+                    "stdout": "trevorc.out",
+                    "stderr": "trevorc.err"
+                },
+                {
+                    "argv": [
+                        "--quiet",
+                        "--mode",
+                        "gtp"
+                    ],
+                    "stdin": "trevord.tst",
+                    "stdout": "trevord.out",
+                    "stderr": "trevord.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "13x13.out",
+                    "args": []
+                },
+                {
+                    "run": 2,
+                    "file": "nngs.out",
+                    "args": []
+                },
+                {
+                    "run": 3,
+                    "file": "score2.out",
+                    "args": []
+                },
+                {
+                    "run": 4,
+                    "file": "trevorc.out",
+                    "args": []
+                },
+                {
+                    "run": 5,
+                    "file": "trevord.out",
+                    "args": []
+                }
+            ]
+        }
+    }
+}

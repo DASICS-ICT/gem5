@@ -1,0 +1,69 @@
+{
+    "benchmark": "481.wrf",
+    "prepare": "wrf",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [],
+                    "stdout": "rsl.out.0000",
+                    "stderr": "wrf.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "rsl.out.0000",
+                    "args": [
+                        "--abstol",
+                        "0.01",
+                        "--reltol",
+                        "0.05"
+                    ]
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [],
+                    "stdout": "rsl.out.0000",
+                    "stderr": "wrf.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "rsl.out.0000",
+                    "args": [
+                        "--abstol",
+                        "0.01",
+                        "--reltol",
+                        "0.05"
+                    ]
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [],
+                    "stdout": "rsl.out.0000",
+                    "stderr": "wrf.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "rsl.out.0000",
+                    "args": [
+                        "--abstol",
+                        "0.01",
+                        "--reltol",
+                        "0.05"
+                    ]
+                }
+            ]
+        }
+    }
+}

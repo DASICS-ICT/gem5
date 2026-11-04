@@ -1,0 +1,68 @@
+{
+    "benchmark": "434.zeusmp",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [],
+                    "stdout": "zeusmp.stdout",
+                    "stderr": "zeusmp.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "tsl000aa",
+                    "args": [
+                        "--abstol",
+                        "0.001",
+                        "--reltol",
+                        "0.001"
+                    ]
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [],
+                    "stdout": "zeusmp.stdout",
+                    "stderr": "zeusmp.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "tsl000aa",
+                    "args": [
+                        "--abstol",
+                        "0.001",
+                        "--reltol",
+                        "0.001"
+                    ]
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [],
+                    "stdout": "zeusmp.stdout",
+                    "stderr": "zeusmp.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "tsl000aa",
+                    "args": [
+                        "--abstol",
+                        "0.001",
+                        "--reltol",
+                        "0.001"
+                    ]
+                }
+            ]
+        }
+    }
+}

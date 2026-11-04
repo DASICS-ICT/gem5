@@ -1,0 +1,772 @@
+{
+    "benchmark": "447.dealII",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [
+                        "8"
+                    ],
+                    "stdout": "log",
+                    "stderr": "dealII.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "grid-0.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-1.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-2.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-3.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-4.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-5.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-6.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-7.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-8.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "log",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-0.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-1.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-2.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-3.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-4.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-5.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-6.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-7.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-8.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [
+                        "10"
+                    ],
+                    "stdout": "log",
+                    "stderr": "dealII.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "grid-0.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-1.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-10.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-2.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-3.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-4.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-5.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-6.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-7.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-8.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-9.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "log",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-0.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-1.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-10.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-2.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-3.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-4.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-5.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-6.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-7.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-8.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-9.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [
+                        "23"
+                    ],
+                    "stdout": "log",
+                    "stderr": "dealII.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "grid-0.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-1.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-10.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-11.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-12.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-13.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-14.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-15.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-16.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-17.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-18.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-19.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-2.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-20.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-21.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-22.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-23.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-3.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-4.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-5.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-6.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-7.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-8.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "grid-9.eps",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "log",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-0.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-1.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-10.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-11.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-12.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-13.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-14.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-15.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-16.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-17.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-18.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-19.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-2.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-20.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-21.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-22.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-23.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-3.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-4.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-5.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-6.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-7.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-8.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "solution-9.gmv",
+                    "args": [
+                        "--abstol",
+                        "1e-7"
+                    ]
+                }
+            ]
+        }
+    }
+}

@@ -1,0 +1,110 @@
+{
+    "benchmark": "410.bwaves",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [],
+                    "stdout": "bwaves.stdout",
+                    "stderr": "bwaves.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "bwaves.out",
+                    "args": [
+                        "--abstol",
+                        "1e-16"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "bwaves2.out",
+                    "args": [
+                        "--reltol",
+                        "0.015"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "bwaves3.out",
+                    "args": [
+                        "--abstol",
+                        "1e-6"
+                    ]
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [],
+                    "stdout": "bwaves.stdout",
+                    "stderr": "bwaves.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "bwaves.out",
+                    "args": [
+                        "--abstol",
+                        "1e-16"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "bwaves2.out",
+                    "args": [
+                        "--reltol",
+                        "0.015"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "bwaves3.out",
+                    "args": [
+                        "--abstol",
+                        "1e-6"
+                    ]
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [],
+                    "stdout": "bwaves.stdout",
+                    "stderr": "bwaves.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "bwaves.out",
+                    "args": [
+                        "--abstol",
+                        "1e-16"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "bwaves2.out",
+                    "args": [
+                        "--reltol",
+                        "0.015"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "bwaves3.out",
+                    "args": [
+                        "--abstol",
+                        "1e-6"
+                    ]
+                }
+            ]
+        }
+    }
+}

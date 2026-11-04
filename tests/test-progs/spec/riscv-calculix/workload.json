@@ -1,0 +1,113 @@
+{
+    "benchmark": "454.calculix",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [
+                        "-i",
+                        "beampic"
+                    ],
+                    "stdout": "beampic.log",
+                    "stderr": "beampic.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "SPECtestformatmodifier_z.txt",
+                    "args": [
+                        "--abstol",
+                        "1e-9",
+                        "--reltol",
+                        "1e-9",
+                        "--obiwan"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "beampic.dat",
+                    "args": [
+                        "--abstol",
+                        "1e-9",
+                        "--reltol",
+                        "1e-9",
+                        "--obiwan"
+                    ]
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [
+                        "-i",
+                        "stairs"
+                    ],
+                    "stdout": "stairs.log",
+                    "stderr": "stairs.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "SPECtestformatmodifier_z.txt",
+                    "args": [
+                        "--abstol",
+                        "1e-9",
+                        "--reltol",
+                        "1e-9",
+                        "--obiwan"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "stairs.dat",
+                    "args": [
+                        "--abstol",
+                        "1e-9",
+                        "--reltol",
+                        "1e-9",
+                        "--obiwan"
+                    ]
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [
+                        "-i",
+                        "hyperviscoplastic"
+                    ],
+                    "stdout": "hyperviscoplastic.log",
+                    "stderr": "hyperviscoplastic.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "SPECtestformatmodifier_z.txt",
+                    "args": [
+                        "--abstol",
+                        "1e-9",
+                        "--reltol",
+                        "1e-9",
+                        "--obiwan"
+                    ]
+                },
+                {
+                    "run": 1,
+                    "file": "hyperviscoplastic.dat",
+                    "args": [
+                        "--abstol",
+                        "1e-9",
+                        "--reltol",
+                        "1e-9",
+                        "--obiwan"
+                    ]
+                }
+            ]
+        }
+    }
+}

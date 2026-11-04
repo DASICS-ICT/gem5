@@ -1,0 +1,71 @@
+{
+    "benchmark": "433.milc",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [],
+                    "stdin": "su3imp.in",
+                    "stdout": "su3imp.out",
+                    "stderr": "su3imp.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "su3imp.out",
+                    "args": [
+                        "--abstol",
+                        "2e-7",
+                        "--reltol",
+                        "0.0001"
+                    ]
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [],
+                    "stdin": "su3imp.in",
+                    "stdout": "su3imp.out",
+                    "stderr": "su3imp.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "su3imp.out",
+                    "args": [
+                        "--abstol",
+                        "2e-7",
+                        "--reltol",
+                        "0.0001"
+                    ]
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [],
+                    "stdin": "su3imp.in",
+                    "stdout": "su3imp.out",
+                    "stderr": "su3imp.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "su3imp.out",
+                    "args": [
+                        "--abstol",
+                        "2e-7",
+                        "--reltol",
+                        "0.0001"
+                    ]
+                }
+            ]
+        }
+    }
+}

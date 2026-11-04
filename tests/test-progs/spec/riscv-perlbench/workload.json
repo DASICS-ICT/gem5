@@ -1,0 +1,781 @@
+{
+    "benchmark": "400.perlbench",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [
+                        "-I.",
+                        "-I./lib",
+                        "attrs.pl"
+                    ],
+                    "stdout": "attrs.out",
+                    "stderr": "attrs.err"
+                },
+                {
+                    "argv": [
+                        "-I.",
+                        "-I./lib",
+                        "gv.pl"
+                    ],
+                    "stdout": "gv.out",
+                    "stderr": "gv.err"
+                },
+                {
+                    "argv": [
+                        "-I.",
+                        "-I./lib",
+                        "makerand.pl"
+                    ],
+                    "stdout": "makerand.out",
+                    "stderr": "makerand.err"
+                },
+                {
+                    "argv": [
+                        "-I.",
+                        "-I./lib",
+                        "pack.pl"
+                    ],
+                    "stdout": "pack.out",
+                    "stderr": "pack.err"
+                },
+                {
+                    "argv": [
+                        "-I.",
+                        "-I./lib",
+                        "redef.pl"
+                    ],
+                    "stdout": "redef.out",
+                    "stderr": "redef.err"
+                },
+                {
+                    "argv": [
+                        "-I.",
+                        "-I./lib",
+                        "ref.pl"
+                    ],
+                    "stdout": "ref.out",
+                    "stderr": "ref.err"
+                },
+                {
+                    "argv": [
+                        "-I.",
+                        "-I./lib",
+                        "regmesg.pl"
+                    ],
+                    "stdout": "regmesg.out",
+                    "stderr": "regmesg.err"
+                },
+                {
+                    "argv": [
+                        "-I.",
+                        "-I./lib",
+                        "test.pl"
+                    ],
+                    "stdout": "test.out",
+                    "stderr": "test.err",
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 8,
+                    "file": "append.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "args.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "arith.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "array.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 1,
+                    "file": "attrs.out",
+                    "args": []
+                },
+                {
+                    "run": 8,
+                    "file": "auto.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "base_cond.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "base_pat.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "base_term.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "bless.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "bop.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "bproto.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "chars.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "chop.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "cmdopt.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "cmp.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "comp_term.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "concat.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "context.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "decl.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "defins.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "delete.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "die.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "do.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "each.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "eval.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "exists_sub.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "exp.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "fh.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "grep.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 2,
+                    "file": "gv.out",
+                    "args": []
+                },
+                {
+                    "run": 8,
+                    "file": "hashwarn.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "if.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "inc.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "index.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "int.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "join.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "length.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "lex.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "list.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "loopctl.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "lop.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 3,
+                    "file": "makerand.out",
+                    "args": []
+                },
+                {
+                    "run": 8,
+                    "file": "method.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "my.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "nothr5005.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "oct.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "op_cond.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "op_pat.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "ord.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "override.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 4,
+                    "file": "pack.out",
+                    "args": []
+                },
+                {
+                    "run": 8,
+                    "file": "package.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "pos.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "push.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "quotemeta.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "range.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "recurse.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 5,
+                    "file": "redef.out",
+                    "args": []
+                },
+                {
+                    "run": 6,
+                    "file": "ref.out",
+                    "args": []
+                },
+                {
+                    "run": 8,
+                    "file": "regexp.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "regexp_noamp.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 7,
+                    "file": "regmesg.out",
+                    "args": []
+                },
+                {
+                    "run": 8,
+                    "file": "repeat.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "reverse.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "rs.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "sleep.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "sort.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "splice.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "study.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "sub_lval.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "subst.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "subst_amp.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "subst_wamp.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "tr.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "undef.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "unshift.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "vec.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                },
+                {
+                    "run": 8,
+                    "file": "wantarray.out",
+                    "args": [],
+                    "unsupported_se":
+                        "Requires fork/waitpid beyond single-hart SE."
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [
+                        "-I./lib",
+                        "diffmail.pl",
+                        "2",
+                        "550",
+                        "15",
+                        "24",
+                        "23",
+                        "100"
+                    ],
+                    "stdout": "diffmail.2.550.15.24.23.100.out",
+                    "stderr": "diffmail.2.550.15.24.23.100.err"
+                },
+                {
+                    "argv": [
+                        "-I./lib",
+                        "perfect.pl",
+                        "b",
+                        "3"
+                    ],
+                    "stdout": "perfect.b.3.out",
+                    "stderr": "perfect.b.3.err"
+                },
+                {
+                    "argv": [
+                        "-I./lib",
+                        "splitmail.pl",
+                        "535",
+                        "13",
+                        "25",
+                        "24",
+                        "1091"
+                    ],
+                    "stdout": "splitmail.535.13.25.24.1091.out",
+                    "stderr": "splitmail.535.13.25.24.1091.err"
+                },
+                {
+                    "argv": [
+                        "-I.",
+                        "-I./lib",
+                        "scrabbl.pl"
+                    ],
+                    "stdin": "scrabbl.in",
+                    "stdout": "scrabbl.out",
+                    "stderr": "scrabbl.err"
+                },
+                {
+                    "argv": [
+                        "-I.",
+                        "-I./lib",
+                        "suns.pl"
+                    ],
+                    "stdout": "suns.out",
+                    "stderr": "suns.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "diffmail.2.550.15.24.23.100.out",
+                    "args": []
+                },
+                {
+                    "run": 2,
+                    "file": "perfect.b.3.out",
+                    "args": []
+                },
+                {
+                    "run": 4,
+                    "file": "scrabbl.out",
+                    "args": []
+                },
+                {
+                    "run": 3,
+                    "file": "splitmail.535.13.25.24.1091.out",
+                    "args": []
+                },
+                {
+                    "run": 5,
+                    "file": "suns.out",
+                    "args": []
+                },
+                {
+                    "run": 5,
+                    "file": "validate",
+                    "args": []
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [
+                        "-I./lib",
+                        "checkspam.pl",
+                        "2500",
+                        "5",
+                        "25",
+                        "11",
+                        "150",
+                        "1",
+                        "1",
+                        "1",
+                        "1"
+                    ],
+                    "stdout": "checkspam.2500.5.25.11.150.1.1.1.1.out",
+                    "stderr": "checkspam.2500.5.25.11.150.1.1.1.1.err"
+                },
+                {
+                    "argv": [
+                        "-I./lib",
+                        "diffmail.pl",
+                        "4",
+                        "800",
+                        "10",
+                        "17",
+                        "19",
+                        "300"
+                    ],
+                    "stdout": "diffmail.4.800.10.17.19.300.out",
+                    "stderr": "diffmail.4.800.10.17.19.300.err"
+                },
+                {
+                    "argv": [
+                        "-I./lib",
+                        "splitmail.pl",
+                        "1600",
+                        "12",
+                        "26",
+                        "16",
+                        "4500"
+                    ],
+                    "stdout": "splitmail.1600.12.26.16.4500.out",
+                    "stderr": "splitmail.1600.12.26.16.4500.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "checkspam.2500.5.25.11.150.1.1.1.1.out",
+                    "args": []
+                },
+                {
+                    "run": 2,
+                    "file": "diffmail.4.800.10.17.19.300.out",
+                    "args": []
+                },
+                {
+                    "run": 3,
+                    "file": "splitmail.1600.12.26.16.4500.out",
+                    "args": []
+                }
+            ]
+        }
+    }
+}

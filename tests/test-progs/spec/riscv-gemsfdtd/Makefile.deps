@@ -1,0 +1,14 @@
+$(DST_DIR)/src/leapfrog.o: src/leapfrog.f90 $(addprefix $(DST_DIR)/src/, errorcheck.o parameter.o PEC.o calcflops.o globalvar.o progress.o huygens.fppized.o update.fppized.o UPML.fppized.o NFT.fppized.o)
+$(DST_DIR)/src/readdata.o: src/readdata.f90 $(addprefix $(DST_DIR)/src/, parameter.o globalvar.o errorcheck.o excite.o PEC.o progress.o huygens.fppized.o UPML.fppized.o NFT.fppized.o)
+$(DST_DIR)/src/excite.o: src/excite.f90 $(addprefix $(DST_DIR)/src/, parameter.o globalvar.o)
+$(DST_DIR)/src/PEC.o: src/PEC.f90 $(addprefix $(DST_DIR)/src/, parameter.o errorcheck.o readline.o globalvar.o)
+$(DST_DIR)/src/progress.o: src/progress.f90 $(addprefix $(DST_DIR)/src/, parameter.o globalvar.o)
+$(DST_DIR)/src/calcflops.o: src/calcflops.f90 $(addprefix $(DST_DIR)/src/, globalvar.o parameter.o  huygens.fppized.o UPML.fppized.o NFT.fppized.o)
+$(DST_DIR)/src/fourier_transf.o: src/fourier_transf.f90 $(DST_DIR)/src/parameter.o
+$(DST_DIR)/src/GemsFDTD.o: src/GemsFDTD.f90 $(addprefix $(DST_DIR)/src/, parameter.o readdata.o leapfrog.o)
+$(DST_DIR)/src/globalvar.o: src/globalvar.f90 $(DST_DIR)/src/parameter.o
+$(DST_DIR)/src/posvector.o: src/posvector.f90 $(DST_DIR)/src/parameter.o
+$(DST_DIR)/src/huygens.fppized.o: src/huygens.fppized.f90 $(addprefix $(DST_DIR)/src/, parameter.o globalvar.o excite.o errorcheck.o)
+$(DST_DIR)/src/UPML.fppized.o: src/UPML.fppized.f90 $(addprefix $(DST_DIR)/src/, parameter.o globalvar.o errorcheck.o PEC.o)
+$(DST_DIR)/src/NFT.fppized.o: src/NFT.fppized.f90 $(addprefix $(DST_DIR)/src/, parameter.o globalvar.o posvector.o fourier_transf.o errorcheck.o excite.o huygens.fppized.o)
+$(DST_DIR)/src/update.fppized.o: src/update.fppized.f90 $(addprefix $(DST_DIR)/src/, parameter.o globalvar.o)

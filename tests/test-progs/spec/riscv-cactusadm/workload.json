@@ -1,0 +1,65 @@
+{
+    "benchmark": "436.cactusADM",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [
+                        "benchADM.par"
+                    ],
+                    "stdout": "benchADM.out",
+                    "stderr": "benchADM.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "benchADM.out",
+                    "args": [
+                        "--floatcompare"
+                    ]
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [
+                        "benchADM.par"
+                    ],
+                    "stdout": "benchADM.out",
+                    "stderr": "benchADM.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "benchADM.out",
+                    "args": [
+                        "--floatcompare"
+                    ]
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [
+                        "benchADM.par"
+                    ],
+                    "stdout": "benchADM.out",
+                    "stderr": "benchADM.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "benchADM.out",
+                    "args": [
+                        "--floatcompare"
+                    ]
+                }
+            ]
+        }
+    }
+}

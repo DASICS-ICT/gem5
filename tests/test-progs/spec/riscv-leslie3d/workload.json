@@ -1,0 +1,62 @@
+{
+    "benchmark": "437.leslie3d",
+    "sizes": {
+        "test": {
+            "runs": [
+                {
+                    "argv": [],
+                    "stdin": "leslie3d.in",
+                    "stdout": "leslie3d.stdout",
+                    "stderr": "leslie3d.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "leslie3d.out",
+                    "args": [
+                        "--floatcompare"
+                    ]
+                }
+            ]
+        },
+        "train": {
+            "runs": [
+                {
+                    "argv": [],
+                    "stdin": "leslie3d.in",
+                    "stdout": "leslie3d.stdout",
+                    "stderr": "leslie3d.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "leslie3d.out",
+                    "args": [
+                        "--floatcompare"
+                    ]
+                }
+            ]
+        },
+        "ref": {
+            "runs": [
+                {
+                    "argv": [],
+                    "stdin": "leslie3d.in",
+                    "stdout": "leslie3d.stdout",
+                    "stderr": "leslie3d.err"
+                }
+            ],
+            "comparisons": [
+                {
+                    "run": 1,
+                    "file": "leslie3d.out",
+                    "args": [
+                        "--floatcompare"
+                    ]
+                }
+            ]
+        }
+    }
+}
