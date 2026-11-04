@@ -243,7 +243,9 @@ def _predictor(branch):
         numThreads=1,
         instShiftAmt=1,
         speculativeHistUpdate=True,
-        requiresBTBHit=False,
+        # The decoupled front-end needs BTB entries to discover branches,
+        # including indirect calls and returns predicted by ITTAGE/RAS.
+        requiresBTBHit=True,
         updateBTBAtSquash=True,
         takenOnlyHistory=False,
         btb=MultiLevelBTB(

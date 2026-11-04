@@ -285,6 +285,7 @@ not modeled with their original structures.
 
 | gem5 predictor parameter | Setting |
 | --- | --- |
+| Frontend branch identification | `decoupledFrontEnd=True`, `requiresBTBHit=True` |
 | Conditional prediction | `TAGE`, four history tables, `minHist=8`, `maxHist=119`, geometric histories |
 | TAGE entries per table | V2 4096; V5 2048; base table uses the same entry count |
 | TAGE tag / counter / useful widths | 8 / 3 / 2 |
@@ -294,6 +295,12 @@ not modeled with their original structures.
 | RAS | Capacity from the RAS field above; no separate speculative RAS |
 | Indirect prediction | gem5 `ITTAGE`, reusing table count, capacities, tag, and history range above |
 | Instruction address shift | `instShiftAmt=1` |
+
+The decoupled frontend's BAC relies on BTB records to locate branches, so
+indirect branches and returns are allowed to install BTB entries. RAS and
+ITTAGE still provide return-address and indirect-target predictions,
+respectively. All five models and their SPEC SE and microbenchmark entry
+points share this setting.
 
 Prefetching uses explicitly configured gem5 components: Tagged approximates
 instruction prefetching, gem5 SMS approximates core SMS, Stride approximates

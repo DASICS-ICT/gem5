@@ -260,6 +260,7 @@ SC、Loop、uBTB、ITTAGE 和 V5 推测 RAS 未按原结构建模。
 
 | gem5 预测器参数 | 设定 |
 | --- | --- |
+| 前端分支识别 | `decoupledFrontEnd=True`、`requiresBTBHit=True` |
 | 条件预测 | `TAGE`，4 张历史表，`minHist=8`、`maxHist=119`，几何历史长度 |
 | TAGE 每表项数 | V2 4096；V5 2048，基表使用相同项数 |
 | TAGE tag / counter / useful 位宽 | 8 / 3 / 2 |
@@ -269,6 +270,10 @@ SC、Loop、uBTB、ITTAGE 和 V5 推测 RAS 未按原结构建模。
 | RAS | 容量取上表 RAS 字段；未单独构造推测 RAS |
 | 间接跳转预测 | gem5 `ITTAGE`，复用上述表数、容量、tag 和历史范围 |
 | 指令地址位移 | `instShiftAmt=1` |
+
+解耦前端的 BAC 依赖 BTB 记录定位分支，因此允许间接跳转和返回指令建立
+BTB 条目。RAS 和 ITTAGE 仍分别提供返回地址与间接目标预测。
+该设置由五套模型及其 SPEC SE、微基准入口共用。
 
 预取采用相应 gem5 预取器的显式参数：指令路径为 Tagged 近似，核心 SMS
 使用 gem5 SMS，V5 L1D Stream/Stride 使用 Stride 近似，L2 BOP 使用
