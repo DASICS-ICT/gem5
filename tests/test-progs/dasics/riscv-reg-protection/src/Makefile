@@ -11,8 +11,11 @@ OUT = ../build/riscv-reg-protection.elf
 OBJECTS = ../build/reg_protection.o ../build/reg_protection_asm.o
 RESTORE_OUT = ../build/reg-restore.elf
 RESTORE_OBJECTS = ../build/reg_restore.o ../build/reg_restore_asm.o
+PRESSURE_OUT = ../build/reg-pressure.elf
+PRESSURE_OBJECTS = ../build/reg_pressure.o ../build/reg_pressure_asm.o \
+	../build/reg_protection_asm.o
 
-.PHONY: all restore clean
+.PHONY: all restore pressure clean
 
 all: $(OUT)
 
@@ -40,6 +43,20 @@ $(RESTORE_OUT): $(RESTORE_OBJECTS)
 	mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(ASFLAGS) -c -o $@ $<
 
+pressure: $(PRESSURE_OUT)
+
+$(PRESSURE_OUT): $(PRESSURE_OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $^
+
+../build/reg_pressure.o: reg_pressure.c reg_pressure.h reg_protection.h Makefile
+	mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
+
+../build/reg_pressure_asm.o: reg_pressure.S reg_pressure.h reg_protection.h Makefile
+	mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(ASFLAGS) -c -o $@ $<
+
 # Measurement records remain available after software cleanup.
 clean:
-	rm -f $(OUT) $(OBJECTS) $(RESTORE_OUT) $(RESTORE_OBJECTS)
+	rm -f $(OUT) $(OBJECTS) $(RESTORE_OUT) $(RESTORE_OBJECTS) \
+		$(PRESSURE_OUT) $(PRESSURE_OBJECTS)
