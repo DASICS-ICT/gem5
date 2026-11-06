@@ -4,10 +4,15 @@
 
 ## Scope
 
-The test checks M-to-U and M-to-S transitions, trap return, and S/U-mode
-LibCfg (`0x880`) access. Each domain covers all six CSR instructions and
-the `rd=x0`, `rs1=x0`, and `zimm=0` forms in 12 entries: 24 instruction
-tests and 72 permission scenarios overall. Other CSRs are outside its scope.
+The test checks M-to-U and M-to-S transitions, trap return, DASICS CSR
+access checks, and ordinary CSR controls.
+
+| Coverage | Total across both domains |
+| --- | --- |
+| Six LibCfg CSR instructions and `rd=x0`, `rs1=x0`, and `zimm=0` forms | 24 instruction tests, 72 permission scenarios |
+| LibCfg PC boundaries | 24 scenarios |
+| Read-only probes of all 52 DASICS CSR addresses | 312 scenarios: 285 DASICS access scenarios and 27 ordinary privilege rejections |
+| Ordinary CSR controls | U/S read `cycle`; S also reads and writes `sscratch` |
 
 The test uses one RV64 hart, bare-metal full-system execution, an O3 model,
 and Semihosting termination. Outputs are under `build/m5out-o3/<CPU>/`.
@@ -27,8 +32,9 @@ and Semihosting termination. Outputs are under `build/m5out-o3/<CPU>/`.
    `mepc`, and `a0`, advances `mepc` by 4, then executes `mret`.
 5. Increment `a0` and execute the second ECALL in the current domain.
    The handler checks the trap origin, sequence, `mepc`, and `a0=0x5679`,
-   then runs that domain's 12 permission entries. After U mode completes,
-   S mode starts from the beginning. Success requires completing S mode.
+   then runs the domain's instruction table, boundary table, full CSR address
+   table, and ordinary CSR controls. After U mode completes, S mode starts
+   from the beginning. Success requires completing all S-mode checks.
 
 | Domain | `s3` | Enable bit | Trusted bounds | ECALL `mcause` | Trap-entry `MPP` |
 | --- | --- | --- | --- | --- | --- |
@@ -83,13 +89,138 @@ The read-only and `rd=x0` forms must also be rejected.
 
 Each metadata entry contains five 64-bit fields, totaling 40 bytes:
 `trustedPC`, `untrustedPC`, `sourceValue`, `allowedRd`, and `allowedCSR`.
-Register `s0` points to the current entry, `s1` records the stage, and
-`s2` identifies the entry within each domain: `0` for the initial ECALL pair
-and `1–12` for the table above. Together with `s3` (`0=U`, `1=S`), these
-registers locate the domain and entry when debugging a failure.
+
+## PC-boundary cases
+
+The boundary table reuses one 8-byte-aligned `boundary_probe` instruction,
+`csrrw a0, 0x880, a1`. Let its PC be `B`; `boundary_ecall` immediately
+follows at `B+4`. For each entry, M mode resets the current domain's bounds,
+enable bit, and initial `P/Q/D/FReason` state. Each interval runs with
+protection enabled first, then disabled. Both domains use the same table.
+
+| Entries (on / off) | PC position | Interval `[lo, hi)` | Enabled | Disabled |
+| --- | --- | --- | --- | --- |
+| 1 / 2 | `lo - 8` | `[B+8, B+24)` | Reject | Allow |
+| 3 / 4 | `lo` | `[B, B+16)` | Allow | Allow |
+| 5 / 6 | `hi - 8` | `[B-8, B+8)` | Allow | Allow |
+| 7 / 8 | `hi` | `[B-16, B)` | Reject | Allow |
+| 9 / 10 | Empty interval | `[B, B)` | Reject | Allow |
+| 11 / 12 | Reversed interval | `[B+8, B-8)` | Reject | Allow |
+
+Allowed accesses return through ECALL and check the domain's cause and
+`MPP`, `mepc=B+4`, `a0=P`, LibCfg=`Q`, and FReason=`5`.
+Rejected accesses require `mcause=2`, `MPP` matching the current domain,
+`mepc=B`, `mtval` equal to the probe's original encoding, and unchanged
+`a0=D`, LibCfg=`P`, and FReason=`5`. After M mode skips the faulting
+instruction, ECALL must occur at `B+4` and check unchanged state again.
+
+Each boundary metadata entry contains four 64-bit fields, totaling
+32 bytes: `lower`, `upper`, `enabled`, and `allowed`. Each domain starts
+at the first boundary entry after completing its instruction table.
+
+## All DASICS CSR addresses
+
+The address table covers all 52 architectural CSR addresses in the order
+below. SMainCfg and UMainCfg share internal state but are probed separately.
+Each entry contains four 64-bit fields, totaling 32 bytes: `trustedPC`,
+`untrustedPC`, `readerPC`, and `minpriv`.
+
+| Entries | CSR | Addresses | Minimum privilege |
+| --- | --- | --- | --- |
+| 1 | LibCfg | `0x880` | U |
+| 2–33 | LibBoundLo/Hi 0–15 | `0x890–0x8AF` | U |
+| 34–37 | MainCallEntry, ReturnPC, ActiveZoneReturnPC, FReason | `0x8B0–0x8B3` | U |
+| 38 | JumpCfg | `0x8C8` | U |
+| 39–46 | JumpBoundLo/Hi 0–3 | `0x8C0–0x8C7` | U |
+| 47–49 | UMainCfg, UMainBoundLo/Hi | `0x9E1–0x9E3` | S |
+| 50–52 | SMainCfg, SMainBoundLo/Hi | `0xBC0`, `0xBC2`, `0xBC3` | M |
+
+Each address has statically generated `csrrs a0, csr, zero` probes that do
+not write the target CSR. The trusted and untrusted blocks each contain a
+probe and ECALL in 8 bytes. The current domain's trusted interval is
+`[trustedPC, untrustedPC)`, with the untrusted probe at its upper bound.
+Each address runs three scenarios:
+
+| `s5` | Current domain's protection | Probe location | Ordinary privilege satisfied | Ordinary privilege insufficient |
+| --- | --- | --- | --- | --- |
+| `0` | Disabled | Outside | Allow | Cause 2 |
+| `1` | Enabled | Trusted | Allow | Cause 2 |
+| `2` | Enabled | Outside | Cause 2 | Cause 2 |
+
+U mode satisfies ordinary privilege for 46 addresses and S mode for 49,
+giving `(46+49)×3=285` DASICS access scenarios. The other 6 U-mode and
+3 S-mode addresses are rejected by ordinary privilege in all three scenarios,
+giving 27 rejections. Those rejections do not validate DASICS access checks.
+
+For each scenario, M mode configures protection and bounds, resets
+LibCfg=`P`, FReason=`5`, and `a0=D`, then calls that address's M-mode reader
+to capture its current value in `s4`. Allowed reads must return `a0=s4`;
+rejected reads must preserve `a0=D`. Both require the target CSR to equal
+the snapshot, LibCfg=`P`, and FReason=`5`. MainCfg and MainBound values may
+depend on the scenario and are not assumed to be fixed constants.
+
+Every rejection checks `mcause=2`, the current domain's `MPP`, the exact
+probe `mepc`, and its original encoding in `mtval`. After skipping the probe,
+ECALL must occur at its `PC+4` and recheck unchanged state. Allowed scenarios
+also check their result through the exact following ECALL in M mode.
+
+## Ordinary CSR controls
+
+After the address table, set the current domain's main interval to `[0, 0)`
+and enable protection, so the control instructions run outside trusted code.
+M mode sets both `mcounteren.CY` and `scounteren.CY` to allow S/U reads of
+`cycle`.
+
+| Domain | Instruction | Expected result |
+| --- | --- | --- |
+| U, S | `csrrs a0, 0xC00, zero` | `a0` differs from `D`; no fixed counter value is required |
+| S | `csrrw a0, 0x140, a1` | `sscratch` changes from `P` to `Q`, and `a0=P` |
+
+Each control checks the following ECALL's domain-specific cause, `MPP`,
+exact `mepc`, LibCfg=`P`, and FReason=`5`. U mode does not run the
+`sscratch` control because that CSR requires S privilege.
+
+Known scope: [NanhuV5 FDI ISA](https://aul8ejtumo.feishu.cn/wiki/X3kawI6qoiIKejk3ZUdcebdqnOc),
+revision 221 §3.4, requires rejecting untrusted S-mode writes to ordinary
+CSRs except floating-point and writable vector CSRs. That rule is not yet
+implemented here. Allowing `sscratch` writes describes the current
+implementation and does not establish full ISA conformance.
+
+## CSR write flush policy
+
+Writes to all 52 DASICS CSR addresses retain `IsNonSpeculative` and
+`IsSerializeAfter`, and add `IsSquashAfter` according to write intent.
+At successful O3 commit, the CSR update takes effect before younger
+instructions are squashed and fetch restarts at the next PC.
+For instructions with write intent, disabled S/U protection, a zero source
+value, or an unchanged written value does not suppress the flush.
+Setting `rd=x0` does not remove write intent.
+
+`CSRRS/CSRRC` with `rs1=x0` and `CSRRSI/CSRRCI` with `zimm=0` have no write
+intent and retain only the existing serialization. `CSRRW/CSRRWI` always
+have write intent. Faulting writes do not update the CSR and follow the
+trap path without an additional successful-write flush.
+
+A functional exit code of `0` does not independently prove that a flush
+occurred. Validation requires `Commit`/`Fetch` traces showing commit,
+younger-instruction squash, and fetch at the next PC.
+
+## Debugging
+
+Register `s0` points to the current table entry. Register `s1` records the
+stage: `0/1` for the initial ECALL harness, `2–5` for instruction-permission
+entries, `6` for an allowed boundary ECALL, `7` for a rejected boundary CSR,
+and `8` for its return ECALL. Stages `9/10/11` identify the address table's
+allowed ECALL, rejected CSR, and return ECALL; `12/13` identify the ordinary
+`cycle` and `sscratch` controls.
+Register `s2=0` identifies the initial harness; the instruction and boundary
+tables are each numbered `1–12`, the address table `1–52`, and the ordinary
+controls `1/2`. Use `s3` (`0=U`, `1=S`) and `s1` to locate the domain, table,
+and entry. The address table also uses `s4` for the target snapshot and
+`s5` for scenario `0/1/2`.
 
 Compressed instructions are disabled, so ECALL return advances by 4 bytes.
-The test uses no stack. Registers `ra`, `t0/t1`, `a2/a3`, and `s0/s1/s2/s3` are
+The test uses no stack. Registers `ra`, `t0/t1`, `a2/a3`, and `s0–s5` are
 reserved for the harness. Registers `a0/a1` hold case operands;
 the handler does not implement general context preservation.
 
@@ -113,7 +244,17 @@ the handler does not implement general context preservation.
 | `13` | Rejected access `mepc` is not at the expected CSR instruction |
 | `14` | Rejected access `mtval` does not match the instruction encoding |
 | `15` | Rejected access or trap return changed the `a0` sentinel |
-| `16` | Rejected access or trap return changed the initial LibCfg value |
-| `17` | Rejected access or trap return changed FReason |
-| `18` | Incorrect ECALL `mepc` after returning from the rejected access |
+| `16` | The initial LibCfg value changed when preservation was required |
+| `17` | FReason changed when preservation was required |
+| `18` | Incorrect ECALL `mepc` after a rejected instruction-permission access |
+| `19` | Incorrect ECALL `mepc` after an allowed boundary access |
+| `20` | Incorrect ECALL `mepc` after returning from a rejected boundary access |
+| `21` | Incorrect ECALL `mepc` after an allowed address probe or rejection return |
+| `22` | Allowed address read does not return the target snapshot in `a0` |
+| `23` | Address-table target CSR differs from its snapshot |
+| `24` | Incorrect ECALL `mepc` in the `cycle` control |
+| `25` | The `cycle` control did not change the `a0` sentinel |
+| `26` | Incorrect ECALL `mepc` in the `sscratch` control |
+| `27` | Incorrect old value returned by the `sscratch` control |
+| `28` | Incorrect new value written by the `sscratch` control |
 | `124` | Host timeout |

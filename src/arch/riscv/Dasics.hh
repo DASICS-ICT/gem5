@@ -17,6 +17,13 @@ namespace RiscvISA
 
 #if USE_DASICS
 /**
+ * Classify decoded CSR instructions for a squash after successful commit.
+ * Uses architectural write intent, including writes of an unchanged value.
+ * CSRRS/CSRRC with rs1=x0 and their zero-immediate forms are read-only.
+ */
+bool dasicsCsrNeedsSquash(ExtMachInst machInst);
+
+/**
  * Check the PC against one domain's half-open main bound.
  * Disabled protection treats every PC as trusted. Comparisons use address
  * bits [vaddrBits - 1:3]; vaddrBits is the implemented comparator width,

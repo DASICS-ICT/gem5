@@ -33,6 +33,7 @@
 
 #include <string>
 
+#include "arch/riscv/Dasics.hh"
 #include "arch/riscv/insts/static_inst.hh"
 #include "arch/riscv/regs/misc.hh"
 #include "cpu/exec_context.hh"
@@ -102,6 +103,13 @@ class CSROp : public RiscvStaticInst
         if (csr == CSR_SATP) {
             flags[IsSquashAfter] = true;
         }
+
+#if USE_DASICS
+        // Refetch younger instructions after a committed DASICS CSR write.
+        if (dasicsCsrNeedsSquash(_machInst)) {
+            flags[IsSquashAfter] = true;
+        }
+#endif // USE_DASICS
     }
 
     std::string generateDisassembly(

@@ -90,6 +90,30 @@ isDasicsMiscReg(RegIndex miscReg)
 } // anonymous namespace
 
 bool
+dasicsCsrNeedsSquash(ExtMachInst machInst)
+{
+    const auto csr_it = CSRData.find(machInst.funct12);
+    if (csr_it == CSRData.end() ||
+        !isDasicsMiscReg(csr_it->second.physIndex)) {
+        return false;
+    }
+
+    switch (machInst.funct3) {
+        case 0x1: // CSRRW
+        case 0x5: // CSRRWI
+            return true;
+        case 0x2: // CSRRS
+        case 0x3: // CSRRC
+        case 0x6: // CSRRSI
+        case 0x7: // CSRRCI
+            // The field holds the rs1 index or zimm, never register data.
+            return machInst.csrimm != 0;
+        default:
+            return false;
+    }
+}
+
+bool
 dasicsPcIsTrusted(Addr pc, bool enabled, Addr lower, Addr upper,
                   unsigned vaddrBits)
 {
