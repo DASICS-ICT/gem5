@@ -3,6 +3,8 @@
 #ifndef __ARCH_RISCV_DASICS_HH__
 #define __ARCH_RISCV_DASICS_HH__
 
+#include <array>
+
 #include "arch/riscv/types.hh"
 #include "base/types.hh"
 #include "config/use_dasics.hh"
@@ -31,6 +33,25 @@ bool dasicsCsrNeedsSquash(ExtMachInst machInst);
  */
 bool dasicsPcIsTrusted(Addr pc, bool enabled, Addr lower, Addr upper,
                        unsigned vaddrBits);
+
+/** Raw CSR values for one half-open jump bound. */
+struct DasicsJumpBound
+{
+    Addr lower = 0;
+    Addr upper = 0;
+};
+
+/**
+ * Match a target against four jump bounds or three special addresses.
+ * JumpCfg bits 0, 16, 32, and 48 enable the corresponding bounds, whose
+ * comparisons use bits [vaddrBits - 1:3]. Special addresses match exactly
+ * in bits [vaddrBits - 1:0]; a zero special address remains matchable.
+ * The caller handles privilege, source trust, enables, and branch outcome.
+ */
+bool dasicsJumpTargetIsAllowed(Addr target, RegVal jumpCfg,
+                               const std::array<DasicsJumpBound, 4> &bounds,
+                               Addr mainCallEntry, Addr returnPc,
+                               Addr activeZoneReturnPc, unsigned vaddrBits);
 
 /**
  * Check the current instruction using the non-virtualized S/U domain state.

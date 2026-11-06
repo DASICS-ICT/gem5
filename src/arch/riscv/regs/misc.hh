@@ -1807,7 +1807,119 @@ BitUnion64(DasicsMainCfg)
     Bitfield<7> csst; // S-domain store.
     Bitfield<8> cslt; // S-domain load.
     Bitfield<9> csft; // S-domain control flow.
+
+    // CSR access masks exclude the CBO and atomic controls.
+    Bitfield<10> cuct; // U-domain CBO.
+    Bitfield<11> cuat; // U-domain LR/SC/AMO.
+    Bitfield<12> csct; // S-domain CBO.
+    Bitfield<13> csat; // S-domain LR/SC/AMO.
 EndBitUnion(DasicsMainCfg)
+
+// Each 4-bit slot stores V/U/R/W; U is retained but unused for permissions.
+BitUnion64(DasicsLibCfg)
+    Bitfield<0> write0;
+    Bitfield<1> read0;
+    Bitfield<2> u0;
+    Bitfield<3> valid0;
+
+    Bitfield<4> write1;
+    Bitfield<5> read1;
+    Bitfield<6> u1;
+    Bitfield<7> valid1;
+
+    Bitfield<8> write2;
+    Bitfield<9> read2;
+    Bitfield<10> u2;
+    Bitfield<11> valid2;
+
+    Bitfield<12> write3;
+    Bitfield<13> read3;
+    Bitfield<14> u3;
+    Bitfield<15> valid3;
+
+    Bitfield<16> write4;
+    Bitfield<17> read4;
+    Bitfield<18> u4;
+    Bitfield<19> valid4;
+
+    Bitfield<20> write5;
+    Bitfield<21> read5;
+    Bitfield<22> u5;
+    Bitfield<23> valid5;
+
+    Bitfield<24> write6;
+    Bitfield<25> read6;
+    Bitfield<26> u6;
+    Bitfield<27> valid6;
+
+    Bitfield<28> write7;
+    Bitfield<29> read7;
+    Bitfield<30> u7;
+    Bitfield<31> valid7;
+
+    Bitfield<32> write8;
+    Bitfield<33> read8;
+    Bitfield<34> u8;
+    Bitfield<35> valid8;
+
+    Bitfield<36> write9;
+    Bitfield<37> read9;
+    Bitfield<38> u9;
+    Bitfield<39> valid9;
+
+    Bitfield<40> write10;
+    Bitfield<41> read10;
+    Bitfield<42> u10;
+    Bitfield<43> valid10;
+
+    Bitfield<44> write11;
+    Bitfield<45> read11;
+    Bitfield<46> u11;
+    Bitfield<47> valid11;
+
+    Bitfield<48> write12;
+    Bitfield<49> read12;
+    Bitfield<50> u12;
+    Bitfield<51> valid12;
+
+    Bitfield<52> write13;
+    Bitfield<53> read13;
+    Bitfield<54> u13;
+    Bitfield<55> valid13;
+
+    Bitfield<56> write14;
+    Bitfield<57> read14;
+    Bitfield<58> u14;
+    Bitfield<59> valid14;
+
+    Bitfield<60> write15;
+    Bitfield<61> read15;
+    Bitfield<62> u15;
+    Bitfield<63> valid15;
+EndBitUnion(DasicsLibCfg)
+
+// Only bit 0 of each 16-bit slot controls jump-bound validity.
+BitUnion64(DasicsJumpCfg)
+    Bitfield<0> valid0;
+    Bitfield<16> valid1;
+    Bitfield<32> valid2;
+    Bitfield<48> valid3;
+EndBitUnion(DasicsJumpCfg)
+
+// MainBound, LibBound, and JumpBound share an 8-byte-aligned layout.
+BitUnion64(DasicsBound)
+    // An 8-byte block index; the byte address is blockAddress << 3.
+    Bitfield<63, 3> blockAddress;
+EndBitUnion(DasicsBound)
+
+// MainCallEntry, ReturnPC, and ActiveZoneReturnPC retain all address bits.
+BitUnion64(DasicsAddress)
+    Bitfield<63, 0> address;
+EndBitUnion(DasicsAddress)
+
+BitUnion64(DasicsFReason)
+    Bitfield<2, 0> reason;
+EndBitUnion(DasicsFReason)
 #endif // USE_DASICS
 
 const off_t MXL_OFFSETS[enums::Num_RiscvType] = {

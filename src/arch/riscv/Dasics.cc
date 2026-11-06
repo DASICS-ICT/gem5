@@ -132,6 +132,33 @@ dasicsPcIsTrusted(Addr pc, bool enabled, Addr lower, Addr upper,
 }
 
 bool
+dasicsJumpTargetIsAllowed(Addr target, RegVal jumpCfg,
+                          const std::array<DasicsJumpBound, 4> &bounds,
+                          Addr mainCallEntry, Addr returnPc,
+                          Addr activeZoneReturnPc, unsigned vaddrBits)
+{
+    assert(vaddrBits >= 4 && vaddrBits <= 64);
+
+    const DasicsJumpCfg config = jumpCfg;
+    const std::array<bool, 4> valid = {
+        static_cast<bool>(config.valid0), static_cast<bool>(config.valid1),
+        static_cast<bool>(config.valid2), static_cast<bool>(config.valid3)};
+
+    for (unsigned i = 0; i < bounds.size(); ++i) {
+        // An invalid bound must not use the disabled-protection bypass.
+        if (valid[i] && dasicsPcIsTrusted(target, true, bounds[i].lower,
+                                          bounds[i].upper, vaddrBits)) {
+            return true;
+        }
+    }
+
+    const Addr targetAddress = bits(target, vaddrBits - 1, 0);
+    return targetAddress == bits(mainCallEntry, vaddrBits - 1, 0) ||
+           targetAddress == bits(returnPc, vaddrBits - 1, 0) ||
+           targetAddress == bits(activeZoneReturnPc, vaddrBits - 1, 0);
+}
+
+bool
 dasicsInstIsTrusted(ExecContext *xc, unsigned vaddrBits)
 {
     const auto mode = static_cast<PrivilegeMode>(xc->readMiscReg(MISCREG_PRV));
