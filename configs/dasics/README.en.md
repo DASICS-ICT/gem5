@@ -381,9 +381,27 @@ The instantiated `config.ini` records actual SimObject parameters. Total
 cycles of the CSR test describe that test only and do not measure
 application-level DASICS overhead.
 
+## DASICS ISA parameter
+
+The DASICS build provides `dasics_vaddr_bits`, with a default of 50 and a
+valid range of 4–64. It specifies the implemented address comparator width;
+the default main-bound comparison uses bits `[49:3]`, independently of the
+current `satp` mode. The parameter appears in the ISA object's `config.ini`
+section.
+
+Set it after creating the ISA object and before `m5.instantiate()`:
+
+```python
+system.cpu.isa[0].dasics_vaddr_bits = 50
+```
+
+The ordinary build does not provide this parameter. It does not change CSR
+storage width or the paging mode.
+
 ## DASICS microarchitectural costs pending modeling
 
-These configurations reuse existing CSR semantics. Frontend trust tags,
+CSR access checks run during instruction execution using that instruction's
+PC and architectural CSR state. Frontend trust tags,
 bound-check latency, distributed CSR propagation, flushes after configuration
 updates, check-port contention, and speculative-path handling require separate
 implementation and validation. Compare DASICS modes with the same model,

@@ -418,6 +418,12 @@ def template CSRExecute {{
         Fault tvm_fault = isa->tvmChecks(csr, pm, machInst);
         if (tvm_fault != NoFault) { return tvm_fault; }
 
+#if USE_DASICS
+        Fault dasics_fault = dasicsCsrAccessCheck(
+            xc, midx, machInst, isa->getDasicsVAddrBits());
+        if (dasics_fault != NoFault) { return dasics_fault; }
+#endif // USE_DASICS
+
         if (%(read_cond)s) {
             switch (csr) {
                 case CSR_CYCLE:   case CSR_CYCLEH:

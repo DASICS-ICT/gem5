@@ -39,6 +39,7 @@ make clean-riscv-dasics
 | Test | Description | Reproduction |
 | --- | --- | --- |
 | `riscv-dasics-csr` | [Test description](../tests/test-progs/dasics/riscv-dasics-csr/README.en.md) | [Run](#riscv-dasics-csr) |
+| `riscv-dasics-csr-permission` | [Test description](../tests/test-progs/dasics/riscv-dasics-csr-permission/README.en.md) | [Run](#riscv-dasics-csr-permission) |
 
 ## Test reproduction
 
@@ -64,4 +65,21 @@ make dasics-test TEST=riscv-dasics-csr CPU=all
 
 ```bash
 make dasics-clean TEST=riscv-dasics-csr
+```
+
+### riscv-dasics-csr-permission
+
+```bash
+make riscv-dasics &&
+  make dasics-test TEST=riscv-dasics-csr-permission CPU=v5_full
+```
+
+```bash
+make dasics-test TEST=riscv-dasics-csr-permission CPU=all
+```
+
+#### Clean software
+
+```bash
+make dasics-clean TEST=riscv-dasics-csr-permission
 ```

@@ -46,6 +46,7 @@
 #include "arch/riscv/regs/misc.hh"
 #include "arch/riscv/types.hh"
 #include "base/types.hh"
+#include "config/use_dasics.hh"
 
 namespace gem5
 {
@@ -98,6 +99,11 @@ class ISA : public BaseISA
      *  ELEN in Ch. 2 of RISC-V vector spec
     */
     unsigned elen;
+
+#if USE_DASICS
+    /** Implemented DASICS comparator width, independent of SATP mode. */
+    const unsigned _dasicsVAddrBits;
+#endif // USE_DASICS
 
     /** The combination of privilege modes
      *  in Privilege Levels section of RISC-V privileged spec
@@ -193,6 +199,14 @@ class ISA : public BaseISA
     unsigned getVecLenInBits() { return vlen; }
     unsigned getVecLenInBytes() { return vlen >> 3; }
     unsigned getVecElemLenInBits() { return elen; }
+
+#if USE_DASICS
+    unsigned
+    getDasicsVAddrBits() const
+    {
+        return _dasicsVAddrBits;
+    }
+#endif // USE_DASICS
 
     int64_t getVectorLengthInBytes() const override { return vlen >> 3; }
 

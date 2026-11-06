@@ -40,6 +40,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+from m5.defines import buildEnv
 from m5.objects.BaseISA import BaseISA
 from m5.params import (
     Enum,
@@ -568,6 +569,13 @@ class RiscvISA(BaseISA):
         "Length of each vector element in bits. \
         ELEN in Ch. 2 of RISC-V vector spec",
     )
+    if buildEnv.get("USE_DASICS", False):
+        dasics_vaddr_bits = Param.Unsigned(
+            50,
+            "Implemented DASICS address comparator width in bits (4-64), "
+            "independent of the current address translation mode",
+        )
+
     privilege_mode_set = Param.PrivilegeModeSet(
         "MSU",  # set MHSU to enable hypervisor (H-extension)
         # No timing CPUs are supported in MHSU currently

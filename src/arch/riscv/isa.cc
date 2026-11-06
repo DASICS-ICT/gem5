@@ -367,10 +367,19 @@ ISA::ISA(const Params &p)
       _rvType(p.riscv_profile == enums::RVI20U32 ? enums::RV32 : enums::RV64),
       vlen(p.vlen),
       elen(p.elen),
+#if USE_DASICS
+      _dasicsVAddrBits(p.dasics_vaddr_bits),
+#endif // USE_DASICS
       _privilegeModeSet(p.privilege_mode_set),
       _reportedExtensions(p.reported_extensions),
       _wfiResumeOnPending(p.wfi_resume_on_pending)
 {
+#if USE_DASICS
+    fatal_if(_dasicsVAddrBits < 4 || _dasicsVAddrBits > 64,
+             "dasics_vaddr_bits must be between 4 and 64 (got %u)",
+             _dasicsVAddrBits);
+#endif // USE_DASICS
+
     _regClasses.push_back(&intRegClass);
     _regClasses.push_back(&floatRegClass);
     _regClasses.push_back(&vecRegClass);

@@ -28,13 +28,14 @@ CROSS_COMPILE ?= riscv64-linux-gnu-
 CC = $(CROSS_COMPILE)gcc
 CFLAGS = -march=rv64imac_zicsr -mabi=lp64 -nostdlib -nostartfiles -static
 LDFLAGS = -no-pie -Wl,--build-id=none -Wl,-Ttext=0x80000000 -Wl,-e,_start
-OUT = ../build/riscv-dasics-csr.elf
+PROGRAM ?= riscv-dasics-csr
+OUT = ../build/$(PROGRAM).elf
 
 .PHONY: all run clean
 
 all: $(OUT)
 
-$(OUT): riscv-dasics-csr.S Makefile
+$(OUT): $(PROGRAM).S $(MAKEFILE_LIST)
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $<
 

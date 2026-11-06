@@ -83,6 +83,8 @@ clean-riscv-dasics:
 
 # Each test owns its run target and output layout.
 # run-result.txt preserves simulator exit codes across recursive make calls.
+# make dasics-test TEST=riscv-dasics-csr-permission CPU=v5_full
+# make dasics-clean TEST=riscv-dasics-csr-permission
 dasics-test: override GEM5_BINARY := \
 	$(GEM5_REPO_DIR)/build/RISCV_DASICS/gem5.opt
 dasics-test: dasics-check dasics-cpu-check

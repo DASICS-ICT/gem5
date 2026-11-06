@@ -348,8 +348,23 @@ SoC 名义参数；V2 的 2 GHz 和全部模型的 DRAM 时序属于统一实验
 `dasics_platform.py` 修改。实例化后的 `config.ini` 是实际 SimObject 参数依据。
 CSR 用例的总运行周期只作该用例的统计，不能代表 DASICS 应用性能开销。
 
+## DASICS ISA 参数
+
+DASICS 版提供 `dasics_vaddr_bits`，默认 50，允许范围为 4–64。
+它指定地址比较器的实现位宽；默认主边界比较使用地址位 `[49:3]`，
+与运行时 `satp` 模式无关。参数记录在 ISA 对象对应的 `config.ini` 节中。
+
+在 ISA 对象创建后、`m5.instantiate()` 前设置：
+
+```python
+system.cpu.isa[0].dasics_vaddr_bits = 50
+```
+
+普通版不提供此参数。该参数不改变 CSR 存储位宽或分页模式。
+
 ## 尚未建模的 DASICS 微架构成本
 
-当前配置复用既有 CSR 语义。前端可信标签、边界检查延迟、CSR distributed
+CSR 访问检查位于指令执行阶段，使用该指令的 PC 和架构 CSR 状态。
+前端可信标签、边界检查延迟、CSR distributed
 传播、配置更新后的冲刷、检查端口竞争和投机路径处理需要后续独立实现并验证。
 比较 DASICS 开关时应使用相同模型、相同输入和相同测量区间，再报告周期差异。
