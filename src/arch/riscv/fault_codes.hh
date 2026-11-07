@@ -30,6 +30,7 @@
 #define __ARCH_RISCV_FAULT_CODES_HH__
 
 #include "base/types.hh"
+#include "config/use_dasics.hh"
 
 namespace gem5
 {
@@ -77,11 +78,17 @@ enum ExceptionCode : uint64_t
     LOAD_PAGE = 13,
     STORE_PAGE = 15,
     AMO_PAGE = 15,
-    INST_GUEST_PAGE = 20, // H-extension
-    LOAD_GUEST_PAGE = 21, // H-extension
-    VIRTUAL_INST = 22,    // H-extension
-    STORE_GUEST_PAGE = 23,// H-extension
-    AMO_GUEST_PAGE = 23,  // H-extension
+    INST_GUEST_PAGE = 20,  // H-extension
+    LOAD_GUEST_PAGE = 21,  // H-extension
+    VIRTUAL_INST = 22,     // H-extension
+    STORE_GUEST_PAGE = 23, // H-extension
+    AMO_GUEST_PAGE = 23,   // H-extension
+
+#if USE_DASICS
+    // DASICS synchronous check exceptions are classified by source domain.
+    DASICS_U_CHECK = 0x18,
+    DASICS_S_CHECK = 0x19,
+#endif // USE_DASICS
 
     INT_SOFTWARE_SUPER = 1,
     INT_SOFTWARE_VIRTUAL_SUPER = 2, // H-extension
@@ -148,7 +155,17 @@ enum ExceptionCode : uint64_t
     INT_NMI = NumInterruptTypes,
 };
 
-
+#if USE_DASICS
+// Detailed fault reasons stored in the shared DASICS FReason CSR.
+enum class DasicsFaultReason : uint8_t
+{
+    None = 0,
+    Ecall = 1,
+    Load = 2,
+    Store = 3,
+    Jump = 4,
+};
+#endif // USE_DASICS
 
 // H-extension useful masks
 const RegVal DELEGABLE_EXCPS = 0
@@ -168,15 +185,19 @@ const RegVal DELEGABLE_EXCPS = 0
     | (1ULL << STORE_PAGE)
     ;
 
+// RV64 adds DASICS check exceptions when the extension is enabled.
+#if USE_DASICS
+const RegVal DELEGABLE_EXCPS_RV64 =
+    DELEGABLE_EXCPS | (1ULL << DASICS_U_CHECK) | (1ULL << DASICS_S_CHECK);
+#else
+const RegVal DELEGABLE_EXCPS_RV64 = DELEGABLE_EXCPS;
+#endif // USE_DASICS
 
-
-const RegVal DELEGABLE_EXCPS_WITH_RVH = DELEGABLE_EXCPS
-    | (1ULL << ECALL_VIRTUAL_SUPER)
-    | (1ULL << INST_GUEST_PAGE)
-    | (1ULL << LOAD_GUEST_PAGE)
-    | (1ULL << VIRTUAL_INST)
-    | (1ULL << STORE_GUEST_PAGE)
-    ;
+// RV64 machine delegation also includes H-extension exception causes.
+const RegVal DELEGABLE_EXCPS_WITH_RVH =
+    DELEGABLE_EXCPS_RV64 | (1ULL << ECALL_VIRTUAL_SUPER) |
+    (1ULL << INST_GUEST_PAGE) | (1ULL << LOAD_GUEST_PAGE) |
+    (1ULL << VIRTUAL_INST) | (1ULL << STORE_GUEST_PAGE);
 
 const RegVal VS_DELEGABLE_EXCPS = DELEGABLE_EXCPS &
     ~((1ULL << ECALL_SUPER) |

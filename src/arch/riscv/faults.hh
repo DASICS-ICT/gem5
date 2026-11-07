@@ -243,6 +243,28 @@ class AddressFault : public RiscvFault
     RegVal trap_value2() const override { return _gpaddr >> 2; }
 };
 
+#if USE_DASICS
+/**
+ * A synchronous DASICS check fault from non-virtualized U/S execution.
+ * The reason is carried with the fault until it is accepted for trap entry.
+ * The caller must supply PRV_U or PRV_S and exclude virtualized execution.
+ */
+class DasicsFault : public RiscvFault
+{
+  private:
+    const DasicsFaultReason _reason;
+    // Full fault address for xtval, independent of the comparator width.
+    const Addr _trapValue;
+
+  public:
+    DasicsFault(PrivilegeMode sourceMode, DasicsFaultReason reason,
+                Addr trapValue);
+
+    RegVal trap_value() const override;
+    void invoke(ThreadContext *tc, const StaticInstPtr &inst) override;
+};
+#endif // USE_DASICS
+
 class BreakpointFault : public RiscvFault
 {
   private:

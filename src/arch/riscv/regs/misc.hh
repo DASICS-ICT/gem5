@@ -2586,7 +2586,7 @@ CSRWriteMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
         },
         [enums::MSU] = {
             {CSR_MIDELEG, MIDELEG_MASK[enums::MSU]},
-            {CSR_MEDELEG, DELEGABLE_EXCPS},
+            {CSR_MEDELEG, DELEGABLE_EXCPS_RV64},
             {CSR_MSTATUS,
                 STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
                 STATUS_MIE_MASK | STATUS_MPIE_MASK | STATUS_MPP_MASK |
