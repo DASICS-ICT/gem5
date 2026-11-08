@@ -48,13 +48,16 @@
 
     .equ CASE_SOURCE, 0
     .equ CASE_DELEGATED, 8
-    .equ CASE_ALLOWED, 16
-    .equ CASE_SIZE, 24
+    .equ CASE_COMPLETES, 16
+    .equ CASE_PROBE, 24
+    .equ CASE_SIZE, 32
+    .equ PROBE_JALR, 0
+    .equ PROBE_BEQ, 1
     .equ STAGE_SETUP, 0
     .equ STAGE_PROBE, 1
     .equ STAGE_RESUME, 2
 
-    /* Failure status is case_id * 16 + reason; case 0 is initialization. */
+    /* case_id * 15 + reason fits 16 cases in 8 bits; case 0 is setup. */
     .equ FAIL_DELEGATION, 1
     .equ FAIL_SOURCE, 2
     .equ FAIL_ROUTE, 3
@@ -70,9 +73,11 @@
 
     /*
      * s0: case row; s1: one-based case ID; s2: source privilege;
-     * s3: delegate to S; s4: allow target; s5: execution stage;
+     * s3: delegate to S; s4: completes without DASICS; s5: execution stage;
      * s6: accepted DASICS trap count; s7: target GPR marker;
-     * s8: resume marker; s9: target memory marker address.
+     * s8: resume marker; s9: target memory marker address; s10: probe kind;
+     * s11: probe PC; a3: expected ra after completion without DASICS.
+     * M initializes the expected state; both handlers preserve it.
      * ra remains observable throughout the test: no call/ret is used.
      * a2 carries a failure reason, including across the S failure ECALL.
      */
@@ -109,7 +114,8 @@ start_case:
     li      s5, STAGE_SETUP
     ld      s2, CASE_SOURCE(s0)
     ld      s3, CASE_DELEGATED(s0)
-    ld      s4, CASE_ALLOWED(s0)
+    ld      s4, CASE_COMPLETES(s0)
+    ld      s10, CASE_PROBE(s0)
     li      s6, 0
     li      s7, 0
     li      s8, 0
@@ -130,8 +136,17 @@ start_case:
     csrw    CSR_DASICS_JUMP_BOUND_LO0, t0
     la      t0, target_end
     csrw    CSR_DASICS_JUMP_BOUND_HI0, t0
+    la      s11, jump_probe
+    la      a3, jump_link
+    mv      t0, s4
+    beqz    s10, .Lwrite_jump_cfg
+    la      s11, beq_probe
+    li      a3, RA_SENTINEL
+    /* Neither BEQ outcome has an authorized target. */
+    li      t0, 0
+.Lwrite_jump_cfg:
     /* Writing 0 or 1 leaves groups 1-3 invalid in every case. */
-    csrw    CSR_DASICS_JUMP_CFG, s4
+    csrw    CSR_DASICS_JUMP_CFG, t0
 
     /* Only the selected DASICS cause is delegated; ECALLs always reach M. */
     li      t0, 0
@@ -154,8 +169,7 @@ start_case:
     /* JALR clears bit 0 before checking or reporting its actual target. */
     ori     a1, a1, 1
     li      s5, STAGE_PROBE
-    la      t0, jump_probe
-    csrw    mepc, t0
+    csrw    mepc, s11
     li      t0, ENTRY_STATUS_CLEAR
     csrc    mstatus, t0
     slli    t0, s2, 11
@@ -171,6 +185,11 @@ jump_link:
     ebreak
 
     .balign 8
+    /* Keep the shared target aligned without padding after the BEQ. */
+    nop
+beq_probe:
+    /* Same next PC for both outcomes; only a taken branch must fault. */
+    beq     s4, zero, target_entry
 target_entry:
     li      s7, TARGET_MARKER
     sd      s7, 0(s9)
@@ -230,8 +249,7 @@ machine_trap_handler:
     bnez    s6, fail
     li      a2, FAIL_EPC
     csrr    t0, mepc
-    la      t1, jump_probe
-    bne     t0, t1, fail
+    bne     t0, s11, fail
     li      a2, FAIL_TVAL
     csrr    t0, mtval
     la      t1, target_entry
@@ -260,8 +278,7 @@ machine_trap_handler:
     li      t1, FREASON_SENTINEL
     bne     t0, t1, fail
     li      a2, FAIL_LINK
-    la      t0, jump_link
-    bne     ra, t0, fail
+    bne     ra, a3, fail
     li      a2, FAIL_TARGET_GPR
     li      t0, TARGET_MARKER
     bne     s7, t0, fail
@@ -316,8 +333,7 @@ supervisor_trap_handler:
     bne     t0, t1, supervisor_failure_ecall
     li      a2, FAIL_EPC
     csrr    t0, sepc
-    la      t1, jump_probe
-    bne     t0, t1, supervisor_failure_ecall
+    bne     t0, s11, supervisor_failure_ecall
     li      a2, FAIL_TVAL
     csrr    t0, stval
     la      t1, target_entry
@@ -343,6 +359,7 @@ pass:
     j       exit_test
 fail:
     slli    t0, s1, 4
+    sub     t0, t0, s1
     add     a2, a2, t0
 exit_test:
     la      a1, exit_args
@@ -360,15 +377,23 @@ halt:
     .section .rodata
     .balign 8
 cases:
-    /* Source, delegate to S, allow target. */
-    .dword  PRV_U, 0, 1
-    .dword  PRV_U, 0, 0
-    .dword  PRV_U, 1, 1
-    .dword  PRV_U, 1, 0
-    .dword  PRV_S, 0, 1
-    .dword  PRV_S, 0, 0
-    .dword  PRV_S, 1, 1
-    .dword  PRV_S, 1, 0
+    /* Source, delegate to S, completes without DASICS, probe kind. */
+    .dword  PRV_U, 0, 1, PROBE_JALR
+    .dword  PRV_U, 0, 0, PROBE_JALR
+    .dword  PRV_U, 1, 1, PROBE_JALR
+    .dword  PRV_U, 1, 0, PROBE_JALR
+    .dword  PRV_S, 0, 1, PROBE_JALR
+    .dword  PRV_S, 0, 0, PROBE_JALR
+    .dword  PRV_S, 1, 1, PROBE_JALR
+    .dword  PRV_S, 1, 0, PROBE_JALR
+    .dword  PRV_U, 0, 1, PROBE_BEQ
+    .dword  PRV_U, 0, 0, PROBE_BEQ
+    .dword  PRV_U, 1, 1, PROBE_BEQ
+    .dword  PRV_U, 1, 0, PROBE_BEQ
+    .dword  PRV_S, 0, 1, PROBE_BEQ
+    .dword  PRV_S, 0, 0, PROBE_BEQ
+    .dword  PRV_S, 1, 1, PROBE_BEQ
+    .dword  PRV_S, 1, 0, PROBE_BEQ
 cases_end:
 
     .section .data
