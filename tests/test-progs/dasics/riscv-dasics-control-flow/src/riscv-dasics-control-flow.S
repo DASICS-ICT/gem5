@@ -50,14 +50,27 @@
     .equ CASE_DELEGATED, 8
     .equ CASE_COMPLETES, 16
     .equ CASE_PROBE, 24
-    .equ CASE_SIZE, 32
+    .equ CASE_RS1, 32
+    .equ CASE_RS2, 40
+    .equ CASE_SIZE, 48
     .equ PROBE_JALR, 0
     .equ PROBE_BEQ, 1
+    .equ PROBE_BNE, 2
+    .equ PROBE_BLT, 3
+    .equ PROBE_BGE, 4
+    .equ PROBE_BLTU, 5
+    .equ PROBE_BGEU, 6
+    .equ PROBE_PC, 0
+    .equ PROBE_TARGET, 8
+    .equ PROBE_END, 16
+    .equ PROBE_ECALL, 24
+    .equ PROBE_LINK, 32
+    .equ PROBE_SIZE, 40
     .equ STAGE_SETUP, 0
     .equ STAGE_PROBE, 1
     .equ STAGE_RESUME, 2
 
-    /* case_id * 15 + reason fits 16 cases in 8 bits; case 0 is setup. */
+    /* Print the reason separately; exit status identifies the failed case. */
     .equ FAIL_DELEGATION, 1
     .equ FAIL_SOURCE, 2
     .equ FAIL_ROUTE, 3
@@ -77,6 +90,7 @@
      * s6: accepted DASICS trap count; s7: target GPR marker;
      * s8: resume marker; s9: target memory marker address; s10: probe kind;
      * s11: probe PC; a3: expected ra after completion without DASICS.
+     * a4/a5: branch operands; a6: target PC; a7: completion ECALL PC.
      * M initializes the expected state; both handlers preserve it.
      * ra remains observable throughout the test: no call/ret is used.
      * a2 carries a failure reason, including across the S failure ECALL.
@@ -116,6 +130,8 @@ start_case:
     ld      s3, CASE_DELEGATED(s0)
     ld      s4, CASE_COMPLETES(s0)
     ld      s10, CASE_PROBE(s0)
+    ld      a4, CASE_RS1(s0)
+    ld      a5, CASE_RS2(s0)
     li      s6, 0
     li      s7, 0
     li      s8, 0
@@ -132,18 +148,23 @@ start_case:
     csrw    CSR_DASICS_MAIN_CALL_ENTRY, zero
     csrw    CSR_DASICS_RETURN_PC, zero
     csrw    CSR_DASICS_ACTIVE_ZONE_RETURN_PC, zero
-    la      t0, target_entry
-    csrw    CSR_DASICS_JUMP_BOUND_LO0, t0
-    la      t0, target_end
-    csrw    CSR_DASICS_JUMP_BOUND_HI0, t0
-    la      s11, jump_probe
-    la      a3, jump_link
-    mv      t0, s4
-    beqz    s10, .Lwrite_jump_cfg
-    la      s11, beq_probe
-    li      a3, RA_SENTINEL
-    /* Neither BEQ outcome has an authorized target. */
+
+    /* Each probe has its own adjacent target and completion ECALL. */
+    li      t0, PROBE_SIZE
+    mul     t0, s10, t0
+    la      t1, probes
+    add     t0, t0, t1
+    ld      s11, PROBE_PC(t0)
+    ld      a6, PROBE_TARGET(t0)
+    ld      t1, PROBE_END(t0)
+    ld      a7, PROBE_ECALL(t0)
+    ld      a3, PROBE_LINK(t0)
+    csrw    CSR_DASICS_JUMP_BOUND_LO0, a6
+    csrw    CSR_DASICS_JUMP_BOUND_HI0, t1
+    /* Conditional targets remain unauthorized for either outcome. */
     li      t0, 0
+    bnez    s10, .Lwrite_jump_cfg
+    mv      t0, s4
 .Lwrite_jump_cfg:
     /* Writing 0 or 1 leaves groups 1-3 invalid in every case. */
     csrw    CSR_DASICS_JUMP_CFG, t0
@@ -165,9 +186,8 @@ start_case:
     li      t0, MAIN_CFG
     csrw    CSR_DASICS_S_MAIN_CFG, t0
     li      ra, RA_SENTINEL
-    la      a1, target_entry
     /* JALR clears bit 0 before checking or reporting its actual target. */
-    ori     a1, a1, 1
+    ori     a1, a6, 1
     li      s5, STAGE_PROBE
     csrw    mepc, s11
     li      t0, ENTRY_STATUS_CLEAR
@@ -184,20 +204,29 @@ jump_link:
     ecall
     ebreak
 
+    .macro BRANCH_PROBE name, instruction
     .balign 8
-    /* Keep the shared target aligned without padding after the BEQ. */
+    /* Keep the target aligned without padding after the branch. */
     nop
-beq_probe:
+\name\()_probe:
     /* Same next PC for both outcomes; only a taken branch must fault. */
-    beq     s4, zero, target_entry
-target_entry:
+    \instruction a4, a5, \name\()_target
+\name\()_target:
     li      s7, TARGET_MARKER
     sd      s7, 0(s9)
-target_ecall:
+\name\()_ecall:
     ecall
     ebreak
     .balign 8
-target_end:
+\name\()_end:
+    .endm
+
+    BRANCH_PROBE beq, beq
+    BRANCH_PROBE bne, bne
+    BRANCH_PROBE blt, blt
+    BRANCH_PROBE bge, bge
+    BRANCH_PROBE bltu, bltu
+    BRANCH_PROBE bgeu, bgeu
 
 resume_entry:
     li      s8, RESUME_MARKER
@@ -252,8 +281,7 @@ machine_trap_handler:
     bne     t0, s11, fail
     li      a2, FAIL_TVAL
     csrr    t0, mtval
-    la      t1, target_entry
-    bne     t0, t1, fail
+    bne     t0, a6, fail
     CHECK_REJECTED_STATE fail
     li      a2, FAIL_RESUME
     bnez    s8, fail
@@ -271,8 +299,7 @@ machine_trap_handler:
     bnez    s6, fail
     li      a2, FAIL_EPC
     csrr    t0, mepc
-    la      t1, target_ecall
-    bne     t0, t1, fail
+    bne     t0, a7, fail
     li      a2, FAIL_FREASON
     csrr    t0, CSR_DASICS_FREASON
     li      t1, FREASON_SENTINEL
@@ -336,8 +363,7 @@ supervisor_trap_handler:
     bne     t0, s11, supervisor_failure_ecall
     li      a2, FAIL_TVAL
     csrr    t0, stval
-    la      t1, target_entry
-    bne     t0, t1, supervisor_failure_ecall
+    bne     t0, a6, supervisor_failure_ecall
     CHECK_REJECTED_STATE supervisor_failure_ecall
     li      a2, FAIL_RESUME
     bnez    s8, supervisor_failure_ecall
@@ -358,12 +384,39 @@ pass:
     li      a2, 0
     j       exit_test
 fail:
-    slli    t0, s1, 4
-    sub     t0, t0, s1
-    add     a2, a2, t0
+    /* Two decimal digits cover all cases and diagnostic reasons. */
+    li      t0, 10
+    la      t3, failure_case
+    divu    t1, s1, t0
+    remu    t2, s1, t0
+    addi    t1, t1, '0'
+    addi    t2, t2, '0'
+    sb      t1, 0(t3)
+    sb      t2, 1(t3)
+    la      t3, failure_reason
+    divu    t1, a2, t0
+    remu    t2, a2, t0
+    addi    t1, t1, '0'
+    addi    t2, t2, '0'
+    sb      t1, 0(t3)
+    sb      t2, 1(t3)
+    /* Publish the diagnostic before the host reads guest memory. */
+    fence   rw, rw
+    la      a1, failure_message
+    li      a0, 0x04
+    .balign 16
+semihost_write:
+    slli    zero, zero, 0x1f
+    ebreak
+    srai    zero, zero, 7
+    mv      a2, s1
+    bnez    a2, exit_test
+    /* Initialization must not use the successful exit status. */
+    li      a2, 255
 exit_test:
     la      a1, exit_args
     sd      a2, 8(a1)
+    fence   rw, rw
     li      a0, 0x20
     /* Keep the semihosting marker in a single fetch page. */
     .balign 16
@@ -376,24 +429,49 @@ halt:
 
     .section .rodata
     .balign 8
+probes:
+    /* Source PC, target, exclusive end, completion ECALL, expected ra. */
+    .dword  jump_probe, beq_target, beq_end, beq_ecall, jump_link
+    .dword  beq_probe, beq_target, beq_end, beq_ecall, RA_SENTINEL
+    .dword  bne_probe, bne_target, bne_end, bne_ecall, RA_SENTINEL
+    .dword  blt_probe, blt_target, blt_end, blt_ecall, RA_SENTINEL
+    .dword  bge_probe, bge_target, bge_end, bge_ecall, RA_SENTINEL
+    .dword  bltu_probe, bltu_target, bltu_end, bltu_ecall, RA_SENTINEL
+    .dword  bgeu_probe, bgeu_target, bgeu_end, bgeu_ecall, RA_SENTINEL
+
+    .macro CASE_PAIR probe, normal_lhs, normal_rhs, fault_lhs, fault_rhs
+    .dword  PRV_U, 0, 1, \probe, \normal_lhs, \normal_rhs
+    .dword  PRV_U, 0, 0, \probe, \fault_lhs, \fault_rhs
+    .dword  PRV_U, 1, 1, \probe, \normal_lhs, \normal_rhs
+    .dword  PRV_U, 1, 0, \probe, \fault_lhs, \fault_rhs
+    .dword  PRV_S, 0, 1, \probe, \normal_lhs, \normal_rhs
+    .dword  PRV_S, 0, 0, \probe, \fault_lhs, \fault_rhs
+    .dword  PRV_S, 1, 1, \probe, \normal_lhs, \normal_rhs
+    .dword  PRV_S, 1, 0, \probe, \fault_lhs, \fault_rhs
+    .endm
+
+    .macro EQUALITY_CASES probe, completes
+    .dword  PRV_U, 0, \completes, \probe, 1, 1
+    .dword  PRV_U, 1, \completes, \probe, 1, 1
+    .dword  PRV_S, 0, \completes, \probe, 1, 1
+    .dword  PRV_S, 1, \completes, \probe, 1, 1
+    .endm
+
 cases:
-    /* Source, delegate to S, completes without DASICS, probe kind. */
-    .dword  PRV_U, 0, 1, PROBE_JALR
-    .dword  PRV_U, 0, 0, PROBE_JALR
-    .dword  PRV_U, 1, 1, PROBE_JALR
-    .dword  PRV_U, 1, 0, PROBE_JALR
-    .dword  PRV_S, 0, 1, PROBE_JALR
-    .dword  PRV_S, 0, 0, PROBE_JALR
-    .dword  PRV_S, 1, 1, PROBE_JALR
-    .dword  PRV_S, 1, 0, PROBE_JALR
-    .dword  PRV_U, 0, 1, PROBE_BEQ
-    .dword  PRV_U, 0, 0, PROBE_BEQ
-    .dword  PRV_U, 1, 1, PROBE_BEQ
-    .dword  PRV_U, 1, 0, PROBE_BEQ
-    .dword  PRV_S, 0, 1, PROBE_BEQ
-    .dword  PRV_S, 0, 0, PROBE_BEQ
-    .dword  PRV_S, 1, 1, PROBE_BEQ
-    .dword  PRV_S, 1, 0, PROBE_BEQ
+    /* Source, delegation, normal completion, probe kind, lhs, rhs. */
+    CASE_PAIR PROBE_JALR, 0, 0, 0, 0
+    CASE_PAIR PROBE_BEQ, 1, 0, 0, 0
+    CASE_PAIR PROBE_BNE, 1, 1, 1, 0
+    CASE_PAIR PROBE_BLT, 1, -1, -1, 1
+    CASE_PAIR PROBE_BGE, -1, 1, 1, -1
+    CASE_PAIR PROBE_BLTU, -1, 1, 1, -1
+    CASE_PAIR PROBE_BGEU, 1, -1, -1, 1
+
+    /* Equality distinguishes strict comparisons from inclusive ones. */
+    EQUALITY_CASES PROBE_BLT, 1
+    EQUALITY_CASES PROBE_BGE, 0
+    EQUALITY_CASES PROBE_BLTU, 1
+    EQUALITY_CASES PROBE_BGEU, 0
 cases_end:
 
     .section .data
@@ -403,3 +481,9 @@ target_memory_marker:
 exit_args:
     .dword  0x20026
     .dword  0
+failure_message:
+    .ascii  "DASICS control-flow: case="
+failure_case:
+    .ascii  "00 reason="
+failure_reason:
+    .asciz  "00\n"
