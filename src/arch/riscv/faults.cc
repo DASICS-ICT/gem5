@@ -37,6 +37,7 @@
 #include "arch/riscv/pmp.hh"
 #include "arch/riscv/regs/misc.hh"
 #include "arch/riscv/utility.hh"
+#include "config/use_dasics.hh"
 #include "cpu/base.hh"
 #include "cpu/thread_context.hh"
 #include "debug/Faults.hh"
@@ -50,6 +51,43 @@ namespace gem5
 
 namespace RiscvISA
 {
+
+#if USE_DASICS
+DasicsFault::DasicsFault(PrivilegeMode sourceMode, DasicsFaultReason reason,
+                         Addr trapValue)
+    : RiscvFault("DASICS check", FaultType::OTHERS, DASICS_U_CHECK),
+      _reason(reason),
+      _trapValue(trapValue)
+{
+    switch (sourceMode) {
+        case PRV_U:
+            _code = DASICS_U_CHECK;
+            break;
+        case PRV_S:
+            _code = DASICS_S_CHECK;
+            break;
+        default:
+            panic("Invalid source privilege mode %d for DASICS check fault",
+                  sourceMode);
+    }
+}
+
+RegVal
+DasicsFault::trap_value() const
+{
+    return _trapValue;
+}
+
+void
+DasicsFault::invoke(ThreadContext *tc, const StaticInstPtr &inst)
+{
+    // Only an accepted full-system trap updates the shared fault reason.
+    if (FullSystem) {
+        tc->setMiscReg(MISCREG_DASICS_FREASON, static_cast<RegVal>(_reason));
+    }
+    RiscvFault::invoke(tc, inst);
+}
+#endif // USE_DASICS
 
 void
 RiscvFault::invokeSE(ThreadContext *tc, const StaticInstPtr &inst)

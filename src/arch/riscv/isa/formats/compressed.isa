@@ -72,7 +72,7 @@ def format CJOp(code, *opt_flags) {{
     """
     iop = InstObjParams(name, Name, 'ImmOp<int64_t>',
         {'code': code, 'imm_code': imm_code,
-         'regs': ''}, opt_flags)
+         'regs': '', 'taken': 'true'}, opt_flags)
     header_output = BranchDeclare.subst(iop)
     decoder_output = JumpConstructor.subst(iop)
     decode_block = BasicDecode.subst(iop)
@@ -90,7 +90,7 @@ def format CBOp(code, *opt_flags) {{
     regs = 'srcRegIdx(0)'
     iop = InstObjParams(name, Name, 'ImmOp<int64_t>',
         {'code': code, 'imm_code': imm_code,
-         'regs': 'srcRegIdx(0)'}, opt_flags)
+         'regs': 'srcRegIdx(0)', 'taken': 'branch_taken'}, opt_flags)
     header_output = BranchDeclare.subst(iop)
     decoder_output = ImmConstructor.subst(iop)
     decode_block = BasicDecode.subst(iop)
@@ -165,6 +165,15 @@ def template CJumpExecute {{
         %(op_decl)s;
         %(op_rd)s;
         %(code)s;
+#if USE_DASICS
+        // Check the resolved target before operand writeback.
+        auto *isa = static_cast<RiscvISA::ISA *>(xc->tcBase()->getIsaPtr());
+        Fault dasics_fault = dasicsJumpAccessCheck(
+            xc, NPC, true, isa->getDasicsVAddrBits());
+        if (dasics_fault != NoFault) {
+            return dasics_fault;
+        }
+#endif // USE_DASICS
         %(op_wb)s;
         return NoFault;
     }

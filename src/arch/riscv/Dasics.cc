@@ -203,6 +203,46 @@ dasicsCsrAccessCheck(ExecContext *xc, RegIndex miscReg, ExtMachInst machInst,
     return std::make_shared<IllegalInstFault>("Untrusted access to DASICS CSR",
                                               machInst);
 }
+
+Fault
+dasicsJumpAccessCheck(ExecContext *xc, Addr target, bool taken,
+                      unsigned vaddrBits)
+{
+    if (!taken || dasicsInstIsTrusted(xc, vaddrBits)) {
+        return NoFault;
+    }
+
+    // An untrusted result implies enabled, non-virtualized U/S execution.
+    const auto mode = static_cast<PrivilegeMode>(xc->readMiscReg(MISCREG_PRV));
+    const DasicsMainCfg config = xc->readMiscReg(MISCREG_DASICS_MAIN_CFG);
+    const bool checkDisabled = mode == PRV_U ? static_cast<bool>(config.cuft)
+                                             : static_cast<bool>(config.csft);
+    if (checkDisabled) {
+        return NoFault;
+    }
+
+    const std::array<DasicsJumpBound, 4> bounds = {{
+        {xc->readMiscReg(MISCREG_DASICS_JUMP_BOUND_LO0),
+         xc->readMiscReg(MISCREG_DASICS_JUMP_BOUND_HI0)},
+        {xc->readMiscReg(MISCREG_DASICS_JUMP_BOUND_LO1),
+         xc->readMiscReg(MISCREG_DASICS_JUMP_BOUND_HI1)},
+        {xc->readMiscReg(MISCREG_DASICS_JUMP_BOUND_LO2),
+         xc->readMiscReg(MISCREG_DASICS_JUMP_BOUND_HI2)},
+        {xc->readMiscReg(MISCREG_DASICS_JUMP_BOUND_LO3),
+         xc->readMiscReg(MISCREG_DASICS_JUMP_BOUND_HI3)},
+    }};
+    if (dasicsJumpTargetIsAllowed(
+            target, xc->readMiscReg(MISCREG_DASICS_JUMP_CFG), bounds,
+            xc->readMiscReg(MISCREG_DASICS_MAIN_CALL_ENTRY),
+            xc->readMiscReg(MISCREG_DASICS_RETURN_PC),
+            xc->readMiscReg(MISCREG_DASICS_ACTIVE_ZONE_RETURN_PC),
+            vaddrBits)) {
+        return NoFault;
+    }
+
+    return std::make_shared<DasicsFault>(mode, DasicsFaultReason::Jump,
+                                         target);
+}
 #endif // USE_DASICS
 
 } // namespace RiscvISA

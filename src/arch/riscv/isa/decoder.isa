@@ -343,13 +343,15 @@ decode QUADRANT default Unknown::unknown() {
         }}, IsDirectControl, IsUncondControl);
         format CBOp {
             0x6: c_beqz({{
-                if (rvSext(Rp1) == 0)
+                const bool branch_taken = rvSext(Rp1) == 0;
+                if (branch_taken)
                     NPC = rvSext(PC + imm);
                 else
                     NPC = NPC;
             }}, IsDirectControl, IsCondControl);
             0x7: c_bnez({{
-                if (rvSext(Rp1) != 0)
+                const bool branch_taken = rvSext(Rp1) != 0;
+                if (branch_taken)
                     NPC = rvSext(PC + imm);
                 else
                     NPC = NPC;
@@ -5686,42 +5688,48 @@ decode QUADRANT default Unknown::unknown() {
         0x18: decode FUNCT3 {
             format BOp {
                 0x0: beq({{
-                    if (rvSext(Rs1) == rvSext(Rs2)) {
+                    const bool branch_taken = rvSext(Rs1) == rvSext(Rs2);
+                    if (branch_taken) {
                         NPC = rvSext(PC + imm);
                     } else {
                         NPC = rvSext(NPC);
                     }
                 }}, IsDirectControl, IsCondControl);
                 0x1: bne({{
-                    if (rvSext(Rs1) != rvSext(Rs2)) {
+                    const bool branch_taken = rvSext(Rs1) != rvSext(Rs2);
+                    if (branch_taken) {
                         NPC = rvSext(PC + imm);
                     } else {
                         NPC = rvSext(NPC);
                     }
                 }}, IsDirectControl, IsCondControl);
                 0x4: blt({{
-                    if (rvSext(Rs1_sd) < rvSext(Rs2_sd)) {
+                    const bool branch_taken = rvSext(Rs1_sd) < rvSext(Rs2_sd);
+                    if (branch_taken) {
                         NPC = rvSext(PC + imm);
                     } else {
                         NPC = rvSext(NPC);
                     }
                 }}, IsDirectControl, IsCondControl);
                 0x5: bge({{
-                    if (rvSext(Rs1_sd) >= rvSext(Rs2_sd)) {
+                    const bool branch_taken = rvSext(Rs1_sd) >= rvSext(Rs2_sd);
+                    if (branch_taken) {
                         NPC = rvSext(PC + imm);
                     } else {
                         NPC = rvSext(NPC);
                     }
                 }}, IsDirectControl, IsCondControl);
                 0x6: bltu({{
-                    if (rvZext(Rs1) < rvZext(Rs2)) {
+                    const bool branch_taken = rvZext(Rs1) < rvZext(Rs2);
+                    if (branch_taken) {
                         NPC = rvSext(PC + imm);
                     } else {
                         NPC = rvSext(NPC);
                     }
                 }}, IsDirectControl, IsCondControl);
                 0x7: bgeu({{
-                    if (rvZext(Rs1) >= rvZext(Rs2)) {
+                    const bool branch_taken = rvZext(Rs1) >= rvZext(Rs2);
+                    if (branch_taken) {
                         NPC = rvSext(PC + imm);
                     } else {
                         NPC = rvSext(NPC);

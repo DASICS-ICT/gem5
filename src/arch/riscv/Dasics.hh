@@ -67,6 +67,16 @@ bool dasicsInstIsTrusted(ExecContext *xc, unsigned vaddrBits);
  */
 Fault dasicsCsrAccessCheck(ExecContext *xc, RegIndex miscReg,
                            ExtMachInst machInst, unsigned vaddrBits);
+
+/**
+ * Check a resolved control transfer while xc still holds the source PC.
+ * taken is the actual branch outcome, even when target is the next PC.
+ * The caller supplies the ISA-resolved target, including JALR bit 0 clearing.
+ * A rejected transfer returns a fault carrying the full target address;
+ * this check does not change architectural state.
+ */
+Fault dasicsJumpAccessCheck(ExecContext *xc, Addr target, bool taken,
+                            unsigned vaddrBits);
 #endif // USE_DASICS
 
 } // namespace RiscvISA
