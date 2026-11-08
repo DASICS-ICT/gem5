@@ -4,17 +4,18 @@
 
 ## Scope
 
-Test DASICS target checks for RV64 non-virtualized U/S `JALR` and
+Test DASICS target checks for RV64 non-virtualized U/S `JALR`, `JAL`, and
 `BEQ/BNE/BLT/BGE/BLTU/BGEU`, delegation to M/S handlers, and exception return.
 The configuration uses one O3 hart, bare-metal full-system simulation, Bare
-address translation, and Semihosting. Exit status `0` requires all 72 cases
-to complete. `JAL`, compressed instructions, and O3 wrong-path execution are
+address translation, and Semihosting. Exit status `0` requires all 80 cases
+to complete. Compressed instructions and O3 wrong-path execution are
 outside this test's coverage.
 
-A normal case allows the JALR target or does not take the conditional branch.
+A normal case allows the JALR/JAL target or does not take the conditional
+branch.
 It executes the marker code and returns to M through an ordinary ECALL.
-An exceptional case denies the JALR target or takes a conditional branch to
-an unauthorized target. It enters the configured M/S handler, returns to an
+An exceptional case denies the JALR/JAL target or takes a conditional branch
+to an unauthorized target. It enters the configured M/S handler, returns to an
 explicit resume label through MRET/SRET, then uses an ordinary ECALL to
 return to M.
 
@@ -44,6 +45,9 @@ Equality boundaries use four groups, each ordered U→M, U→S, S→M, S→S:
 | 65–68 | BLTU | `(1, 1)` | Not taken | No |
 | 69–72 | BGEU | `(1, 1)` | Taken | Yes |
 
+The final cases 73–80 cover JAL in the eight-case order above, testing
+allowed/denied targets for each route. Existing case IDs 1–72 are unchanged.
+
 ## Configuration and layout
 
 - M mode disables interrupts and sets direct MTVEC/STVEC, Bare translation,
@@ -54,15 +58,21 @@ Equality boundaries use four groups, each ordered U→M, U→S, S→M, S→S:
   `[supervisor_trusted_begin, supervisor_trusted_end)`, including the entire
   S handler. Probe, target, and resume code lie outside that trusted range.
 - JumpBound0 uses the current probe description's `[target, end)`. Only
-  allowed JALR cases set JumpCfg=`1`; every other case sets it to `0`.
+  allowed JALR/JAL cases set JumpCfg=`1`; every other case sets it to `0`.
   The other three groups are invalid, and all three special targets are zero.
 - Each case writes exactly `0`, `1<<24`, or `1<<25` to MEDELEG and checks
   readback. ECALL delegation bits remain clear.
 
 JALR cases share `jalr ra, a1, 0` at `jump_probe`, with
 `a1=beq_target|1`. The resolved target and fault TVAL must be `beq_target`.
-`jump_link` immediately follows the probe. JALR and BEQ share `beq_target`,
+`jump_link` immediately follows the probe. JALR, JAL, and BEQ share `beq_target`,
 marker code, `beq_ecall`, and `beq_end`.
+
+JAL uses `jal ra, beq_target` at `jal_probe`, forming its target from the PC
+plus an immediate. An allowed transfer sets `ra=jal_link=jal_probe+4`.
+A denied transfer has EPC=`jal_probe` and TVAL=`beq_target`, preserving the
+`ra` sentinel. ECALL/EBREAK at the link address prevent unintended
+fall-through from being accepted as success.
 
 `BRANCH_PROBE` generates a separate `name_probe`, `name_target`, marker code,
 and `name_ecall` for each conditional branch. Probes use `a4/a5` as
@@ -82,7 +92,7 @@ All instructions use uncompressed encodings, and the harness uses no
 | First EPC | Current target's ordinary ECALL address, held in `a7` | Current probe PC, held in `s11` |
 | DASICS TVAL | Not applicable | Current target address, held in `a6` |
 | FReason | Sentinel `5` remains | Becomes `4`; the subsequent ordinary ECALL preserves it |
-| `ra` | `jump_link` for JALR; sentinel `0xA5A5A5A5A5A5A5A5` for conditional branches | Sentinel `0xA5A5A5A5A5A5A5A5` remains |
+| `ra` | `jump_link` for JALR, `jal_link` for JAL; sentinel `0xA5A5A5A5A5A5A5A5` for conditional branches | Sentinel `0xA5A5A5A5A5A5A5A5` remains |
 | Target GPR and memory markers | Both `0x1234` | Both remain zero |
 | Resume marker | Remains zero | Becomes `0x5678` after returning to `resume_entry` |
 | DASICS trap count | Zero | Exactly one |
@@ -116,7 +126,7 @@ Failures print this message to standard output through Semihosting
 DASICS control-flow: case=NN reason=NN
 ```
 
-`case=01..72` identifies the scenarios above, and the failure exit status
+`case=01..80` identifies the scenarios above, and the failure exit status
 is the case ID. Initialization failures print `case=00` and exit with `255`;
 success exits with `0`. The message reports `reason` separately rather than
 encoding it in the exit status.
@@ -138,15 +148,16 @@ encoding it in the exit status.
 
 Each case-table entry is 48 bytes with six 64-bit fields: source, delegation,
 completion-without-DASICS flag, probe kind, `rs1`, and `rs2`.
-Probe kinds `0..6` identify JALR, BEQ, BNE, BLT, BGE, BLTU, and BGEU,
-respectively. A separate probe-description table has five fields per entry:
+Probe kinds `0..7` identify JALR, BEQ, BNE, BLT, BGE, BLTU, BGEU, and JAL,
+respectively (`PROBE_JAL=7`). A separate probe-description table has eight
+entries, each with five fields:
 PC, target, target end, ordinary ECALL address, and normal-completion `ra`.
 M mode reads these expectations by probe kind; shared handlers preserve and
 check them.
 
 `s0` holds the case pointer; `s1` the case ID; `s2/s3` the source and delegation.
-`s4` indicates completion without a DASICS trap: `1` for allowed JALR or a
-not-taken conditional branch, `0` for denied JALR or a taken conditional
+`s4` indicates completion without a DASICS trap: `1` for allowed JALR/JAL or a
+not-taken conditional branch, `0` for denied JALR/JAL or a taken conditional
 branch. `s5` is the stage (`0` setup, `1` probe, `2` resume), and `s6` counts
 accepted DASICS traps. `s7/s8` hold target/resume markers; `s9` points to the
 memory marker. `s10` holds the probe kind, `s11` the probe PC, `a3` the

@@ -60,6 +60,7 @@
     .equ PROBE_BGE, 4
     .equ PROBE_BLTU, 5
     .equ PROBE_BGEU, 6
+    .equ PROBE_JAL, 7
     .equ PROBE_PC, 0
     .equ PROBE_TARGET, 8
     .equ PROBE_END, 16
@@ -149,7 +150,7 @@ start_case:
     csrw    CSR_DASICS_RETURN_PC, zero
     csrw    CSR_DASICS_ACTIVE_ZONE_RETURN_PC, zero
 
-    /* Each probe has its own adjacent target and completion ECALL. */
+    /* Load this probe's target range and expected trap/link state. */
     li      t0, PROBE_SIZE
     mul     t0, s10, t0
     la      t1, probes
@@ -163,7 +164,10 @@ start_case:
     csrw    CSR_DASICS_JUMP_BOUND_HI0, t1
     /* Conditional targets remain unauthorized for either outcome. */
     li      t0, 0
-    bnez    s10, .Lwrite_jump_cfg
+    beqz    s10, .Lauthorize_jump
+    li      t1, PROBE_JAL
+    bne     s10, t1, .Lwrite_jump_cfg
+.Lauthorize_jump:
     mv      t0, s4
 .Lwrite_jump_cfg:
     /* Writing 0 or 1 leaves groups 1-3 invalid in every case. */
@@ -201,6 +205,13 @@ jump_probe:
     jalr    ra, a1, 0
 jump_link:
     /* Falling through the probe is never a successful test outcome. */
+    ecall
+    ebreak
+
+    .balign 8
+jal_probe:
+    jal     ra, beq_target
+jal_link:
     ecall
     ebreak
 
@@ -438,6 +449,7 @@ probes:
     .dword  bge_probe, bge_target, bge_end, bge_ecall, RA_SENTINEL
     .dword  bltu_probe, bltu_target, bltu_end, bltu_ecall, RA_SENTINEL
     .dword  bgeu_probe, bgeu_target, bgeu_end, bgeu_ecall, RA_SENTINEL
+    .dword  jal_probe, beq_target, beq_end, beq_ecall, jal_link
 
     .macro CASE_PAIR probe, normal_lhs, normal_rhs, fault_lhs, fault_rhs
     .dword  PRV_U, 0, 1, \probe, \normal_lhs, \normal_rhs
@@ -472,6 +484,8 @@ cases:
     EQUALITY_CASES PROBE_BGE, 0
     EQUALITY_CASES PROBE_BLTU, 1
     EQUALITY_CASES PROBE_BGEU, 0
+
+    CASE_PAIR PROBE_JAL, 0, 0, 0, 0
 cases_end:
 
     .section .data
