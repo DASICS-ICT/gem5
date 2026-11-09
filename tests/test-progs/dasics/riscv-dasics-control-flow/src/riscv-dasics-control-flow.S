@@ -62,6 +62,10 @@
     .equ PROBE_BGEU, 6
     .equ PROBE_JAL, 7
     .equ PROBE_CJALR, 8
+    .equ PROBE_CJ, 9
+    .equ PROBE_CJR, 10
+    .equ PROBE_CBEQZ, 11
+    .equ PROBE_CBNEZ, 12
     .equ PROBE_PC, 0
     .equ PROBE_TARGET, 8
     .equ PROBE_END, 16
@@ -169,6 +173,10 @@ start_case:
     li      t1, PROBE_JAL
     beq     s10, t1, .Lauthorize_jump
     li      t1, PROBE_CJALR
+    beq     s10, t1, .Lauthorize_jump
+    li      t1, PROBE_CJ
+    beq     s10, t1, .Lauthorize_jump
+    li      t1, PROBE_CJR
     bne     s10, t1, .Lwrite_jump_cfg
 .Lauthorize_jump:
     mv      t0, s4
@@ -193,7 +201,7 @@ start_case:
     li      t0, MAIN_CFG
     csrw    CSR_DASICS_S_MAIN_CFG, t0
     li      ra, RA_SENTINEL
-    /* JALR/C.JALR clear bit 0 before checking or reporting the target. */
+    /* Indirect jumps clear bit 0 before checking or reporting the target. */
     ori     a1, a6, 1
     li      s5, STAGE_PROBE
     csrw    mepc, s11
@@ -230,6 +238,28 @@ cjalr_link:
     ecall
     ebreak
 
+    .balign 8
+    .option push
+    .option rvc
+    c.nop
+cj_probe:
+    c.j     beq_target
+    .option pop
+cj_fallthrough:
+    ecall
+    ebreak
+
+    .balign 8
+    .option push
+    .option rvc
+    c.nop
+cjr_probe:
+    c.jr    a1
+    .option pop
+cjr_fallthrough:
+    ecall
+    ebreak
+
     .macro BRANCH_PROBE name, instruction
     .balign 8
     /* Keep the target aligned without padding after the branch. */
@@ -253,6 +283,29 @@ cjalr_link:
     BRANCH_PROBE bge, bge
     BRANCH_PROBE bltu, bltu
     BRANCH_PROBE bgeu, bgeu
+
+    .macro CBRANCH_PROBE name, instruction
+    .balign 8
+    /* Six padding bytes align the target after the two-byte branch. */
+    nop
+    .option push
+    .option rvc
+    c.nop
+\name\()_probe:
+    \instruction a4, \name\()_target
+    .option pop
+\name\()_target:
+    li      s7, TARGET_MARKER
+    sd      s7, 0(s9)
+\name\()_ecall:
+    ecall
+    ebreak
+    .balign 8
+\name\()_end:
+    .endm
+
+    CBRANCH_PROBE cbeqz, c.beqz
+    CBRANCH_PROBE cbnez, c.bnez
 
 resume_entry:
     li      s8, RESUME_MARKER
@@ -410,15 +463,20 @@ pass:
     li      a2, 0
     j       exit_test
 fail:
-    /* Two decimal digits cover all cases and diagnostic reasons. */
-    li      t0, 10
+    /* Use three case digits and two reason digits for the diagnostics. */
+    li      t0, 100
     la      t3, failure_case
     divu    t1, s1, t0
     remu    t2, s1, t0
     addi    t1, t1, '0'
-    addi    t2, t2, '0'
     sb      t1, 0(t3)
-    sb      t2, 1(t3)
+    li      t0, 10
+    divu    t1, t2, t0
+    remu    t2, t2, t0
+    addi    t1, t1, '0'
+    addi    t2, t2, '0'
+    sb      t1, 1(t3)
+    sb      t2, 2(t3)
     la      t3, failure_reason
     divu    t1, a2, t0
     remu    t2, a2, t0
@@ -466,6 +524,10 @@ probes:
     .dword  bgeu_probe, bgeu_target, bgeu_end, bgeu_ecall, RA_SENTINEL
     .dword  jal_probe, beq_target, beq_end, beq_ecall, jal_link
     .dword  cjalr_probe, beq_target, beq_end, beq_ecall, cjalr_link
+    .dword  cj_probe, beq_target, beq_end, beq_ecall, RA_SENTINEL
+    .dword  cjr_probe, beq_target, beq_end, beq_ecall, RA_SENTINEL
+    .dword  cbeqz_probe, cbeqz_target, cbeqz_end, cbeqz_ecall, RA_SENTINEL
+    .dword  cbnez_probe, cbnez_target, cbnez_end, cbnez_ecall, RA_SENTINEL
 
     .macro CASE_PAIR probe, normal_lhs, normal_rhs, fault_lhs, fault_rhs
     .dword  PRV_U, 0, 1, \probe, \normal_lhs, \normal_rhs
@@ -503,6 +565,10 @@ cases:
 
     CASE_PAIR PROBE_JAL, 0, 0, 0, 0
     CASE_PAIR PROBE_CJALR, 0, 0, 0, 0
+    CASE_PAIR PROBE_CJ, 0, 0, 0, 0
+    CASE_PAIR PROBE_CJR, 0, 0, 0, 0
+    CASE_PAIR PROBE_CBEQZ, 1, 0, 0, 0
+    CASE_PAIR PROBE_CBNEZ, 0, 0, 1, 0
 cases_end:
 
     .section .data
@@ -515,6 +581,6 @@ exit_args:
 failure_message:
     .ascii  "DASICS control-flow: case="
 failure_case:
-    .ascii  "00 reason="
+    .ascii  "000 reason="
 failure_reason:
     .asciz  "00\n"

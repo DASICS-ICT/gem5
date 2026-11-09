@@ -4,13 +4,13 @@
 
 ## 测试范围
 
-验证 RV64 非虚拟化 U/S 态 `JALR/JAL/C.JALR`、`BEQ/BNE/BLT/BGE/BLTU/BGEU` 的
+验证 RV64 非虚拟化 U/S 态普通及压缩无条件跳转、条件分支共 13 类指令的
 DASICS 目标检查、M/S 异常委托和异常返回。使用单 hart O3、裸机全系统、
-Bare 地址翻译和 Semihosting 退出。只有 88 个场景全部完成才以状态 `0` 退出。
-本用例不覆盖其他压缩控制转移或 O3 错误路径。
+Bare 地址翻译和 Semihosting 退出。只有 120 个场景全部完成才以状态 `0` 退出。
+O3 错误路径测试暂缓；RV32 C.JAL、Zcmp/Zcmt 和 xRET 不作为本用例的被测指令。
 
-正常场景指 JALR/JAL/C.JALR 目标获准，或条件分支不跳转；执行标记代码后通过普通
-ECALL 返回 M 态。异常场景指 JALR/JAL/C.JALR 目标被拒绝，或条件分支跳向
+正常场景指无条件跳转目标获准，或条件分支不跳转；执行标记代码后通过普通
+ECALL 返回 M 态。异常场景指无条件跳转目标被拒绝，或条件分支跳向
 未授权目标；进入配置的 M/S handler，经 MRET/SRET 恢复到指定标签，再通过
 普通 ECALL 返回 M 态。
 
@@ -38,8 +38,19 @@ S→S 正常/异常。箭头表示来源域和 DASICS 异常处理态；正常�
 | 65–68 | BLTU | `(1, 1)` | 不跳转 | 无 |
 | 69–72 | BGEU | `(1, 1)` | 跳转 | 有 |
 
-73–80 为 JAL，81–88 为 C.JALR，均按上述每组八例的顺序排列，各路由分别
-测试目标允许/拒绝。已有 1–80 的编号保持不变。
+后续八例组使用相同的路由顺序；无条件跳转分别测试目标允许/拒绝，压缩条件分支
+分别测试不跳转/跳转。已有 1–88 的编号保持不变。
+
+| 编号 | 探针 | 正常场景 | 异常场景 |
+| --- | --- | --- | --- |
+| 73–80 | JAL | 目标允许 | 目标拒绝 |
+| 81–88 | C.JALR | 目标允许 | 目标拒绝 |
+| 89–96 | C.J | 目标允许 | 目标拒绝 |
+| 97–104 | C.JR | 目标允许 | 目标拒绝 |
+| 105–112 | C.BEQZ | `a4=1`，不跳转 | `a4=0`，跳转 |
+| 113–120 | C.BNEZ | `a4=0`，不跳转 | `a4=1`，跳转 |
+
+压缩条件分支只使用 `a4`；用例表中的 `rs2` 填 `0`，不参与比较。
 
 ## 配置与布局
 
@@ -50,14 +61,14 @@ S→S 正常/异常。箭头表示来源域和 DASICS 异常处理态；正常�
 - UMainBound=`[0, 0)`；SMainBound 覆盖
   `[supervisor_trusted_begin, supervisor_trusted_end)`。
   S handler 的全部指令位于可信区，探针、目标及恢复代码位于区外。
-- JumpBound0 使用当前探针描述的 `[target, end)`；仅 JALR/JAL/C.JALR 允许场景设置
+- JumpBound0 使用当前探针描述的 `[target, end)`；仅无条件跳转允许场景设置
   JumpCfg=`1`，其余场景均为 `0`。其余三组无效，三个特殊目标地址均为 `0`。
 - 每个场景把 MEDELEG 精确写为 `0`、`1<<24` 或 `1<<25` 并检查读回。
   ECALL 对应位始终为 `0`。
 
 JALR 共用 `jump_probe` 处的 `jalr ra, a1, 0`，输入为 `a1=beq_target|1`；
 实际目标和故障 TVAL 均应为 `beq_target`。`jump_link` 是探针后一条指令的地址。
-JALR、JAL、C.JALR 与 BEQ 共用 `beq_target`、标记代码、`beq_ecall` 和 `beq_end`。
+无条件跳转与 BEQ 共用 `beq_target`、标记代码、`beq_ecall` 和 `beq_end`。
 
 JAL 使用 `jal_probe` 处的 `jal ra, beq_target`，由 PC 加立即数形成目标。
 允许时 `ra=jal_link=jal_probe+4`；拒绝时 EPC=`jal_probe`、
@@ -67,18 +78,27 @@ TVAL=`beq_target`，`ra` 保持哨兵。链接地址处安排 ECALL/EBREAK，防
 C.JALR 使用 `cjalr_probe` 处显式的 `c.jalr a1`，输入为 `a1=beq_target|1`；
 实际目标为 `beq_target`。允许时 `ra=cjalr_link=cjalr_probe+2`；拒绝时
 EPC=`cjalr_probe`、TVAL=`beq_target`，`ra` 保持哨兵，沿用相同的恢复检查。
-局部 `.option push/rvc/pop` 只包住布局用的 `c.nop` 和 `c.jalr`。
 从 8 字节边界先放置 2 字节 C.NOP，使探针 PC 位于 4 字节边界加 2 的位置，
 `cjalr_link` 则按 4 字节对齐。MRET 直接进入探针，不执行填充；链接地址处的
 ECALL/EBREAK 仍为非压缩编码，防止意外顺序执行被当作成功。
 
-`BRANCH_PROBE` 为每种条件分支生成独立的 `name_probe`、`name_target`、
+C.J 使用显式 `c.j beq_target`，由 PC 加立即数取目标；C.JR 使用显式
+`c.jr a1`，输入 `a1=beq_target|1`，实际目标清除最低位。两者无论允许或拒绝
+均不写 `ra`，检查哨兵不变。从 8 字节边界放置 2 字节 C.NOP，再放置 2 字节
+探针；MRET 直接进入半字对齐的探针。`cj_fallthrough`、`cjr_fallthrough`
+处保留非压缩 ECALL/EBREAK，防止错误顺序执行被当作成功。
+
+`BRANCH_PROBE` 为每种普通条件分支生成独立的 `name_probe`、`name_target`、
 标记代码和 `name_ecall`。探针使用 `a4/a5` 作为 `rs1/rs2`；各自目标
-`name_target=name_probe+4`，并保持 8 字节对齐。所有条件分支目标均未授权。
+`name_target=name_probe+4`，并保持 8 字节对齐。
+`CBRANCH_PROBE` 为两种压缩条件分支生成对应的布局：从 8 字节边界依次放置
+4 字节 NOP、2 字节 C.NOP、2 字节分支，目标为 `name_probe+2`，按 8 字节对齐；
+目标标记和 ECALL 仍为 32 位编码。所有条件分支目标均未授权。
 顺序地址与跳转目标相同：不跳转时不应触发 DASICS 目标检查，跳转时必须触发。
 由此检查实际分支结果，而非仅检查下一条指令地址是否改变。
-除 C.JALR 及布局填充 C.NOP 外，框架、ECALL/EBREAK 和 Semihosting 标记
-均保持 32 位编码。C.NOP 只用于布局；测试不使用 `call/ret`，以便核对 `ra`。
+局部 `.option push/rvc/pop` 仅包住各压缩探针及布局填充 C.NOP；其余框架、
+ECALL/EBREAK 和 Semihosting 标记均保持 32 位编码。C.NOP 只用于布局；
+测试不使用 `call/ret`，以便核对 `ra`。
 
 ## 检查内容
 
@@ -88,7 +108,7 @@ ECALL/EBREAK 仍为非压缩编码，防止意外顺序执行被当作成功。
 | 首个 EPC | 当前目标的普通 ECALL 地址，见 `a7` | 当前探针 PC，见 `s11` |
 | DASICS TVAL | 不适用 | 当前目标地址，见 `a6` |
 | FReason | 保持哨兵 `5` | 更新为 `4`，恢复后的普通 ECALL 不再修改它 |
-| `ra` | JALR 为 `jump_link`，JAL 为 `jal_link`，C.JALR 为 `cjalr_link`；条件分支保持 `0xA5A5A5A5A5A5A5A5` | 保持 `0xA5A5A5A5A5A5A5A5` |
+| `ra` | JALR 为 `jump_link`，JAL 为 `jal_link`，C.JALR 为 `cjalr_link`；C.J/C.JR 及条件分支保持 `0xA5A5A5A5A5A5A5A5` | 保持 `0xA5A5A5A5A5A5A5A5` |
 | 目标 GPR 与内存标记 | 均为 `0x1234` | 均保持 `0` |
 | 恢复标记 | 保持 `0` | 返回 `resume_entry` 后变为 `0x5678` |
 | DASICS 异常次数 | `0` | 恰好 `1` |
@@ -108,19 +128,20 @@ make -C tests/test-progs/dasics/riscv-dasics-control-flow/src
 ```
 
 产物为 `build/riscv-dasics-control-flow.elf`，仿真输出位于本测试目录的
-`build/m5out-o3/<CPU>/`。运行前需重新构建包含控制流检查的 DASICS 版 gem5。
+`build/m5out-o3/<CPU>/`。运行需已有包含控制流检查的 DASICS 版 gem5；
+仅修改本测试时只需重建 ELF，无需重编 gem5。
 
 ## 诊断
 
 失败时通过 Semihosting `SYS_WRITE0` 向标准输出打印：
 
 ```text
-DASICS control-flow: case=NN reason=NN
+DASICS control-flow: case=NNN reason=NN
 ```
 
-`case=01..88` 对应上述场景，失败退出码为该用例编号。初始化失败打印
-`case=00` 并以 `255` 退出；成功退出码为 `0`。原因由消息中的 `reason`
-单独给出，不编码在退出码中。
+`case=001..120` 对应上述场景，失败退出码为该用例编号。初始化失败打印
+`case=000` 并以 `255` 退出；成功退出码为 `0`。原因由消息中的
+`reason=01..12` 单独给出，不编码在退出码中。
 
 | reason | 检查失败 |
 | --- | --- |
@@ -138,17 +159,18 @@ DASICS control-flow: case=NN reason=NN
 | 12 | 恢复标记 |
 
 用例表每项 48 字节，六个 64 位字段依次为来源、委托、无 DASICS 异常完成标志、
-探针类型、`rs1`、`rs2`。探针类型 `0..8` 依次表示
+探针类型、`rs1`、`rs2`。探针类型 `0..12` 依次表示
 JALR、BEQ、BNE、BLT、BGE、BLTU、BGEU、JAL、C.JALR，
-`PROBE_JAL=7`、`PROBE_CJALR=8`。
-独立的探针描述表含九项，每项包含五个字段：PC、目标、目标结束地址、普通 ECALL 地址、
+再接 C.J、C.JR、C.BEQZ、C.BNEZ（类型 `9..12`）。
+独立的探针描述表含十三项，每项 40 字节，包含五个字段：PC、目标、目标结束地址、普通 ECALL 地址、
 正常完成时的 `ra`。M 态按类型读取这些预期状态，共享 handler 保留并核对它们。
 
 `s0` 为用例表指针，`s1` 为用例编号，`s2/s3` 分别为来源和委托。
-`s4` 为无 DASICS 异常完成标志：JALR/JAL/C.JALR 允许或条件分支不跳转时为 `1`，
-JALR/JAL/C.JALR 拒绝或条件分支跳转时为 `0`。
+`s4` 为无 DASICS 异常完成标志：无条件跳转允许或条件分支不跳转时为 `1`，
+无条件跳转拒绝或条件分支跳转时为 `0`。
 `s5` 为阶段：`0` 配置、`1` 探针、`2` 恢复；`s6` 为已接受的 DASICS 异常数。
 `s7/s8` 为目标/恢复标记，`s9` 指向目标内存标记。`s10` 为探针类型，
-`s11` 为探针 PC；`a3` 为正常完成时预期的 `ra`，`a4/a5` 为比较输入，
+`s11` 为探针 PC；`a3` 为正常完成时预期的 `ra`，`a4/a5` 为比较输入
+（压缩条件分支仅使用 `a4`），
 `a6` 为故障目标，`a7` 为正常 ECALL PC。
 `a2` 保存失败原因，打印后改为最终退出码。
