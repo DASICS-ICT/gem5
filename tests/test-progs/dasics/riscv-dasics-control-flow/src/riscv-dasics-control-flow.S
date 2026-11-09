@@ -61,6 +61,7 @@
     .equ PROBE_BLTU, 5
     .equ PROBE_BGEU, 6
     .equ PROBE_JAL, 7
+    .equ PROBE_CJALR, 8
     .equ PROBE_PC, 0
     .equ PROBE_TARGET, 8
     .equ PROBE_END, 16
@@ -166,6 +167,8 @@ start_case:
     li      t0, 0
     beqz    s10, .Lauthorize_jump
     li      t1, PROBE_JAL
+    beq     s10, t1, .Lauthorize_jump
+    li      t1, PROBE_CJALR
     bne     s10, t1, .Lwrite_jump_cfg
 .Lauthorize_jump:
     mv      t0, s4
@@ -190,7 +193,7 @@ start_case:
     li      t0, MAIN_CFG
     csrw    CSR_DASICS_S_MAIN_CFG, t0
     li      ra, RA_SENTINEL
-    /* JALR clears bit 0 before checking or reporting its actual target. */
+    /* JALR/C.JALR clear bit 0 before checking or reporting the target. */
     ori     a1, a6, 1
     li      s5, STAGE_PROBE
     csrw    mepc, s11
@@ -212,6 +215,18 @@ jump_link:
 jal_probe:
     jal     ra, beq_target
 jal_link:
+    ecall
+    ebreak
+
+    .balign 8
+    .option push
+    .option rvc
+    /* Keep the link guard word-aligned after the two-byte probe. */
+    c.nop
+cjalr_probe:
+    c.jalr  a1
+    .option pop
+cjalr_link:
     ecall
     ebreak
 
@@ -450,6 +465,7 @@ probes:
     .dword  bltu_probe, bltu_target, bltu_end, bltu_ecall, RA_SENTINEL
     .dword  bgeu_probe, bgeu_target, bgeu_end, bgeu_ecall, RA_SENTINEL
     .dword  jal_probe, beq_target, beq_end, beq_ecall, jal_link
+    .dword  cjalr_probe, beq_target, beq_end, beq_ecall, cjalr_link
 
     .macro CASE_PAIR probe, normal_lhs, normal_rhs, fault_lhs, fault_rhs
     .dword  PRV_U, 0, 1, \probe, \normal_lhs, \normal_rhs
@@ -486,6 +502,7 @@ cases:
     EQUALITY_CASES PROBE_BGEU, 0
 
     CASE_PAIR PROBE_JAL, 0, 0, 0, 0
+    CASE_PAIR PROBE_CJALR, 0, 0, 0, 0
 cases_end:
 
     .section .data
