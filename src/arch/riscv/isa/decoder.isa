@@ -1335,6 +1335,23 @@ decode QUADRANT default Unknown::unknown() {
             }
         }
 
+#if USE_DASICS
+        0x02: decode RVTYPE {
+            0x1: decode FUNCT3 {
+                0x0: DasicsCallJ::dasicscall_j({{
+                    ra = rvSext(PC + 4);
+                    NPC = rvSext(PC + imm);
+                }}, IsDirectControl, IsUncondControl, IsCall,
+                    IsNonSpeculative, IsSerializeAfter, IsSquashAfter);
+                0x1: DasicsCallJR::dasicscall_jr({{
+                    Rd = rvSext(PC + 4);
+                    NPC = rvSext((Rs1 + imm) & ~0x1);
+                }}, IsIndirectControl, IsUncondControl, IsNonSpeculative,
+                    IsSerializeAfter, IsSquashAfter);
+            }
+        }
+#endif // USE_DASICS
+
         0x03: decode FUNCT3 {
             format FenceOp {
                 0x0: fence({{

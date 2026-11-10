@@ -1,0 +1,111 @@
+// -*- mode:c++ -*-
+// SPDX-License-Identifier: BSD-3-Clause
+
+def template DasicsCallJRConstructor {{
+    %(class_name)s::%(class_name)s(ExtMachInst machInst)
+        : %(base_class)s("%(mnemonic)s", machInst, %(op_class)s)
+    {
+        %(set_reg_idx_arr)s;
+        %(constructor)s;
+        imm = sext<12>(IMM12);
+
+        // Apply JALR register hints independently of the custom opcode.
+        const bool rd_link = RD == 1 || RD == 5;
+        const bool rs1_link = RS1 == 1 || RS1 == 5;
+        flags[IsCall] = rd_link;
+        flags[IsReturn] = rs1_link && (!rd_link || RD != RS1);
+    }
+}};
+
+def template DasicsCallExecute {{
+    Fault
+    %(class_name)s::execute(
+        ExecContext *xc, trace::InstRecord *traceData) const
+    {
+        %(op_decl)s;
+        %(op_rd)s;
+
+        auto *isa = static_cast<RiscvISA::ISA *>(xc->tcBase()->getIsaPtr());
+        Fault fault = dasicsCallAccessCheck(
+            xc, machInst, isa->getDasicsVAddrBits());
+        if (fault != NoFault) {
+            return fault;
+        }
+
+        %(code)s;
+
+        // ExecContext defers this write until O3 commit. Serialization and
+        // squash-after keep younger instructions from using an old ReturnPC.
+        xc->setMiscReg(MISCREG_DASICS_RETURN_PC, PC + 4);
+        %(op_wb)s;
+        return NoFault;
+    }
+}};
+
+def template DasicsCallJMethods {{
+    std::unique_ptr<PCStateBase>
+    %(class_name)s::branchTarget(const PCStateBase &branch_pc) const
+    {
+        auto &rpc = branch_pc.as<RiscvISA::PCState>();
+        std::unique_ptr<PCState> npc(dynamic_cast<PCState *>(rpc.clone()));
+        npc->set(rvSext(rpc.pc() + imm));
+        return npc;
+    }
+
+    std::string
+    %(class_name)s::generateDisassembly(
+            Addr pc, const loader::SymbolTable *symtab) const
+    {
+        std::stringstream ss;
+        ss << mnemonic << ' ' << registerName(destRegIdx(0)) << ", " << imm;
+        return ss.str();
+    }
+}};
+
+def template DasicsCallJRMethods {{
+    std::unique_ptr<PCStateBase>
+    %(class_name)s::branchTarget(ThreadContext *tc) const
+    {
+        PCStateBase *pc_ptr = tc->pcState().clone();
+        // The operand table represents x0 with an invalid register ID.
+        const RegVal base = RS1 == 0 ? 0 : tc->getReg(srcRegIdx(0));
+        pc_ptr->as<PCState>().set(rvSext((base + imm) & ~0x1));
+        return std::unique_ptr<PCStateBase>{pc_ptr};
+    }
+
+    std::string
+    %(class_name)s::generateDisassembly(
+            Addr pc, const loader::SymbolTable *symtab) const
+    {
+        std::stringstream ss;
+        ss << mnemonic << ' ' << registerName(destRegIdx(0)) << ", "
+           << imm << "(" << registerName(srcRegIdx(0)) << ")";
+        return ss.str();
+    }
+}};
+
+def format DasicsCallJ(code, *opt_flags) {{
+    imm_code = """
+        // This format uses the encoded RD bits as part of the displacement.
+        imm = DIJIMMBITS10TO1  << 1  |
+              DIJIMMBITS14TO11 << 11 |
+              DIJIMMBITS20TO15 << 15 |
+              DIJIMMBIT21      << 21 |
+              IMMSIGN         << 22;
+        imm = sext<23>(imm);
+    """
+    iop = InstObjParams(name, Name, 'ImmOp<int64_t>',
+        {'code': code, 'imm_code': imm_code}, opt_flags)
+    header_output = BranchDeclare.subst(iop)
+    decoder_output = ImmConstructor.subst(iop)
+    decode_block = BasicDecode.subst(iop)
+    exec_output = DasicsCallExecute.subst(iop) + DasicsCallJMethods.subst(iop)
+}};
+
+def format DasicsCallJR(code, *opt_flags) {{
+    iop = InstObjParams(name, Name, 'ImmOp<int64_t>', code, opt_flags)
+    header_output = JumpDeclare.subst(iop)
+    decoder_output = DasicsCallJRConstructor.subst(iop)
+    decode_block = BasicDecode.subst(iop)
+    exec_output = DasicsCallExecute.subst(iop) + DasicsCallJRMethods.subst(iop)
+}};

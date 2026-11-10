@@ -42,6 +42,7 @@ make clean-riscv-dasics
 | `riscv-dasics-csr-permission` | [Test description](../tests/test-progs/dasics/riscv-dasics-csr-permission/README.en.md) | [Run](#riscv-dasics-csr-permission) |
 | `riscv-dasics-ecall` | [Test description](../tests/test-progs/dasics/riscv-dasics-ecall/README.en.md) | [Run](#riscv-dasics-ecall) |
 | `riscv-dasics-control-flow` | [Test description](../tests/test-progs/dasics/riscv-dasics-control-flow/README.en.md) | [Run](#riscv-dasics-control-flow) |
+| `riscv-dasics-call` | [Test description](../tests/test-progs/dasics/riscv-dasics-call/README.en.md) | [Run](#riscv-dasics-call) |
 | `riscv-dasics-mem` | [Test description](../tests/test-progs/dasics/riscv-dasics-mem/README.en.md) | [Run](#riscv-dasics-mem) |
 
 ## Test reproduction
@@ -139,6 +140,23 @@ make dasics-test TEST=riscv-dasics-control-flow CPU=all
 
 ```bash
 make dasics-clean TEST=riscv-dasics-control-flow
+```
+
+### riscv-dasics-call
+
+```bash
+make riscv-dasics &&
+  make dasics-test TEST=riscv-dasics-call CPU=v5_full
+```
+
+```bash
+make dasics-test TEST=riscv-dasics-call CPU=all
+```
+
+#### Clean software
+
+```bash
+make dasics-clean TEST=riscv-dasics-call
 ```
 
 ### riscv-dasics-mem

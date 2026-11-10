@@ -238,6 +238,27 @@ dasicsCsrAccessCheck(ExecContext *xc, RegIndex miscReg, ExtMachInst machInst,
 }
 
 Fault
+dasicsCallAccessCheck(ExecContext *xc, ExtMachInst machInst,
+                      unsigned vaddrBits)
+{
+    const auto mode = static_cast<PrivilegeMode>(xc->readMiscReg(MISCREG_PRV));
+
+    // Calls require an enabled U/S domain before source-PC trust is checked.
+    if ((mode == PRV_U || mode == PRV_S) && !virtualizationEnabled(xc)) {
+        const DasicsMainCfg config = xc->readMiscReg(MISCREG_DASICS_MAIN_CFG);
+        const bool enabled = mode == PRV_U ? static_cast<bool>(config.uena)
+                                           : static_cast<bool>(config.sena);
+        if (enabled && dasicsInstIsTrusted(xc, vaddrBits)) {
+            return NoFault;
+        }
+    }
+
+    return std::make_shared<IllegalInstFault>(
+        "DASICS call requires enabled, trusted non-virtualized U/S execution",
+        machInst);
+}
+
+Fault
 dasicsJumpAccessCheck(ExecContext *xc, Addr target, bool taken,
                       unsigned vaddrBits)
 {

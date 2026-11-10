@@ -45,6 +45,7 @@
 
 // Include formats for nonstandard extensions
 ##include "compressed.isa"
+##include "dasics.isa"
 
 // Pseudo operations
 ##include "m5ops.isa"
