@@ -40,10 +40,28 @@ make clean-riscv-dasics
 | --- | --- | --- |
 | `riscv-dasics-csr` | [README](../tests/test-progs/dasics/riscv-dasics-csr/README.md) | [命令](#riscv-dasics-csr) |
 | `riscv-dasics-csr-permission` | [README](../tests/test-progs/dasics/riscv-dasics-csr-permission/README.md) | [命令](#riscv-dasics-csr-permission) |
+| `riscv-dasics-ecall` | [README](../tests/test-progs/dasics/riscv-dasics-ecall/README.md) | [命令](#riscv-dasics-ecall) |
 | `riscv-dasics-control-flow` | [README](../tests/test-progs/dasics/riscv-dasics-control-flow/README.md) | [命令](#riscv-dasics-control-flow) |
 | `riscv-dasics-mem` | [README](../tests/test-progs/dasics/riscv-dasics-mem/README.md) | [命令](#riscv-dasics-mem) |
 
 ## 测试复现
+
+### 全部功能测试（默认 `CPU=v5_full`）
+
+```bash
+make riscv-dasics &&
+  make dasics-test
+```
+
+### 全部功能测试 × 全部 CPU
+
+```bash
+make dasics-test CPU=all
+```
+
+自动发现 `tests/test-progs/dasics/riscv-dasics-*/src/Makefile`；新增同结构测试
+并提供 `all/run/clean` 目标即可纳入，`riscv-reg-protection` 实验除外。
+失败或超时后继续其余项目，全部通过才返回 `0`。
 
 ### riscv-dasics-csr
 
@@ -84,6 +102,23 @@ make dasics-test TEST=riscv-dasics-csr-permission CPU=all
 
 ```bash
 make dasics-clean TEST=riscv-dasics-csr-permission
+```
+
+### riscv-dasics-ecall
+
+```bash
+make riscv-dasics &&
+  make dasics-test TEST=riscv-dasics-ecall CPU=v5_full
+```
+
+```bash
+make dasics-test TEST=riscv-dasics-ecall CPU=all
+```
+
+#### 清理软件
+
+```bash
+make dasics-clean TEST=riscv-dasics-ecall
 ```
 
 ### riscv-dasics-control-flow

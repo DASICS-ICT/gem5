@@ -16,6 +16,11 @@
 测试采用单 hart、RV64、裸机全系统与 O3 模型，使用 Semihosting 退出。
 输出位于本目录的 `build/m5out-o3/<CPU>/`。
 
+`enable_domain` 在 U 域设置 `UENA/CUET`，在 S 域设置 `SENA/CSET`，
+关闭对应域的 ECALL 保护。本文普通 cause `8/9` 的 ECALL 仅为测试框架的
+完成/恢复通道，不验证 ECALL 保护；其专项见
+[riscv-dasics-ecall](../riscv-dasics-ecall/README.md)。
+
 ## 执行流程
 
 1. M 态设置直接模式 `mtvec`，关闭中断和异常委托，使用 Bare 地址翻译。

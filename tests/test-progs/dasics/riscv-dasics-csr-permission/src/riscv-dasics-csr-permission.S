@@ -9,6 +9,8 @@
     .equ CSR_DASICS_FREASON, 0x8B3
     .equ DASICS_UENA, (1 << 1)
     .equ DASICS_SENA, (1 << 0)
+    .equ DASICS_CUET, (1 << 2)
+    .equ DASICS_CSET, (1 << 6)
     /* Mixed low bits make immediate set and clear operations observable. */
     .equ LIB_CFG_INITIAL, 0x13579BDF2468ACEF
     .equ LIB_CFG_SOURCE, 0xFEDCBA9876543210
@@ -674,9 +676,10 @@ set_main_bound:
     ret
 
 enable_domain:
-    li      t0, DASICS_UENA
+    /* ECALL signals completion to the harness through ordinary traps. */
+    li      t0, DASICS_UENA | DASICS_CUET
     beqz    s3, .Lenable_domain
-    li      t0, DASICS_SENA
+    li      t0, DASICS_SENA | DASICS_CSET
 .Lenable_domain:
     csrw    CSR_DASICS_S_MAIN_CFG, t0
     ret

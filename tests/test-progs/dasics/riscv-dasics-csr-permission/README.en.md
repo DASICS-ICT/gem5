@@ -17,6 +17,12 @@ access checks, and ordinary CSR controls.
 The test uses one RV64 hart, bare-metal full-system execution, an O3 model,
 and Semihosting termination. Outputs are under `build/m5out-o3/<CPU>/`.
 
+`enable_domain` sets `UENA/CUET` in U mode and `SENA/CSET` in S mode,
+disabling the matching domain's ECALL protection. Ordinary cause `8/9`
+ECALLs here are only completion/recovery signals for the harness. They do
+not test ECALL protection; see the dedicated
+[riscv-dasics-ecall](../riscv-dasics-ecall/README.en.md) test.
+
 ## Execution
 
 1. In M mode, install a direct `mtvec` handler, disable interrupts and trap

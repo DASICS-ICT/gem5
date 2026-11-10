@@ -7,8 +7,11 @@ SHELL := /bin/bash
 GEM5_REPO_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 LOG_DIR := $(abspath $(GEM5_REPO_DIR)/../build-logs)
 DASICS_CONFIG_DIR := $(GEM5_REPO_DIR)/configs/dasics
-DASICS_TEST_DIR = $(GEM5_REPO_DIR)/tests/test-progs/dasics/$(TEST)
-DASICS_OUT_DIR = $(DASICS_TEST_DIR)/build/m5out-o3
+DASICS_TEST_ROOT := $(GEM5_REPO_DIR)/tests/test-progs/dasics
+DASICS_TEST_DIR = $(DASICS_TEST_ROOT)/$(TEST)
+# Functional tests share this layout; standalone experiments stay separate.
+DASICS_TESTS := $(sort $(notdir $(patsubst %/src/Makefile,%, \
+	$(wildcard $(DASICS_TEST_ROOT)/riscv-dasics-*/src/Makefile))))
 DASICS_CPUS := V2_minimal V2_nanhug V2_default v5_full v5_stress
 CPU ?= v5_full
 
@@ -83,63 +86,93 @@ clean-riscv-dasics:
 
 # Each test owns its run target and output layout.
 # run-result.txt preserves simulator exit codes across recursive make calls.
+# Without TEST, discover all functional tests; CPU still defaults to v5_full.
 # make dasics-test TEST=riscv-dasics-csr-permission CPU=v5_full
 # make dasics-clean TEST=riscv-dasics-csr-permission
 dasics-test: override GEM5_BINARY := \
 	$(GEM5_REPO_DIR)/build/RISCV_DASICS/gem5.opt
-dasics-test: dasics-check dasics-cpu-check
-	@$(MAKE) --no-print-directory \
-		-C "$(DASICS_TEST_DIR)/src" \
-		all || { \
-			printf '\033[1;31m[FAIL] %s build\033[0m\n' "$(TEST)" >&2; \
-			exit 1; \
-		}; \
+dasics-test: dasics-cpu-check
+	@tests="$(strip $(TEST))"; \
+	if [ "$(words $(TEST))" -gt 1 ]; then \
+		printf '\033[1;31m[FAIL] Set TEST=<test-name> or omit TEST.\033[0m\n' \
+			>&2; exit 2; \
+	fi; \
+	if [ -z "$$tests" ]; then tests="$(DASICS_TESTS)"; fi; \
+	if [ -z "$$tests" ]; then \
+		printf '\033[1;31m[FAIL] No DASICS functional tests found.\033[0m\n' \
+			>&2; exit 2; \
+	fi; \
+	for test in $$tests; do \
+		case " $(DASICS_TESTS) " in \
+			*" $$test "*) ;; \
+			*) printf '\033[1;31m[FAIL] Unknown DASICS test: %s\033[0m\n' \
+				"$$test" >&2; exit 2 ;; \
+		esac; \
+	done; \
 	models="$(CPU)"; \
 	if [ "$$models" = all ]; then models="$(DASICS_CPUS)"; fi; \
 	status=0; first=1; results=(); \
-	for cpu in $$models; do \
-		if [ "$$first" -eq 0 ]; then \
-			printf '%s\n' '-------------------------------'; \
-		fi; \
-		first=0; \
-		printf 'CPU: %s\n' "$$cpu"; \
-		result_file="$(DASICS_OUT_DIR)/$$cpu/run-result.txt"; \
-		rm -f "$$result_file" || exit; \
-		$(MAKE) --no-print-directory \
-			-C "$(DASICS_TEST_DIR)/src" \
-			GEM5_REPO_DIR="$(GEM5_REPO_DIR)" \
-			GEM5_BINARY="$(GEM5_BINARY)" CPU="$$cpu" \
-			GEM5_CONFIG="$(DASICS_CONFIG_DIR)/riscv_dasics_o3_$$cpu.py" \
-			GEM5_OUTDIR="$(DASICS_OUT_DIR)/$$cpu" \
-			run; \
-		dasics_rc=$$?; \
-		raw_rc=; cycles=N/A; extra=; \
-		if [ -f "$$result_file" ]; then \
-			read -r raw_rc cycles extra < "$$result_file" || true; \
-		fi; \
-		if ! [[ "$$raw_rc" =~ ^[0-9]+$$ && -z "$$extra" && \
-			( "$$cycles" = N/A || "$$cycles" =~ ^[0-9]+$$ ) ]]; then \
-			raw_rc=; cycles=N/A; \
-		fi; \
-		if [ "$$dasics_rc" -eq 0 ] && [ "$$raw_rc" = 0 ]; then \
-			dasics_result=OK; \
-		elif [ "$$raw_rc" = 124 ]; then \
-			dasics_result=TIMEOUT; cycles=N/A; status=1; \
-		else \
-			dasics_result=FAIL; cycles=N/A; status=1; \
-		fi; \
-		results+=("$$cpu $$dasics_result $$cycles"); \
+	for test in $$tests; do \
+		test_dir="$(DASICS_TEST_ROOT)/$$test"; \
+		first_model=1; build_rc=0; \
+		for cpu in $$models; do \
+			if [ "$$first" -eq 0 ]; then \
+				printf '%s\n' '-------------------------------'; \
+			fi; \
+			first=0; \
+			printf 'Test: %s\nCPU: %s\n' "$$test" "$$cpu"; \
+			outdir="$$test_dir/build/m5out-o3/$$cpu"; \
+			result_file="$$outdir/run-result.txt"; \
+			rm -f "$$result_file" || exit; \
+			if [ "$$first_model" -eq 1 ]; then \
+				$(MAKE) --no-print-directory -j "$(JOBS)" \
+					-C "$$test_dir/src" all; \
+				build_rc=$$?; first_model=0; \
+				if [ "$$build_rc" -ne 0 ]; then \
+					printf '\033[1;31m[FAIL] %s build\033[0m\n' \
+						"$$test" >&2; \
+				fi; \
+			fi; \
+			dasics_rc=$$build_rc; \
+			if [ "$$build_rc" -eq 0 ]; then \
+				$(MAKE) --no-print-directory -C "$$test_dir/src" \
+					GEM5_REPO_DIR="$(GEM5_REPO_DIR)" \
+					GEM5_BINARY="$(GEM5_BINARY)" CPU="$$cpu" \
+					GEM5_CONFIG="$(DASICS_CONFIG_DIR)/riscv_dasics_o3_$$cpu.py" \
+					GEM5_OUTDIR="$$outdir" run; \
+				dasics_rc=$$?; \
+			fi; \
+			raw_rc=; cycles=N/A; extra=; result_lines=(); \
+			if [ -f "$$result_file" ] && \
+				mapfile -t result_lines < "$$result_file" && \
+				[ "$${#result_lines[@]}" -eq 1 ]; then \
+				read -r raw_rc cycles extra <<< "$${result_lines[0]}" || true; \
+			fi; \
+			if ! [[ "$$raw_rc" =~ ^[0-9]+$$ && -z "$$extra" && \
+				( "$$cycles" = N/A || "$$cycles" =~ ^[0-9]+$$ ) ]]; then \
+				raw_rc=; cycles=N/A; \
+			fi; \
+			if [ "$$dasics_rc" -eq 0 ] && [ "$$raw_rc" = 0 ]; then \
+				dasics_result=OK; \
+			elif [ "$$raw_rc" = 124 ]; then \
+				dasics_result=TIMEOUT; cycles=N/A; status=1; \
+			else \
+				dasics_result=FAIL; cycles=N/A; status=1; \
+			fi; \
+			results+=("$$test $$cpu $$dasics_result $$cycles"); \
+		done; \
 	done; \
-	printf '\nTest summary: %s\n' "$(TEST)"; \
-	printf '%-14s %-9s %12s\n' CPU Result Cycles; \
+	printf '\nDASICS test summary:\n'; \
+	printf '%-30s %-14s %-9s %12s\n' Test CPU Result Cycles; \
 	for result in "$${results[@]}"; do \
-		read -r cpu dasics_result cycles <<< "$$result"; \
-		printf '%-14s %-9s %12s\n' "$$cpu" "$$dasics_result" "$$cycles"; \
+		read -r test cpu dasics_result cycles <<< "$$result"; \
+		printf '%-30s %-14s %-9s %12s\n' \
+			"$$test" "$$cpu" "$$dasics_result" "$$cycles"; \
 	done; \
 	if [ "$$status" -eq 0 ]; then \
-		printf '\033[1;32m[OK] %s\033[0m\n' "$(TEST)"; \
+		printf '\033[1;32m[OK] DASICS tests\033[0m\n'; \
 	else \
-		printf '\033[1;31m[FAIL] %s\033[0m\n' "$(TEST)" >&2; \
+		printf '\033[1;31m[FAIL] DASICS tests\033[0m\n' >&2; \
 	fi; \
 	exit "$$status"
 
@@ -147,7 +180,7 @@ dasics-clean: dasics-check
 	@$(MAKE) --no-print-directory \
 		-C "$(DASICS_TEST_DIR)/src" clean
 
-# Both actions require an existing test before invoking its Makefile.
+# Cleaning remains explicit and only applies to the selected test.
 dasics-check:
 	@test -n "$(TEST)" || { \
 		printf '\033[1;31m[FAIL] Set TEST=<test-name>.\033[0m\n' >&2; \

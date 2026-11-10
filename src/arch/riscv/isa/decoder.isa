@@ -5755,6 +5755,16 @@ decode QUADRANT default Unknown::unknown() {
                 0x0: decode FUNCT7 {
                     0x0: decode RS2 {
                         0x0: ecall({{
+#if USE_DASICS
+                            // Preserve ordinary ECALL when DASICS allows it.
+                            auto *isa = static_cast<RiscvISA::ISA *>(
+                                xc->tcBase()->getIsaPtr());
+                            Fault dasics_fault = dasicsEcallAccessCheck(
+                                xc, isa->getDasicsVAddrBits());
+                            if (dasics_fault != NoFault) {
+                                return dasics_fault;
+                            }
+#endif // USE_DASICS
                             MISA misa = xc->readMiscReg(MISCREG_ISA);
                             bool virtualized = misa.rvh ?
                                 virtualizationEnabled(xc) : false;

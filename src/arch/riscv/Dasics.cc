@@ -344,6 +344,25 @@ dasicsMemAccessCheck(ExecContext *xc, Addr address, unsigned size,
         isWrite ? DasicsFaultReason::Store : DasicsFaultReason::Load;
     return std::make_shared<DasicsFault>(mode, reason, address);
 }
+
+Fault
+dasicsEcallAccessCheck(ExecContext *xc, unsigned vaddrBits)
+{
+    if (dasicsInstIsTrusted(xc, vaddrBits)) {
+        return NoFault;
+    }
+
+    // An untrusted result implies enabled, non-virtualized U/S execution.
+    const auto mode = static_cast<PrivilegeMode>(xc->readMiscReg(MISCREG_PRV));
+    const DasicsMainCfg config = xc->readMiscReg(MISCREG_DASICS_MAIN_CFG);
+    const bool checkDisabled = mode == PRV_U ? static_cast<bool>(config.cuet)
+                                             : static_cast<bool>(config.cset);
+    if (checkDisabled) {
+        return NoFault;
+    }
+
+    return std::make_shared<DasicsFault>(mode, DasicsFaultReason::Ecall, 0);
+}
 #endif // USE_DASICS
 
 } // namespace RiscvISA

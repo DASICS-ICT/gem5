@@ -40,10 +40,31 @@ make clean-riscv-dasics
 | --- | --- | --- |
 | `riscv-dasics-csr` | [Test description](../tests/test-progs/dasics/riscv-dasics-csr/README.en.md) | [Run](#riscv-dasics-csr) |
 | `riscv-dasics-csr-permission` | [Test description](../tests/test-progs/dasics/riscv-dasics-csr-permission/README.en.md) | [Run](#riscv-dasics-csr-permission) |
+| `riscv-dasics-ecall` | [Test description](../tests/test-progs/dasics/riscv-dasics-ecall/README.en.md) | [Run](#riscv-dasics-ecall) |
 | `riscv-dasics-control-flow` | [Test description](../tests/test-progs/dasics/riscv-dasics-control-flow/README.en.md) | [Run](#riscv-dasics-control-flow) |
 | `riscv-dasics-mem` | [Test description](../tests/test-progs/dasics/riscv-dasics-mem/README.en.md) | [Run](#riscv-dasics-mem) |
 
 ## Test reproduction
+
+### All functional tests (default `CPU=v5_full`)
+
+```bash
+make riscv-dasics &&
+  make dasics-test
+```
+
+### All functional tests × all CPUs
+
+```bash
+make dasics-test CPU=all
+```
+
+Tests are discovered through
+`tests/test-progs/dasics/riscv-dasics-*/src/Makefile`; new tests with the same
+layout and `all/run/clean` targets join automatically. The
+`riscv-reg-protection` experiment is excluded.
+Failures and timeouts do not stop remaining items; only a fully passing run
+returns `0`.
 
 ### riscv-dasics-csr
 
@@ -84,6 +105,23 @@ make dasics-test TEST=riscv-dasics-csr-permission CPU=all
 
 ```bash
 make dasics-clean TEST=riscv-dasics-csr-permission
+```
+
+### riscv-dasics-ecall
+
+```bash
+make riscv-dasics &&
+  make dasics-test TEST=riscv-dasics-ecall CPU=v5_full
+```
+
+```bash
+make dasics-test TEST=riscv-dasics-ecall CPU=all
+```
+
+#### Clean software
+
+```bash
+make dasics-clean TEST=riscv-dasics-ecall
 ```
 
 ### riscv-dasics-control-flow

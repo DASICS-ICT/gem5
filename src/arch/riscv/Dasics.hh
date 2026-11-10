@@ -101,6 +101,15 @@ Fault dasicsJumpAccessCheck(ExecContext *xc, Addr target, bool taken,
  */
 Fault dasicsMemAccessCheck(ExecContext *xc, Addr address, unsigned size,
                            bool isWrite, unsigned vaddrBits);
+
+/**
+ * Check ECALL from an enabled, untrusted, non-virtualized U/S domain.
+ * CUET/CSET close bits bypass the check for the corresponding domain.
+ * NoFault leaves ordinary ECALL handling to the caller. A rejection carries
+ * the Ecall reason and a zero trap value; only fault delivery writes FReason.
+ * This check does not change architectural state.
+ */
+Fault dasicsEcallAccessCheck(ExecContext *xc, unsigned vaddrBits);
 #endif // USE_DASICS
 
 } // namespace RiscvISA
