@@ -41,6 +41,7 @@ make clean-riscv-dasics
 | `riscv-dasics-csr` | [README](../tests/test-progs/dasics/riscv-dasics-csr/README.md) | [命令](#riscv-dasics-csr) |
 | `riscv-dasics-csr-permission` | [README](../tests/test-progs/dasics/riscv-dasics-csr-permission/README.md) | [命令](#riscv-dasics-csr-permission) |
 | `riscv-dasics-control-flow` | [README](../tests/test-progs/dasics/riscv-dasics-control-flow/README.md) | [命令](#riscv-dasics-control-flow) |
+| `riscv-dasics-mem` | [README](../tests/test-progs/dasics/riscv-dasics-mem/README.md) | [命令](#riscv-dasics-mem) |
 
 ## 测试复现
 
@@ -100,4 +101,21 @@ make dasics-test TEST=riscv-dasics-control-flow CPU=all
 
 ```bash
 make dasics-clean TEST=riscv-dasics-control-flow
+```
+
+### riscv-dasics-mem
+
+```bash
+make riscv-dasics &&
+  make dasics-test TEST=riscv-dasics-mem CPU=v5_full
+```
+
+```bash
+make dasics-test TEST=riscv-dasics-mem CPU=all
+```
+
+#### 清理软件
+
+```bash
+make dasics-clean TEST=riscv-dasics-mem
 ```

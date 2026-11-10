@@ -34,8 +34,8 @@ bool dasicsCsrNeedsSquash(ExtMachInst machInst);
 bool dasicsPcIsTrusted(Addr pc, bool enabled, Addr lower, Addr upper,
                        unsigned vaddrBits);
 
-/** Raw CSR values for one half-open jump bound. */
-struct DasicsJumpBound
+/** Raw lower/upper CSR values; each checker supplies its comparison rules. */
+struct DasicsAddrRange
 {
     Addr lower = 0;
     Addr upper = 0;
@@ -49,9 +49,22 @@ struct DasicsJumpBound
  * The caller handles privilege, source trust, enables, and branch outcome.
  */
 bool dasicsJumpTargetIsAllowed(Addr target, RegVal jumpCfg,
-                               const std::array<DasicsJumpBound, 4> &bounds,
+                               const std::array<DasicsAddrRange, 4> &bounds,
                                Addr mainCallEntry, Addr returnPc,
                                Addr activeZoneReturnPc, unsigned vaddrBits);
+
+/**
+ * Authorize a complete scalar access using one of the 16 data bounds.
+ * size is a byte count of 1, 2, 4, or 8; other sizes and address wraparound
+ * are rejected. Compare full 64-bit virtual addresses without discarding
+ * access-address low bits; bound CSR values have bits [2:0] cleared.
+ * A single valid entry must cover the entire access and permit the read or
+ * write. The reserved U bit does not affect permission. The caller handles
+ * privilege, source trust, check enables, alignment, and exception delivery.
+ */
+bool dasicsMemAccessIsAllowed(Addr address, unsigned size, bool isWrite,
+                              RegVal libCfg,
+                              const std::array<DasicsAddrRange, 16> &bounds);
 
 /**
  * Check the current instruction using the non-virtualized S/U domain state.
@@ -77,6 +90,17 @@ Fault dasicsCsrAccessCheck(ExecContext *xc, RegIndex miscReg,
  */
 Fault dasicsJumpAccessCheck(ExecContext *xc, Addr target, bool taken,
                             unsigned vaddrBits);
+
+/**
+ * Check an ordinary scalar access against the current S/U data permissions.
+ * address is the original effective virtual address; size is a byte count.
+ * vaddrBits applies only to source-PC trust, not the data-address comparison.
+ * Privilege, source trust, and the matching load/store close bit can bypass
+ * the check. A rejection carries the original address in a DasicsFault;
+ * this function does not access memory or change architectural state.
+ */
+Fault dasicsMemAccessCheck(ExecContext *xc, Addr address, unsigned size,
+                           bool isWrite, unsigned vaddrBits);
 #endif // USE_DASICS
 
 } // namespace RiscvISA

@@ -141,6 +141,20 @@ def template LoadExecute {{
         %(op_rd)s;
         %(ea_code)s;
 
+#if USE_DASICS
+        // Prefetch hints share this template but bypass scalar checks.
+        // Reject denied accesses before translation or result writeback.
+        if (!isPrefetch()) {
+            auto *isa = static_cast<RiscvISA::ISA *>(
+                xc->tcBase()->getIsaPtr());
+            Fault dasics_fault = dasicsMemAccessCheck(
+                xc, EA, sizeof(Mem), false, isa->getDasicsVAddrBits());
+            if (dasics_fault != NoFault) {
+                return dasics_fault;
+            }
+        }
+#endif // USE_DASICS
+
         {
             Fault fault =
                 readMemAtomicLE(xc, traceData, EA, Mem, memAccessFlags);
@@ -166,6 +180,20 @@ def template LoadInitiateAcc {{
         %(op_src_decl)s;
         %(op_rd)s;
         %(ea_code)s;
+
+#if USE_DASICS
+        // Prefetch hints share this template but bypass scalar checks.
+        // Reject denied accesses before translation or result writeback.
+        if (!isPrefetch()) {
+            auto *isa = static_cast<RiscvISA::ISA *>(
+                xc->tcBase()->getIsaPtr());
+            Fault dasics_fault = dasicsMemAccessCheck(
+                xc, EA, sizeof(Mem), false, isa->getDasicsVAddrBits());
+            if (dasics_fault != NoFault) {
+                return dasics_fault;
+            }
+        }
+#endif // USE_DASICS
 
         return initiateMemRead(xc, traceData, EA, Mem, memAccessFlags);
     }
@@ -199,6 +227,16 @@ def template StoreExecute {{
         %(op_rd)s;
         %(ea_code)s;
 
+#if USE_DASICS
+        // Reject denied accesses before translation or memory side effects.
+        auto *isa = static_cast<RiscvISA::ISA *>(xc->tcBase()->getIsaPtr());
+        Fault dasics_fault = dasicsMemAccessCheck(
+            xc, EA, sizeof(Mem), true, isa->getDasicsVAddrBits());
+        if (dasics_fault != NoFault) {
+            return dasics_fault;
+        }
+#endif // USE_DASICS
+
         %(memacc_code)s;
 
         {
@@ -226,6 +264,16 @@ def template StoreInitiateAcc {{
         %(op_decl)s;
         %(op_rd)s;
         %(ea_code)s;
+
+#if USE_DASICS
+        // Reject denied accesses before translation or memory side effects.
+        auto *isa = static_cast<RiscvISA::ISA *>(xc->tcBase()->getIsaPtr());
+        Fault dasics_fault = dasicsMemAccessCheck(
+            xc, EA, sizeof(Mem), true, isa->getDasicsVAddrBits());
+        if (dasics_fault != NoFault) {
+            return dasics_fault;
+        }
+#endif // USE_DASICS
 
         %(memacc_code)s;
 
