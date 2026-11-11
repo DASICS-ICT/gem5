@@ -60,8 +60,10 @@ save general-purpose, floating-point, or vector registers.
 User-mode interrupt delivery, virtualized user exception handling, and
 direct M-to-U delegation in M/U-only systems are outside this support.
 The existing [CSR permission test](tests/test-progs/dasics/riscv-dasics-csr-permission/README.en.md)
-checks SSCRATCH rejection and recovery; a dedicated U-handler/URET round-trip
-test is not yet part of the functional test inventory.
+checks SSCRATCH rejection and recovery. The
+[user-trap test](tests/test-progs/dasics/riscv-dasics-user-trap/README.en.md)
+covers M/S/U routing of ordinary and DASICS exceptions originating in U,
+including U-handler return through URET.
 
 ## SPEC CPU2006
 

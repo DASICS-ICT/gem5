@@ -44,6 +44,7 @@ make clean-riscv-dasics
 | `riscv-dasics-control-flow` | [Test description](../tests/test-progs/dasics/riscv-dasics-control-flow/README.en.md) | [Run](#riscv-dasics-control-flow) |
 | `riscv-dasics-call` | [Test description](../tests/test-progs/dasics/riscv-dasics-call/README.en.md) | [Run](#riscv-dasics-call) |
 | `riscv-dasics-mem` | [Test description](../tests/test-progs/dasics/riscv-dasics-mem/README.en.md) | [Run](#riscv-dasics-mem) |
+| `riscv-dasics-user-trap` | [Test description](../tests/test-progs/dasics/riscv-dasics-user-trap/README.en.md) | [Run](#riscv-dasics-user-trap) |
 
 ## Test reproduction
 
@@ -174,4 +175,21 @@ make dasics-test TEST=riscv-dasics-mem CPU=all
 
 ```bash
 make dasics-clean TEST=riscv-dasics-mem
+```
+
+### riscv-dasics-user-trap
+
+```bash
+make riscv-dasics &&
+  make dasics-test TEST=riscv-dasics-user-trap CPU=v5_full
+```
+
+```bash
+make dasics-test TEST=riscv-dasics-user-trap CPU=all
+```
+
+#### Clean software
+
+```bash
+make dasics-clean TEST=riscv-dasics-user-trap
 ```
