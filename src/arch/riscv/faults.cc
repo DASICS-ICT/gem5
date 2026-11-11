@@ -158,6 +158,13 @@ RiscvFault::invoke(ThreadContext *tc, const StaticInstPtr &inst)
                     }
                     // otherwise handled in VS (S with V = 1)
                 }
+#if USE_DASICS
+                // Use the original V state: guest traps may have cleared V.
+                if (isa->rvType() == RV64 && pp == PRV_U && !pv &&
+                    bits(tc->readMiscReg(MISCREG_SEDELEG), _code) != 0) {
+                    prv = PRV_U;
+                }
+#endif // USE_DASICS
             }
         }
 
@@ -165,8 +172,18 @@ RiscvFault::invoke(ThreadContext *tc, const StaticInstPtr &inst)
         MiscRegIndex cause, epc, tvec, tval;
         switch (prv) {
           case PRV_U:
-            panic("Delegating interrupt to user mode is removed.");
-            break;
+#if USE_DASICS
+              cause = MISCREG_UCAUSE;
+              epc = MISCREG_UEPC;
+              tvec = MISCREG_UTVEC;
+              tval = MISCREG_UTVAL;
+
+              status.upie = status.uie;
+              status.uie = 0;
+#else
+              panic("Delegating interrupt to user mode is removed.");
+#endif // USE_DASICS
+              break;
           case PRV_S:
             cause = MISCREG_SCAUSE;
             epc = MISCREG_SEPC;
@@ -196,8 +213,8 @@ RiscvFault::invoke(ThreadContext *tc, const StaticInstPtr &inst)
             break;
         }
 
-        // H-extension extra handling for invoke
-        if (misa.rvh) {
+        // Only M/S trap entry updates H-extension state; U entry keeps V=0.
+        if (misa.rvh && prv != PRV_U) {
             if (prv == PRV_M) {
                 status.mpv = pv;
                 status.gva = mustSetGva();

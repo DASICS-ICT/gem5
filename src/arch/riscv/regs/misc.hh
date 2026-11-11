@@ -178,7 +178,12 @@ enum MiscRegIndex
     MISCREG_PMPADDR14,
     MISCREG_PMPADDR15,
 
-    MISCREG_RESERVED01, // MISCREG_SEDELEG,
+#if USE_DASICS
+    MISCREG_SEDELEG,
+#else
+    MISCREG_RESERVED01,
+#endif // USE_DASICS
+
     MISCREG_RESERVED02, // MISCREG_SIDELEG,
     MISCREG_STVEC,
     MISCREG_SCOUNTEREN,
@@ -189,11 +194,20 @@ enum MiscRegIndex
     MISCREG_SATP,
     MISCREG_SENVCFG,
 
-    MISCREG_RESERVED03, // MISCREG_UTVEC,
-    MISCREG_RESERVED04, // MISCREG_USCRATCH,
-    MISCREG_RESERVED05, // MISCREG_UEPC,
-    MISCREG_RESERVED06, // MISCREG_UCAUSE,
-    MISCREG_RESERVED07, // MISCREG_UTVAL,
+#if USE_DASICS
+    MISCREG_UTVEC,
+    MISCREG_USCRATCH,
+    MISCREG_UEPC,
+    MISCREG_UCAUSE,
+    MISCREG_UTVAL,
+#else
+    MISCREG_RESERVED03,
+    MISCREG_RESERVED04,
+    MISCREG_RESERVED05,
+    MISCREG_RESERVED06,
+    MISCREG_RESERVED07,
+#endif // USE_DASICS
+
     MISCREG_FFLAGS,
     MISCREG_FRM,
 
@@ -422,6 +436,16 @@ enum CSRIndex
     CSR_FFLAGS = 0x001,
     CSR_FRM = 0x002,
     CSR_FCSR = 0x003,
+#if USE_DASICS
+    // clang-format off
+    CSR_USTATUS  = 0x000,
+    CSR_UTVEC    = 0x005,
+    CSR_USCRATCH = 0x040,
+    CSR_UEPC     = 0x041,
+    CSR_UCAUSE   = 0x042,
+    CSR_UTVAL    = 0x043,
+// clang-format on
+#endif // USE_DASICS
     CSR_CYCLE = 0xC00,
     CSR_TIME = 0xC01,
     CSR_INSTRET = 0xC02,
@@ -491,6 +515,9 @@ enum CSRIndex
     // rv32 only csr register end
 
     CSR_SSTATUS = 0x100,
+#if USE_DASICS
+    CSR_SEDELEG = 0x102,
+#endif // USE_DASICS
     CSR_SIE = 0x104,
     CSR_STVEC = 0x105,
     CSR_SCOUNTEREN = 0x106,
@@ -839,6 +866,19 @@ const std::unordered_map<int, CSRMetadata> CSRData = {
      {"frm", MISCREG_FRM, rvTypeFlags(RV64, RV32), isaExtsFlags('f')}},
     {CSR_FCSR,
      {"fcsr", MISCREG_FFLAGS, rvTypeFlags(RV64, RV32), isaExtsFlags('f')}},
+#if USE_DASICS
+    {CSR_USTATUS,
+     {"ustatus", MISCREG_STATUS, rvTypeFlags(RV64), isaExtsFlags('u')}},
+    {CSR_UTVEC,
+     {"utvec", MISCREG_UTVEC, rvTypeFlags(RV64), isaExtsFlags('u')}},
+    {CSR_USCRATCH,
+     {"uscratch", MISCREG_USCRATCH, rvTypeFlags(RV64), isaExtsFlags('u')}},
+    {CSR_UEPC, {"uepc", MISCREG_UEPC, rvTypeFlags(RV64), isaExtsFlags('u')}},
+    {CSR_UCAUSE,
+     {"ucause", MISCREG_UCAUSE, rvTypeFlags(RV64), isaExtsFlags('u')}},
+    {CSR_UTVAL,
+     {"utval", MISCREG_UTVAL, rvTypeFlags(RV64), isaExtsFlags('u')}},
+#endif // USE_DASICS
     {CSR_CYCLE,
      {"cycle", MISCREG_CYCLE, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
     {CSR_TIME,
@@ -1027,6 +1067,10 @@ const std::unordered_map<int, CSRMetadata> CSRData = {
 
     {CSR_SSTATUS,
      {"sstatus", MISCREG_STATUS, rvTypeFlags(RV64, RV32), isaExtsFlags('s')}},
+#if USE_DASICS
+    {CSR_SEDELEG,
+     {"sedeleg", MISCREG_SEDELEG, rvTypeFlags(RV64), isaExtsFlags('s', 'u')}},
+#endif // USE_DASICS
     {CSR_SIE, {"sie", MISCREG_IE, rvTypeFlags(RV64, RV32), isaExtsFlags('s')}},
     {CSR_STVEC,
      {"stvec", MISCREG_STVEC, rvTypeFlags(RV64, RV32), isaExtsFlags('s')}},
@@ -1692,6 +1736,13 @@ BitUnion64(STATUS)
     Bitfield<5> spie;
     Bitfield<3> mie;
     Bitfield<1> sie;
+
+#if USE_DASICS
+    // Shared user-trap interrupt state for the USTATUS view.
+    Bitfield<4> upie; // UIE saved on trap entry to U mode.
+    Bitfield<0> uie;  // Global user interrupt enable.
+
+#endif // USE_DASICS
 EndBitUnion(STATUS)
 
 
@@ -1793,6 +1844,12 @@ EndBitUnion(JVT)
 
 #if USE_DASICS
 // DASICS CSR bitfields.
+BitUnion64(UTVEC)
+    // Encoded base address; the byte address is base << 2.
+    Bitfield<63, 2> base;
+    Bitfield<1, 0> mode; // 0: direct, 1: vectored, 2/3: reserved.
+EndBitUnion(UTVEC)
+
 // Named fields of the shared RV64 UMainCfg/SMainCfg value.
 BitUnion64(DasicsMainCfg)
     Bitfield<0> sena; // Enable S-domain protection.
@@ -1987,6 +2044,13 @@ const RegVal STATUS_SPIE_MASK = 1ULL << 5;
 const RegVal STATUS_MIE_MASK = 1ULL << 3;
 const RegVal STATUS_SIE_MASK = 1ULL << 1;
 
+#if USE_DASICS
+// DASICS user-trap status masks; USTATUS exposes only UIE and UPIE.
+const RegVal STATUS_UPIE_MASK = 1ULL << 4;
+const RegVal STATUS_UIE_MASK = 1ULL << 0;
+const RegVal USTATUS_MASK = STATUS_UPIE_MASK | STATUS_UIE_MASK;
+#endif // USE_DASICS
+
 // H-extension
 const RegVal HSTATUS_VSXL_MASK = 3ULL << VSXL_OFFSET;
 const RegVal HSTATUS_VTSR_MASK = 1ULL << 22;
@@ -1999,6 +2063,7 @@ const RegVal HSTATUS_SPV_MASK = 1ULL << 7;
 const RegVal HSTATUS_GVA_MASK = 1LL << 6;
 const RegVal HSTATUS_VSBE_MASK = 1ULL << 5;
 
+// clang-format off
 const RegVal
 MSTATUS_MASKS[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
     [RV32] = {
@@ -2022,10 +2087,18 @@ MSTATUS_MASKS[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
                      STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
                      STATUS_MPIE_MASK | STATUS_MIE_MASK,
         [enums::MU] = STATUS_SD_MASKS[RV64] | STATUS_MBE_MASK[RV64] |
+#if USE_DASICS
+                      // DASICS user-trap state shared with USTATUS.
+                      USTATUS_MASK |
+#endif // USE_DASICS
                       STATUS_UXL_MASK | STATUS_TW_MASK |  STATUS_MPRV_MASK |
                       STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
                       STATUS_MPP_MASK | STATUS_MPIE_MASK | STATUS_MIE_MASK,
         [enums::MSU] = STATUS_SD_MASKS[RV64] |
+#if USE_DASICS
+                       // DASICS user-trap state shared with USTATUS.
+                       USTATUS_MASK |
+#endif // USE_DASICS
                        STATUS_MBE_MASK[RV64] | STATUS_SBE_MASK[RV64] |
                        STATUS_SXL_MASK | STATUS_UXL_MASK |
                        STATUS_TSR_MASK | STATUS_TW_MASK | STATUS_TVM_MASK |
@@ -2035,6 +2108,10 @@ MSTATUS_MASKS[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
                        STATUS_MPIE_MASK | STATUS_SPIE_MASK |
                        STATUS_MIE_MASK | STATUS_SIE_MASK,
         [enums::MHSU] = STATUS_SD_MASKS[RV64] |
+#if USE_DASICS
+                       // DASICS user-trap state shared with USTATUS.
+                       USTATUS_MASK |
+#endif // USE_DASICS
                        STATUS_MPV_MASK | STATUS_GVA_MASK | // H-extension
                        STATUS_MBE_MASK[RV64] | STATUS_SBE_MASK[RV64] |
                        STATUS_SXL_MASK | STATUS_UXL_MASK |
@@ -2046,6 +2123,7 @@ MSTATUS_MASKS[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
                        STATUS_MIE_MASK | STATUS_SIE_MASK,
     },
 };
+// clang-format on
 // rv32 only
 const RegVal MSTATUSH_MASKS[enums::Num_PrivilegeModeSet] = {
     [enums::M] = STATUS_MBE_MASK[RV32],
@@ -2299,6 +2377,7 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
 
 #if USE_DASICS
             // DASICS CSR masks.
+            {CSR_USTATUS               , USTATUS_MASK          },
             {CSR_DASICS_U_MAIN_CFG     , DASICS_U_MAIN_CFG_MASK},
             {CSR_DASICS_U_MAIN_BOUND_LO, DASICS_BOUND_MASK     },
             {CSR_DASICS_U_MAIN_BOUND_HI, DASICS_BOUND_MASK     },
@@ -2354,7 +2433,12 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
             {CSR_FFLAGS, FFLAGS_MASK},
             {CSR_FRM, FRM_MASK},
             {CSR_FCSR, FFLAGS_MASK | (FRM_MASK << FRM_OFFSET)},
-            {CSR_SSTATUS, SSTATUS_MASKS[RV64][enums::MSU]},
+            {CSR_SSTATUS,
+#if USE_DASICS
+                // Expose shared user-trap state through the supervisor view.
+                USTATUS_MASK |
+#endif // USE_DASICS
+                SSTATUS_MASKS[RV64][enums::MSU]},
             {CSR_SIE, SI_MASK[enums::MSU]},
             {CSR_SIP, SI_MASK[enums::MSU]},
             {CSR_MSTATUS, MSTATUS_MASKS[RV64][enums::MSU]},
@@ -2364,6 +2448,8 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
 
 #if USE_DASICS
             // DASICS CSR masks.
+            {CSR_USTATUS               , USTATUS_MASK          },
+            {CSR_SEDELEG               , SEDELEG_MASK          },
             {CSR_DASICS_U_MAIN_CFG     , DASICS_U_MAIN_CFG_MASK},
             {CSR_DASICS_U_MAIN_BOUND_LO, DASICS_BOUND_MASK     },
             {CSR_DASICS_U_MAIN_BOUND_HI, DASICS_BOUND_MASK     },
@@ -2419,7 +2505,12 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
             {CSR_FFLAGS, FFLAGS_MASK},
             {CSR_FRM, FRM_MASK},
             {CSR_FCSR, FFLAGS_MASK | (FRM_MASK << FRM_OFFSET)},
-            {CSR_SSTATUS, SSTATUS_MASKS[RV64][enums::MHSU]},
+            {CSR_SSTATUS,
+#if USE_DASICS
+                // VSSTATUS continues to use the unextended base mask.
+                USTATUS_MASK |
+#endif // USE_DASICS
+                SSTATUS_MASKS[RV64][enums::MHSU]},
             {CSR_SIE, SI_MASK[enums::MHSU]},
             {CSR_SIP, SI_MASK[enums::MHSU]},
             {CSR_VSSTATUS, SSTATUS_MASKS[RV64][enums::MHSU]},
@@ -2436,6 +2527,8 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
 
 #if USE_DASICS
             // DASICS CSR masks.
+            {CSR_USTATUS               , USTATUS_MASK          },
+            {CSR_SEDELEG               , SEDELEG_MASK          },
             {CSR_DASICS_U_MAIN_CFG     , DASICS_U_MAIN_CFG_MASK},
             {CSR_DASICS_U_MAIN_BOUND_LO, DASICS_BOUND_MASK     },
             {CSR_DASICS_U_MAIN_BOUND_HI, DASICS_BOUND_MASK     },
@@ -2577,6 +2670,10 @@ CSRWriteMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
             {CSR_MIDELEG, 0ULL},
             {CSR_MEDELEG, 0ULL},
             {CSR_MSTATUS,
+#if USE_DASICS
+                // DASICS user-trap state shared with USTATUS.
+                USTATUS_MASK |
+#endif // USE_DASICS
                 STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
                 STATUS_MIE_MASK | STATUS_MPIE_MASK | STATUS_MPP_MASK |
                 STATUS_TW_MASK  |
@@ -2588,6 +2685,10 @@ CSRWriteMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
             {CSR_MIDELEG, MIDELEG_MASK[enums::MSU]},
             {CSR_MEDELEG, DELEGABLE_EXCPS_RV64},
             {CSR_MSTATUS,
+#if USE_DASICS
+                // DASICS user-trap state shared with USTATUS.
+                USTATUS_MASK |
+#endif // USE_DASICS
                 STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
                 STATUS_MIE_MASK | STATUS_MPIE_MASK | STATUS_MPP_MASK |
                 STATUS_TW_MASK  | STATUS_TVM_MASK  |
@@ -2601,6 +2702,10 @@ CSRWriteMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
                 SEI_MASK | SSI_MASK | STI_MASK // added for S
             },
             {CSR_SSTATUS,
+#if USE_DASICS
+                // UIE and UPIE share storage with MSTATUS and USTATUS.
+                USTATUS_MASK |
+#endif // USE_DASICS
                 STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
                 STATUS_SIE_MASK | STATUS_SPIE_MASK | // no TSR here!
                 STATUS_SPP_MASK  | STATUS_SUM_MASK | STATUS_MXR_MASK
@@ -2615,6 +2720,10 @@ CSRWriteMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
             {CSR_MIDELEG, MIDELEG_MASK[enums::MHSU]},
             {CSR_MEDELEG, DELEGABLE_EXCPS_WITH_RVH},
             {CSR_MSTATUS,
+#if USE_DASICS
+                // DASICS user-trap state shared with USTATUS.
+                USTATUS_MASK |
+#endif // USE_DASICS
                 STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
                 STATUS_MIE_MASK | STATUS_MPIE_MASK | STATUS_MPP_MASK |
                 STATUS_TW_MASK  | STATUS_TVM_MASK  |
@@ -2630,6 +2739,10 @@ CSRWriteMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
                 VSSI_MASK // added for H
             },
             {CSR_SSTATUS,
+#if USE_DASICS
+                // UIE and UPIE share storage with MSTATUS and USTATUS.
+                USTATUS_MASK |
+#endif // USE_DASICS
                 STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
                 STATUS_SIE_MASK | STATUS_SPIE_MASK | // no TSR here!
                 STATUS_SPP_MASK  | STATUS_SUM_MASK | STATUS_MXR_MASK

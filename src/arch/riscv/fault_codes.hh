@@ -193,6 +193,13 @@ const RegVal DELEGABLE_EXCPS_RV64 =
 const RegVal DELEGABLE_EXCPS_RV64 = DELEGABLE_EXCPS;
 #endif // USE_DASICS
 
+#if USE_DASICS
+// SEDELEG only supports exceptions originating in non-virtualized U mode.
+const RegVal SEDELEG_MASK =
+    DELEGABLE_EXCPS_RV64 & ~((1ULL << ECALL_SUPER) | (1ULL << ECALL_MACHINE) |
+                             (1ULL << DASICS_S_CHECK));
+#endif // USE_DASICS
+
 // RV64 machine delegation also includes H-extension exception causes.
 const RegVal DELEGABLE_EXCPS_WITH_RVH =
     DELEGABLE_EXCPS_RV64 | (1ULL << ECALL_VIRTUAL_SUPER) |

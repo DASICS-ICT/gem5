@@ -181,7 +181,11 @@ const std::array<const char *, NUM_MISCREGS> MiscRegNames = {{
     [MISCREG_PMPADDR14] = "PMPADDR14",
     [MISCREG_PMPADDR15] = "PMPADDR15",
 
+#if USE_DASICS
+    [MISCREG_SEDELEG] = "SEDELEG",
+#else
     [MISCREG_RESERVED01] = "",
+#endif // USE_DASICS
     [MISCREG_RESERVED02] = "",
     [MISCREG_STVEC] = "STVEC",
     [MISCREG_SCOUNTEREN] = "SCOUNTEREN",
@@ -192,11 +196,19 @@ const std::array<const char *, NUM_MISCREGS> MiscRegNames = {{
     [MISCREG_SATP] = "SATP",
     [MISCREG_SENVCFG] = "SENVCFG",
 
+#if USE_DASICS
+    [MISCREG_UTVEC] = "UTVEC",
+    [MISCREG_USCRATCH] = "USCRATCH",
+    [MISCREG_UEPC] = "UEPC",
+    [MISCREG_UCAUSE] = "UCAUSE",
+    [MISCREG_UTVAL] = "UTVAL",
+#else
     [MISCREG_RESERVED03] = "",
     [MISCREG_RESERVED04] = "",
     [MISCREG_RESERVED05] = "",
     [MISCREG_RESERVED06] = "",
     [MISCREG_RESERVED07] = "",
+#endif // USE_DASICS
     [MISCREG_FFLAGS] = "FFLAGS",
     [MISCREG_FRM] = "FRM",
 
@@ -684,10 +696,12 @@ ISA::readMiscReg(RegIndex idx)
             return misa.rvh ? mideleg_val | HS_INTERRUPTS : mideleg_val;
 
         }
-      case MISCREG_SEPC:
-      case MISCREG_MEPC:
-      case MISCREG_MNEPC:
-        {
+#if USE_DASICS
+        case MISCREG_UEPC:
+#endif // USE_DASICS
+        case MISCREG_SEPC:
+        case MISCREG_MEPC:
+        case MISCREG_MNEPC: {
             MISA misa = readMiscRegNoEffect(MISCREG_ISA);
             auto val = readMiscRegNoEffect(idx);
             // if compressed instructions are disabled, epc[1] is set to 0
@@ -985,8 +999,20 @@ ISA::setMiscReg(RegIndex idx, RegVal val)
                 ic->setIE(val);
             }
             break;
-          case MISCREG_SATP:
-            {
+#if USE_DASICS
+            case MISCREG_UTVEC: {
+                UTVEC cur_val = readMiscRegNoEffect(idx);
+                UTVEC new_val = val;
+                // Reserved MODE values preserve the old mode while
+                // accepting the new BASE field.
+                if (new_val.mode > 1) {
+                    new_val.mode = cur_val.mode;
+                }
+                setMiscRegNoEffect(idx, new_val);
+            } break;
+#endif // USE_DASICS
+
+            case MISCREG_SATP: {
                 // we only support bare and Sv39 mode; setting a different mode
                 // shall have no effect (see 4.1.12 in priv ISA manual)
                 SATP cur_val = readMiscRegNoEffect(idx);
@@ -1006,8 +1032,7 @@ ISA::setMiscReg(RegIndex idx, RegVal val)
                 // large ASID space."
 
                 setMiscRegNoEffect(idx, new_val);
-            }
-            break;
+            } break;
 
           case MISCREG_VSATP:
             {
@@ -1426,6 +1451,12 @@ ISA::writeCSR(ExecContext *xc, uint64_t csr, RegVal writeData)
     auto midx = csr_it->second.physIndex;
 
     switch (csr) {
+#if USE_DASICS
+        case CSR_SEDELEG:
+            // Only causes already delegated by M can be delegated to U.
+            writeData &= xc->readMiscReg(MISCREG_MEDELEG);
+            break;
+#endif // USE_DASICS
         case CSR_SIP: case CSR_SIE:
         case CSR_HIP: case CSR_HIE:
         {

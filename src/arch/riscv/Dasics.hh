@@ -73,13 +73,18 @@ bool dasicsMemAccessIsAllowed(Addr address, unsigned size, bool isWrite,
 bool dasicsInstIsTrusted(ExecContext *xc, unsigned vaddrBits);
 
 /**
- * Check DASICS CSR access after ordinary CSR permission checks.
- * miscReg is the internal MISCREG index, not the architectural CSR address.
- * A rejected access returns an illegal-instruction fault without updating
- * FReason or any other architectural state.
+ * Check DASICS restrictions after ordinary CSR permission checks.
+ * machInst supplies the original CSR address to distinguish aliases sharing
+ * the same internal register.
+ * Supervisor trap CSR reads and writes require trust in the non-virtualized
+ * S domain. Implicit trap-state updates do not pass through this check.
+ * Virtualized accesses to user-trap support CSRs return a
+ * virtual-instruction fault; other rejected accesses return an
+ * illegal-instruction fault. Neither path updates FReason or any other
+ * architectural state.
  */
-Fault dasicsCsrAccessCheck(ExecContext *xc, RegIndex miscReg,
-                           ExtMachInst machInst, unsigned vaddrBits);
+Fault dasicsCsrAccessCheck(ExecContext *xc, ExtMachInst machInst,
+                           unsigned vaddrBits);
 
 /**
  * Authorize DASICSCALL in an enabled, non-virtualized U/S domain.

@@ -86,7 +86,7 @@ _start:
     li      s4, 0
     li      s5, 0
     /* s1 selects entry 0/1, forms 2-5, boundaries 6-8, addresses 9-11,
-     * or ordinary CSR controls 12/13. */
+     * cycle control 12, or sscratch rejection/return 13/14. */
     li      s1, 0
     la      t0, mode_entry
 enter_lower_mode:
@@ -295,6 +295,8 @@ trap_handler:
     beq     s1, t0, .Lexpect_illegal
     li      t0, 10
     beq     s1, t0, .Lexpect_illegal
+    li      t0, 13
+    beq     s1, t0, .Lexpect_illegal
     /* The ECALL cause is 8 for U and 9 for non-virtualized S. */
     addi    t0, s3, 8
     j       .Lcheck_cause
@@ -338,6 +340,8 @@ trap_handler:
     beq     s1, t1, .Lordinary_cycle
     li      t1, 13
     beq     s1, t1, .Lordinary_sscratch
+    li      t1, 14
+    beq     s1, t1, .Lordinary_sscratch_resumed
     li      a2, 3
     j       exit_test
 
@@ -595,7 +599,7 @@ trap_handler:
     j       .Lstart_access_case
 
 .Lstart_ordinary_controls:
-    /* Empty active bounds make both ordinary controls untrusted. */
+    /* Both probes are untrusted; only sscratch requires source trust. */
     csrw    CSR_DASICS_S_MAIN_CFG, zero
     li      t0, 0
     li      t1, 0
@@ -631,18 +635,37 @@ trap_handler:
     j       enter_lower_mode
 
 .Lordinary_sscratch:
+    li      a2, 13
+    la      t1, ordinary_sscratch_probe
+    bne     t0, t1, exit_test
+    li      a2, 14
+    lwu     t1, 0(t0)
+    csrr    t0, mtval
+    bne     t0, t1, exit_test
+    call    check_sscratch_rejected
+    li      s1, 14
+    csrr    t0, mepc
+    addi    t0, t0, 4
+    csrw    mepc, t0
+    mret
+
+.Lordinary_sscratch_resumed:
     li      a2, 26
     la      t1, ordinary_sscratch_ecall
     bne     t0, t1, exit_test
+    call    check_sscratch_rejected
+    j       .Lnext_domain
+
+check_sscratch_rejected:
     li      a2, 27
-    li      t0, LIB_CFG_INITIAL
+    li      t0, RD_SENTINEL
     bne     a0, t0, exit_test
     li      a2, 28
     csrr    t0, sscratch
-    li      t1, LIB_CFG_SOURCE
+    li      t1, LIB_CFG_INITIAL
     bne     t0, t1, exit_test
-    call    check_protection_state
-    j       .Lnext_domain
+    /* Tail-call the common checks so ra returns to either trap stage. */
+    j       check_protection_state
 
 .Lnext_domain:
     li      t0, PRV_S

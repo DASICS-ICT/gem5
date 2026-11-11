@@ -438,7 +438,7 @@ def template CSRExecute {{
 
 #if USE_DASICS
         Fault dasics_fault = dasicsCsrAccessCheck(
-            xc, midx, machInst, isa->getDasicsVAddrBits());
+            xc, machInst, isa->getDasicsVAddrBits());
         if (dasics_fault != NoFault) { return dasics_fault; }
 #endif // USE_DASICS
 

@@ -10,11 +10,13 @@
 | --- | --- |
 | LibCfg 的六种 CSR 指令及 `rd=x0`、`rs1=x0`、`zimm=0` 形式 | 24 项指令测试、72 个权限场景 |
 | LibCfg 的 PC 边界检查 | 24 个场景 |
-| 全部 52 个 DASICS CSR 地址的只读探测 | 312 个场景：285 个门禁场景、27 个普通特权拒绝场景 |
-| 普通 CSR 对照 | U/S 各读取 `cycle`，S 态额外读写 `sscratch` |
+| 本文 52 个自定义 DASICS CSR 地址的只读探测 | 312 个场景：285 个门禁场景、27 个普通特权拒绝场景 |
+| 普通 CSR 对照 | U/S 各允许读取 `cycle`，S 态检查非可信 `sscratch` CSRRW 被拒绝 |
 
 测试采用单 hart、RV64、裸机全系统与 O3 模型，使用 Semihosting 退出。
 输出位于本目录的 `build/m5out-o3/<CPU>/`。
+地址表保留原有 52 个自定义 CSR，新增的 7 个 U 态异常支持 CSR
+（包含 S 级 `SEDELEG`）不在该表覆盖范围。
 
 `enable_domain` 在 U 域设置 `UENA/CUET`，在 S 域设置 `SENA/CSET`，
 关闭对应域的 ECALL 保护。本文普通 cause `8/9` 的 ECALL 仅为测试框架的
@@ -31,7 +33,7 @@
 4. 当前域设置 `a0=0x5678` 并执行第一次 ECALL；M 态处理程序检查
    当前域对应的 `mcause`、`MPP`、精确 `mepc` 和 `a0`，将 `mepc` 加 4 后执行 `mret`。
 5. 当前域将 `a0` 加 1 并执行第二次 ECALL；M 态检查异常来源、顺序、
-   `mepc` 和 `a0=0x5679`，随后依次执行该域的指令权限表、边界表、全 CSR 地址表和
+   `mepc` 和 `a0=0x5679`，随后依次执行该域的指令权限表、边界表、CSR 地址表和
    普通 CSR 对照。U 域全部完成后从头执行 S 域；S 域全部完成后才能成功退出。
 
 | 当前域 | `s3` | 使能位 | 可信区边界 | ECALL `mcause` | 异常入口 `MPP` |
@@ -108,9 +110,9 @@ M 态跳过故障指令后，必须在 `B+4` 再次收到 ECALL，并重新检�
 边界元数据表每项包含 `lower`、`upper`、`enabled`、`allowed`
 四个 64 位字段，共 32 字节；每域的指令表完成后从边界表第一项继续执行。
 
-## 全 DASICS CSR 地址门禁
+## DASICS CSR 地址表门禁
 
-地址表按以下顺序覆盖全部 52 个架构 CSR 地址。SMainCfg 与 UMainCfg
+地址表按以下顺序覆盖本文 52 个自定义 DASICS CSR 地址。SMainCfg 与 UMainCfg
 共用内部状态，仍作为两个地址分别探测。每项包含 `trustedPC`、
 `untrustedPC`、`readerPC`、`minpriv` 四个 64 位字段，共 32 字节。
 
@@ -156,18 +158,25 @@ M 态同时设置 `mcounteren.CY` 和 `scounteren.CY`，允许 S/U 读取 `cycle
 | 当前域 | 指令 | 预期 |
 | --- | --- | --- |
 | U、S | `csrrs a0, 0xC00, zero` | `a0` 不再等于 `D`；不比较固定计数值 |
-| S | `csrrw a0, 0x140, a1` | `sscratch` 从 `P` 更新为 `Q`，`a0=P` |
+| S | `csrrw a0, 0x140, a1` | cause `2`，`a0=D`、`sscratch=P` |
 
-每项均检查后续 ECALL 的当前域原因、`MPP`、精确 `mepc`，以及
-LibCfg=`P`、FReason=`5`。U 态不执行 `sscratch` 对照，因为该 CSR 要求 S 特权。
+`cycle` 对照通过后续普通 ECALL 检查当前域 cause `8/9`、`MPP`、精确 `mepc`，
+以及 LibCfg=`P`、FReason=`5`。
 
-已知范围：[NanhuV5 FDI ISA](https://aul8ejtumo.feishu.cn/wiki/X3kawI6qoiIKejk3ZUdcebdqnOc)
-revision 221 §3.4 要求拒绝非可信 S 态对普通 CSR 的写入，浮点和可写向量 CSR 除外。
-当前尚未接入该规则；此处允许写 `sscratch` 仅描述现有实现，不能作为完整 ISA 一致性证明。
+S 态 `sscratch` 对照启用 SENA，并将 S 可信区设为 `[0, 0)`。
+`ordinary_sscratch_probe` 必须产生 cause `2`、`MPP=S`、
+`mepc=ordinary_sscratch_probe`，`mtval` 为原始 32 位指令编码，且
+`a0=D`、`sscratch=P`、LibCfg=`P`、FReason=`5`。
+M 态跳过 4 字节并返回 S 后，必须在 `ordinary_sscratch_ecall` 收到 cause `9`、
+`MPP=S`，并再次检查上述状态保持。U 态不执行此对照，因为该 CSR 要求 S 特权。
+
+当前非可信 S 态普通 CSR 读写门禁已接入 `SSTATUS`、`STVEC`、`SSCRATCH`、
+`SEPC`、`SCAUSE`、`STVAL`。这些异常 CSR 已保护，但尚未形成所有 S 态 CSR
+的统一访问限制；本用例仅检查上述六项中的 `SSCRATCH`。
 
 ## CSR 写后刷新策略
 
-全部 52 个 DASICS CSR 地址的写指令保留 `IsNonSpeculative` 和 `IsSerializeAfter`，
+本文地址表中 52 个自定义 CSR 的写指令保留 `IsNonSpeculative` 和 `IsSerializeAfter`，
 并按写意图增加 `IsSquashAfter`。O3 成功提交时先使 CSR 更新生效，再刷新年轻指令，
 从下一条 PC 重新取指。指令具有写意图时，S/U 域保护关闭、实际源值为零或写入值不变
 均不取消刷新；`rd=x0` 也不取消写意图。
@@ -185,7 +194,8 @@ revision 221 §3.4 要求拒绝非可信 S 态对普通 CSR 的写入，浮点�
 `2～5` 为指令权限用例，`6` 为边界允许访问后的 ECALL，
 `7` 为边界拒绝访问，`8` 为边界拒绝返回后的 ECALL；
 `9/10/11` 分别为地址表允许 ECALL、拒绝 CSR、拒绝返回后的 ECALL，
-`12/13` 分别为普通 `cycle` 和 `sscratch` 对照。
+`12` 为普通 `cycle` 允许对照的 ECALL，`13` 为 SSCRATCH 非法指令异常，
+`14` 为 SSCRATCH 恢复后的 ECALL。
 `s2=0` 表示初始框架；指令表和边界表分别编号 `1～12`，地址表编号 `1～52`，
 普通对照编号 `1/2`。结合 `s3`（`0=U`、`1=S`）和 `s1` 定位域、表及用例。
 地址表额外使用 `s4` 保存目标快照、`s5` 记录场景 `0/1/2`。
@@ -212,7 +222,7 @@ revision 221 §3.4 要求拒绝非可信 S 态对普通 CSR 的写入，浮点�
 | `11` | 允许访问时，LibCfg 不符合对应指令的预期结果 |
 | `12` | 允许访问时，FReason 被修改 |
 | `13` | 拒绝访问时，`mepc` 未指向预期 CSR 指令 |
-| `14` | 拒绝访问时，`mtval` 不等于指令编码 |
+| `14` | 拒绝访问时，`mtval` 不等于原始 32 位指令编码 |
 | `15` | 拒绝访问或返回后的 `a0` 哨兵被修改 |
 | `16` | 应保持的 LibCfg 初值被修改 |
 | `17` | 应保持的 FReason 被修改 |
@@ -224,7 +234,7 @@ revision 221 §3.4 要求拒绝非可信 S 态对普通 CSR 的写入，浮点�
 | `23` | 地址表目标 CSR 偏离快照 |
 | `24` | `cycle` 对照的 ECALL `mepc` 错误 |
 | `25` | `cycle` 对照未改变 `a0` 哨兵 |
-| `26` | `sscratch` 对照的 ECALL `mepc` 错误 |
-| `27` | `sscratch` 对照返回旧值错误 |
-| `28` | `sscratch` 对照写入新值错误 |
+| `26` | `sscratch` 恢复后 ECALL 的 `mepc` 错误 |
+| `27` | `sscratch` 拒绝或恢复后的 `a0` 哨兵被修改 |
+| `28` | `sscratch` 初值被修改 |
 | `124` | 宿主运行超时 |

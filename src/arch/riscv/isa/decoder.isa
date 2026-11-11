@@ -5793,6 +5793,48 @@ decode QUADRANT default Unknown::unknown() {
                         0x1: ebreak({{
                             return executeEBreakOrSemihosting(xc);
                         }}, IsSerializeAfter, IsNonSpeculative, No_OpClass);
+#if USE_DASICS
+                        0x2: decode RVTYPE {
+                            0x1: uret({{
+                                if (machInst.rs1 != 0 || machInst.rd != 0) {
+                                    return std::make_shared<IllegalInstFault>(
+                                        "Invalid URET encoding", machInst);
+                                }
+                                MISA misa = xc->readMiscReg(MISCREG_ISA);
+                                if (!misa.rvu) {
+                                    return std::make_shared<IllegalInstFault>(
+                                        "uret can't execute without RVU",
+                                        machInst);
+                                }
+
+                                // User trap state has no guest counterpart.
+                                if (virtualizationEnabled(xc)) {
+                                    return std::make_shared<VirtualInstFault>(
+                                        "uret in virtualized mode", machInst);
+                                }
+                                if (xc->readMiscReg(MISCREG_PRV) != PRV_U) {
+                                    return std::make_shared<IllegalInstFault>(
+                                        "uret requires U mode", machInst);
+                                }
+
+                                // Check source trust before restoring state.
+                                auto *isa = static_cast<RiscvISA::ISA *>(
+                                    xc->tcBase()->getIsaPtr());
+                                if (!dasicsInstIsTrusted(
+                                        xc, isa->getDasicsVAddrBits())) {
+                                    return std::make_shared<IllegalInstFault>(
+                                        "Untrusted URET", machInst);
+                                }
+
+                                STATUS status = xc->readMiscReg(
+                                    MISCREG_STATUS);
+                                NPC = rvSext(xc->readMiscReg(MISCREG_UEPC));
+                                status.uie = status.upie;
+                                status.upie = 1;
+                                xc->setMiscReg(MISCREG_STATUS, status);
+                            }}, IsSerializeAfter, IsNonSpeculative, IsReturn);
+                        }
+#endif // USE_DASICS
                     }
                     0x8: decode RS2 {
                         0x2: sret({{
@@ -5833,6 +5875,18 @@ decode QUADRANT default Unknown::unknown() {
                                 }
                                 NPC = NPC;
                             }
+
+#if USE_DASICS
+                            // Check source trust before changing the return
+                            // target, privilege mode, or status.
+                            auto *isa = static_cast<RiscvISA::ISA *>(
+                                xc->tcBase()->getIsaPtr());
+                            if (!dasicsInstIsTrusted(
+                                    xc, isa->getDasicsVAddrBits())) {
+                                return std::make_shared<IllegalInstFault>(
+                                    "Untrusted SRET", machInst);
+                            }
+#endif // USE_DASICS
 
                             NPC = virtualizationEnabled(xc) ?
                                 rvSext(xc->readMiscReg(MISCREG_VSEPC)) :

@@ -11,11 +11,14 @@ access checks, and ordinary CSR controls.
 | --- | --- |
 | Six LibCfg CSR instructions and `rd=x0`, `rs1=x0`, and `zimm=0` forms | 24 instruction tests, 72 permission scenarios |
 | LibCfg PC boundaries | 24 scenarios |
-| Read-only probes of all 52 DASICS CSR addresses | 312 scenarios: 285 DASICS access scenarios and 27 ordinary privilege rejections |
-| Ordinary CSR controls | U/S read `cycle`; S also reads and writes `sscratch` |
+| Read-only probes of the 52 custom DASICS CSR addresses in this table | 312 scenarios: 285 DASICS access scenarios and 27 ordinary privilege rejections |
+| Ordinary CSR controls | U/S may read `cycle`; S checks rejection of untrusted `sscratch` CSRRW |
 
 The test uses one RV64 hart, bare-metal full-system execution, an O3 model,
 and Semihosting termination. Outputs are under `build/m5out-o3/<CPU>/`.
+The address table retains the original 52 custom CSRs; it does not cover
+the seven newly added CSRs for U-mode exception support, including
+`SEDELEG`, which requires S privilege.
 
 `enable_domain` sets `UENA/CUET` in U mode and `SENA/CSET` in S mode,
 disabling the matching domain's ECALL protection. Ordinary cause `8/9`
@@ -38,7 +41,7 @@ not test ECALL protection; see the dedicated
    `mepc`, and `a0`, advances `mepc` by 4, then executes `mret`.
 5. Increment `a0` and execute the second ECALL in the current domain.
    The handler checks the trap origin, sequence, `mepc`, and `a0=0x5679`,
-   then runs the domain's instruction table, boundary table, full CSR address
+   then runs the domain's instruction table, boundary table, CSR address
    table, and ordinary CSR controls. After U mode completes, S mode starts
    from the beginning. Success requires completing all S-mode checks.
 
@@ -124,10 +127,10 @@ Each boundary metadata entry contains four 64-bit fields, totaling
 32 bytes: `lower`, `upper`, `enabled`, and `allowed`. Each domain starts
 at the first boundary entry after completing its instruction table.
 
-## All DASICS CSR addresses
+## DASICS CSR address table
 
-The address table covers all 52 architectural CSR addresses in the order
-below. SMainCfg and UMainCfg share internal state but are probed separately.
+The address table covers the 52 custom DASICS CSR addresses below.
+SMainCfg and UMainCfg share internal state but are probed separately.
 Each entry contains four 64-bit fields, totaling 32 bytes: `trustedPC`,
 `untrustedPC`, `readerPC`, and `minpriv`.
 
@@ -180,21 +183,27 @@ M mode sets both `mcounteren.CY` and `scounteren.CY` to allow S/U reads of
 | Domain | Instruction | Expected result |
 | --- | --- | --- |
 | U, S | `csrrs a0, 0xC00, zero` | `a0` differs from `D`; no fixed counter value is required |
-| S | `csrrw a0, 0x140, a1` | `sscratch` changes from `P` to `Q`, and `a0=P` |
+| S | `csrrw a0, 0x140, a1` | Cause `2`, with `a0=D` and `sscratch=P` |
 
-Each control checks the following ECALL's domain-specific cause, `MPP`,
-exact `mepc`, LibCfg=`P`, and FReason=`5`. U mode does not run the
-`sscratch` control because that CSR requires S privilege.
+The `cycle` controls check the following ordinary ECALL's domain-specific
+cause `8/9`, `MPP`, exact `mepc`, LibCfg=`P`, and FReason=`5`.
 
-Known scope: [NanhuV5 FDI ISA](https://aul8ejtumo.feishu.cn/wiki/X3kawI6qoiIKejk3ZUdcebdqnOc),
-revision 221 §3.4, requires rejecting untrusted S-mode writes to ordinary
-CSRs except floating-point and writable vector CSRs. That rule is not yet
-implemented here. Allowing `sscratch` writes describes the current
-implementation and does not establish full ISA conformance.
+The S-mode `sscratch` control enables SENA with an empty S trusted interval
+`[0, 0)`. `ordinary_sscratch_probe` must produce cause `2`, `MPP=S`, and
+`mepc=ordinary_sscratch_probe`, with the original 32-bit instruction in
+`mtval`. State must remain `a0=D`, `sscratch=P`, LibCfg=`P`, and FReason=`5`.
+After M mode skips four bytes and returns to S, an ECALL must occur at
+`ordinary_sscratch_ecall` with cause `9` and `MPP=S`, rechecking unchanged
+state. U mode omits this control because the CSR requires S privilege.
+
+The current DASICS gate protects untrusted S-mode reads and writes to
+`SSTATUS`, `STVEC`, `SSCRATCH`, `SEPC`, `SCAUSE`, and `STVAL`. These exception
+CSRs are protected, but access restrictions are not yet uniform across all
+S-mode CSRs. This test exercises only `SSCRATCH` among these six.
 
 ## CSR write flush policy
 
-Writes to all 52 DASICS CSR addresses retain `IsNonSpeculative` and
+Writes to the 52 custom CSR addresses in this table retain `IsNonSpeculative` and
 `IsSerializeAfter`, and add `IsSquashAfter` according to write intent.
 At successful O3 commit, the CSR update takes effect before younger
 instructions are squashed and fetch restarts at the next PC.
@@ -217,8 +226,9 @@ Register `s0` points to the current table entry. Register `s1` records the
 stage: `0/1` for the initial ECALL harness, `2–5` for instruction-permission
 entries, `6` for an allowed boundary ECALL, `7` for a rejected boundary CSR,
 and `8` for its return ECALL. Stages `9/10/11` identify the address table's
-allowed ECALL, rejected CSR, and return ECALL; `12/13` identify the ordinary
-`cycle` and `sscratch` controls.
+allowed ECALL, rejected CSR, and return ECALL. Stage `12` identifies the
+allowed `cycle` control's ECALL, `13` the SSCRATCH illegal-instruction trap,
+and `14` its return ECALL.
 Register `s2=0` identifies the initial harness; the instruction and boundary
 tables are each numbered `1–12`, the address table `1–52`, and the ordinary
 controls `1/2`. Use `s3` (`0=U`, `1=S`) and `s1` to locate the domain, table,
@@ -248,7 +258,7 @@ the handler does not implement general context preservation.
 | `11` | Unexpected LibCfg result for an allowed instruction |
 | `12` | Allowed access changed FReason |
 | `13` | Rejected access `mepc` is not at the expected CSR instruction |
-| `14` | Rejected access `mtval` does not match the instruction encoding |
+| `14` | Rejected access `mtval` does not match the original 32-bit instruction |
 | `15` | Rejected access or trap return changed the `a0` sentinel |
 | `16` | The initial LibCfg value changed when preservation was required |
 | `17` | FReason changed when preservation was required |
@@ -260,7 +270,7 @@ the handler does not implement general context preservation.
 | `23` | Address-table target CSR differs from its snapshot |
 | `24` | Incorrect ECALL `mepc` in the `cycle` control |
 | `25` | The `cycle` control did not change the `a0` sentinel |
-| `26` | Incorrect ECALL `mepc` in the `sscratch` control |
-| `27` | Incorrect old value returned by the `sscratch` control |
-| `28` | Incorrect new value written by the `sscratch` control |
+| `26` | Incorrect return-ECALL `mepc` in the `sscratch` control |
+| `27` | Rejected `sscratch` access or its return changed the `a0` sentinel |
+| `28` | The initial `sscratch` value changed |
 | `124` | Host timeout |

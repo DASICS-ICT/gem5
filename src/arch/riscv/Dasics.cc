@@ -21,83 +21,116 @@ namespace RiscvISA
 namespace
 {
 
+// Use CSR addresses to distinguish aliases of shared register storage.
+// SEDELEG controls user-trap delegation despite its S-mode access privilege.
 bool
-isDasicsMiscReg(RegIndex miscReg)
+isUserTrapCsr(uint64_t csr)
 {
-    switch (miscReg) {
-        // Main-region and call state.
-        case MISCREG_DASICS_MAIN_CFG:
-        case MISCREG_DASICS_MAIN_CALL_ENTRY:
-        case MISCREG_DASICS_RETURN_PC:
-        case MISCREG_DASICS_ACTIVE_ZONE_RETURN_PC:
-        case MISCREG_DASICS_FREASON:
-        case MISCREG_DASICS_U_MAIN_BOUND_LO:
-        case MISCREG_DASICS_U_MAIN_BOUND_HI:
-        case MISCREG_DASICS_S_MAIN_BOUND_LO:
-        case MISCREG_DASICS_S_MAIN_BOUND_HI:
-
-        // Data bounds.
-        case MISCREG_DASICS_LIB_CFG:
-        case MISCREG_DASICS_LIB_BOUND_LO0:
-        case MISCREG_DASICS_LIB_BOUND_HI0:
-        case MISCREG_DASICS_LIB_BOUND_LO1:
-        case MISCREG_DASICS_LIB_BOUND_HI1:
-        case MISCREG_DASICS_LIB_BOUND_LO2:
-        case MISCREG_DASICS_LIB_BOUND_HI2:
-        case MISCREG_DASICS_LIB_BOUND_LO3:
-        case MISCREG_DASICS_LIB_BOUND_HI3:
-        case MISCREG_DASICS_LIB_BOUND_LO4:
-        case MISCREG_DASICS_LIB_BOUND_HI4:
-        case MISCREG_DASICS_LIB_BOUND_LO5:
-        case MISCREG_DASICS_LIB_BOUND_HI5:
-        case MISCREG_DASICS_LIB_BOUND_LO6:
-        case MISCREG_DASICS_LIB_BOUND_HI6:
-        case MISCREG_DASICS_LIB_BOUND_LO7:
-        case MISCREG_DASICS_LIB_BOUND_HI7:
-        case MISCREG_DASICS_LIB_BOUND_LO8:
-        case MISCREG_DASICS_LIB_BOUND_HI8:
-        case MISCREG_DASICS_LIB_BOUND_LO9:
-        case MISCREG_DASICS_LIB_BOUND_HI9:
-        case MISCREG_DASICS_LIB_BOUND_LO10:
-        case MISCREG_DASICS_LIB_BOUND_HI10:
-        case MISCREG_DASICS_LIB_BOUND_LO11:
-        case MISCREG_DASICS_LIB_BOUND_HI11:
-        case MISCREG_DASICS_LIB_BOUND_LO12:
-        case MISCREG_DASICS_LIB_BOUND_HI12:
-        case MISCREG_DASICS_LIB_BOUND_LO13:
-        case MISCREG_DASICS_LIB_BOUND_HI13:
-        case MISCREG_DASICS_LIB_BOUND_LO14:
-        case MISCREG_DASICS_LIB_BOUND_HI14:
-        case MISCREG_DASICS_LIB_BOUND_LO15:
-        case MISCREG_DASICS_LIB_BOUND_HI15:
-
-        // Jump bounds.
-        case MISCREG_DASICS_JUMP_CFG:
-        case MISCREG_DASICS_JUMP_BOUND_LO0:
-        case MISCREG_DASICS_JUMP_BOUND_HI0:
-        case MISCREG_DASICS_JUMP_BOUND_LO1:
-        case MISCREG_DASICS_JUMP_BOUND_HI1:
-        case MISCREG_DASICS_JUMP_BOUND_LO2:
-        case MISCREG_DASICS_JUMP_BOUND_HI2:
-        case MISCREG_DASICS_JUMP_BOUND_LO3:
-        case MISCREG_DASICS_JUMP_BOUND_HI3:
+    switch (csr) {
+        case CSR_SEDELEG:
+        case CSR_USTATUS:
+        case CSR_UTVEC:
+        case CSR_USCRATCH:
+        case CSR_UEPC:
+        case CSR_UCAUSE:
+        case CSR_UTVAL:
             return true;
         default:
             return false;
     }
 }
 
-} // anonymous namespace
+bool
+isSupervisorTrapCsr(uint64_t csr)
+{
+    // These CSRs retain their ordinary VS aliases in virtualized execution.
+    switch (csr) {
+        case CSR_SSTATUS:
+        case CSR_STVEC:
+        case CSR_SSCRATCH:
+        case CSR_SEPC:
+        case CSR_SCAUSE:
+        case CSR_STVAL:
+            return true;
+        default:
+            return false;
+    }
+}
 
 bool
-dasicsCsrNeedsSquash(ExtMachInst machInst)
+isDasicsCsr(uint64_t csr)
 {
-    const auto csr_it = CSRData.find(machInst.funct12);
-    if (csr_it == CSRData.end() ||
-        !isDasicsMiscReg(csr_it->second.physIndex)) {
-        return false;
+    if (isUserTrapCsr(csr)) {
+        return true;
     }
 
+    switch (csr) {
+        // Main-region and call state.
+        case CSR_DASICS_U_MAIN_CFG:
+        case CSR_DASICS_S_MAIN_CFG:
+        case CSR_DASICS_MAIN_CALL_ENTRY:
+        case CSR_DASICS_RETURN_PC:
+        case CSR_DASICS_ACTIVE_ZONE_RETURN_PC:
+        case CSR_DASICS_FREASON:
+        case CSR_DASICS_U_MAIN_BOUND_LO:
+        case CSR_DASICS_U_MAIN_BOUND_HI:
+        case CSR_DASICS_S_MAIN_BOUND_LO:
+        case CSR_DASICS_S_MAIN_BOUND_HI:
+
+        // Data bounds.
+        case CSR_DASICS_LIB_CFG:
+        case CSR_DASICS_LIB_BOUND_LO0:
+        case CSR_DASICS_LIB_BOUND_HI0:
+        case CSR_DASICS_LIB_BOUND_LO1:
+        case CSR_DASICS_LIB_BOUND_HI1:
+        case CSR_DASICS_LIB_BOUND_LO2:
+        case CSR_DASICS_LIB_BOUND_HI2:
+        case CSR_DASICS_LIB_BOUND_LO3:
+        case CSR_DASICS_LIB_BOUND_HI3:
+        case CSR_DASICS_LIB_BOUND_LO4:
+        case CSR_DASICS_LIB_BOUND_HI4:
+        case CSR_DASICS_LIB_BOUND_LO5:
+        case CSR_DASICS_LIB_BOUND_HI5:
+        case CSR_DASICS_LIB_BOUND_LO6:
+        case CSR_DASICS_LIB_BOUND_HI6:
+        case CSR_DASICS_LIB_BOUND_LO7:
+        case CSR_DASICS_LIB_BOUND_HI7:
+        case CSR_DASICS_LIB_BOUND_LO8:
+        case CSR_DASICS_LIB_BOUND_HI8:
+        case CSR_DASICS_LIB_BOUND_LO9:
+        case CSR_DASICS_LIB_BOUND_HI9:
+        case CSR_DASICS_LIB_BOUND_LO10:
+        case CSR_DASICS_LIB_BOUND_HI10:
+        case CSR_DASICS_LIB_BOUND_LO11:
+        case CSR_DASICS_LIB_BOUND_HI11:
+        case CSR_DASICS_LIB_BOUND_LO12:
+        case CSR_DASICS_LIB_BOUND_HI12:
+        case CSR_DASICS_LIB_BOUND_LO13:
+        case CSR_DASICS_LIB_BOUND_HI13:
+        case CSR_DASICS_LIB_BOUND_LO14:
+        case CSR_DASICS_LIB_BOUND_HI14:
+        case CSR_DASICS_LIB_BOUND_LO15:
+        case CSR_DASICS_LIB_BOUND_HI15:
+
+        // Jump bounds.
+        case CSR_DASICS_JUMP_CFG:
+        case CSR_DASICS_JUMP_BOUND_LO0:
+        case CSR_DASICS_JUMP_BOUND_HI0:
+        case CSR_DASICS_JUMP_BOUND_LO1:
+        case CSR_DASICS_JUMP_BOUND_HI1:
+        case CSR_DASICS_JUMP_BOUND_LO2:
+        case CSR_DASICS_JUMP_BOUND_HI2:
+        case CSR_DASICS_JUMP_BOUND_LO3:
+        case CSR_DASICS_JUMP_BOUND_HI3:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool
+csrHasWriteIntent(ExtMachInst machInst)
+{
     switch (machInst.funct3) {
         case 0x1: // CSRRW
         case 0x5: // CSRRWI
@@ -111,6 +144,14 @@ dasicsCsrNeedsSquash(ExtMachInst machInst)
         default:
             return false;
     }
+}
+
+} // anonymous namespace
+
+bool
+dasicsCsrNeedsSquash(ExtMachInst machInst)
+{
+    return isDasicsCsr(machInst.funct12) && csrHasWriteIntent(machInst);
 }
 
 bool
@@ -222,19 +263,24 @@ dasicsInstIsTrusted(ExecContext *xc, unsigned vaddrBits)
 }
 
 Fault
-dasicsCsrAccessCheck(ExecContext *xc, RegIndex miscReg, ExtMachInst machInst,
-                     unsigned vaddrBits)
+dasicsCsrAccessCheck(ExecContext *xc, ExtMachInst machInst, unsigned vaddrBits)
 {
-    if (!isDasicsMiscReg(miscReg)) {
-        return NoFault;
+    const uint64_t csr = machInst.funct12;
+
+    // User trap CSRs have no guest aliases; keep their host state private.
+    if (isUserTrapCsr(csr) && virtualizationEnabled(xc)) {
+        return std::make_shared<VirtualInstFault>(
+            "User trap CSR is not accessible in virtualized mode", machInst);
     }
 
-    if (dasicsInstIsTrusted(xc, vaddrBits)) {
-        return NoFault;
+    // DASICS and supervisor trap CSRs require trust for reads and writes.
+    const bool requires_trust = isDasicsCsr(csr) || isSupervisorTrapCsr(csr);
+    if (requires_trust && !dasicsInstIsTrusted(xc, vaddrBits)) {
+        return std::make_shared<IllegalInstFault>(
+            "Untrusted access to protected CSR", machInst);
     }
 
-    return std::make_shared<IllegalInstFault>("Untrusted access to DASICS CSR",
-                                              machInst);
+    return NoFault;
 }
 
 Fault
