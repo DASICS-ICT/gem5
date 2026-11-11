@@ -1342,12 +1342,12 @@ decode QUADRANT default Unknown::unknown() {
                     ra = rvSext(PC + 4);
                     NPC = rvSext(PC + imm);
                 }}, IsDirectControl, IsUncondControl, IsCall,
-                    IsNonSpeculative, IsSerializeAfter, IsSquashAfter);
+                    IsNonSpeculative, IsSerializeAfter);
                 0x1: DasicsCallJR::dasicscall_jr({{
                     Rd = rvSext(PC + 4);
                     NPC = rvSext((Rs1 + imm) & ~0x1);
                 }}, IsIndirectControl, IsUncondControl, IsNonSpeculative,
-                    IsSerializeAfter, IsSquashAfter);
+                    IsSerializeAfter);
             }
         }
 #endif // USE_DASICS

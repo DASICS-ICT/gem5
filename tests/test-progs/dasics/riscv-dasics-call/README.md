@@ -104,15 +104,16 @@ make -C tests/test-progs/dasics/riscv-dasics-call/src
 
 ## 可选 O3 轨迹
 
-调用使用 `IsNonSpeculative`、`IsSerializeAfter` 和 `IsSquashAfter`；
-`xc->setMiscReg` 将隐式 ReturnPC 写入推迟到 O3 提交。
-软件返回 `0` 不能单独证明提交后的刷新时序。
+调用保留 `IsNonSpeculative` 和 `IsSerializeAfter`；`xc->setMiscReg` 将隐式
+ReturnPC 写入推迟到 O3 提交。预测正确时 Fetch 可以预先取得目标指令，年轻指令
+在 Rename 等待调用提交后再推进和发射，成功调用不额外请求 SquashAfter。
+预测错误和异常仍走普通 O3 冲刷路径。软件返回 `0` 不能单独证明这些时序关系。
 
 ```bash
 mkdir -p tests/test-progs/dasics/riscv-dasics-call/build/m5out-o3/v5_full-trace
 build/RISCV_DASICS/gem5.opt \
   --outdir=tests/test-progs/dasics/riscv-dasics-call/build/m5out-o3/v5_full-trace \
-  --debug-flags=Commit,Fetch,RiscvMisc \
+  --debug-flags=Commit,Fetch,Decode,Rename,IEW,IQ,RiscvMisc \
   --debug-file=dasics-call.trace \
   configs/dasics/riscv_dasics_o3_v5_full.py \
   tests/test-progs/dasics/riscv-dasics-call/build/riscv-dasics-call.elf
@@ -120,13 +121,16 @@ build/RISCV_DASICS/gem5.opt \
 
 轨迹位于独立的 `v5_full-trace/dasics-call.trace`，核对时按调用 PC 和序号关联：
 
-1. 从 `Trying to commit head instruction`、`Committing instruction with PC`
-   定位调用，区分 M 态初始化的 CSRRW 与调用隐式的
-   `Setting MiscReg DASICS_RETURN_PC` 写入。
-2. 检查后续 tick 的 `Squashing after squash after request` 和 Fetch 的
-   `Squash from commit`，区分提交后 SquashAfter 与普通分支预测错误重定向。
-3. 检查提交后的 Fetch 从调用的实际目标重新取指；`PC+4` 是链接和 ReturnPC，
-   不能将其当作调用后的取指目标。
+1. 由 Fetch 的 `Instruction PC ... created [sn:N]` 和调用助记符定位动态指令，
+   对应到 Commit 的 `Committing instruction with PC` 及隐式
+   `Setting MiscReg DASICS_RETURN_PC` 写入，区分 M 态初始化的 CSRRW。
+2. 检查 Rename 的 `Serialize after instruction encountered.`、
+   `Serialize before instruction encountered.` 和序列化等待。按同一线程与序号
+   关联 IQ 的 `Issuing instruction PC`，确认序号更大的年轻指令不早于调用提交发射。
+3. 成功调用本身不应出现带其序号的 `Executing squash after`；预测正确路径无需
+   因调用成功而重新取指。普通 `branch mispred`、Decode 的
+   `incorrect branch prediction detected at decode` 及异常冲刷仍可发生，
+   其他 CSR 或控制指令的 SquashAfter 也不应误归到该调用。
 
 ## 诊断
 

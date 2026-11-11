@@ -34,8 +34,8 @@ def template DasicsCallExecute {{
 
         %(code)s;
 
-        // ExecContext defers this write until O3 commit. Serialization and
-        // squash-after keep younger instructions from using an old ReturnPC.
+        // ExecContext defers this write until O3 commit. Serialize-after keeps
+        // younger instructions from executing with an old ReturnPC.
         xc->setMiscReg(MISCREG_DASICS_RETURN_PC, PC + 4);
         %(op_wb)s;
         return NoFault;

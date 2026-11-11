@@ -121,16 +121,19 @@ simulation output is under `build/m5out-o3/<CPU>/`. Run commands are in the
 
 ## Optional O3 traces
 
-Calls use `IsNonSpeculative`, `IsSerializeAfter`, and `IsSquashAfter`.
-`xc->setMiscReg` defers the implicit ReturnPC write until O3 commit.
-A software exit status of `0` does not independently establish the timing
-of the subsequent squash.
+Calls retain `IsNonSpeculative` and `IsSerializeAfter`. `xc->setMiscReg`
+defers the implicit ReturnPC write until O3 commit. On a correctly predicted
+path, Fetch may already have target instructions, while younger instructions
+wait at Rename until the call commits before progressing and issuing.
+Successful calls request no additional SquashAfter; mispredictions and
+exceptions still use normal O3 squash paths. A software exit status of `0`
+does not independently establish these timing relationships.
 
 ```bash
 mkdir -p tests/test-progs/dasics/riscv-dasics-call/build/m5out-o3/v5_full-trace
 build/RISCV_DASICS/gem5.opt \
   --outdir=tests/test-progs/dasics/riscv-dasics-call/build/m5out-o3/v5_full-trace \
-  --debug-flags=Commit,Fetch,RiscvMisc \
+  --debug-flags=Commit,Fetch,Decode,Rename,IEW,IQ,RiscvMisc \
   --debug-file=dasics-call.trace \
   configs/dasics/riscv_dasics_o3_v5_full.py \
   tests/test-progs/dasics/riscv-dasics-call/build/riscv-dasics-call.elf
@@ -139,14 +142,21 @@ build/RISCV_DASICS/gem5.opt \
 The trace is stored separately in `v5_full-trace/dasics-call.trace`.
 Correlate events using the call PC and sequence number:
 
-1. Locate the call with `Trying to commit head instruction` and
-   `Committing instruction with PC`. Distinguish the initializing M-mode
-   CSRRW from the call's implicit `Setting MiscReg DASICS_RETURN_PC` write.
-2. Check `Squashing after squash after request` in the subsequent tick and
-   Fetch's `Squash from commit`. Distinguish committed SquashAfter from an
-   ordinary branch-misprediction redirect.
-3. Confirm that post-commit Fetch restarts at the actual call target.
-   `PC+4` is the link and ReturnPC, rather than the post-call fetch target.
+1. Identify the dynamic call using Fetch's
+   `Instruction PC ... created [sn:N]` and its mnemonic. Match it to
+   Commit's `Committing instruction with PC` and the implicit
+   `Setting MiscReg DASICS_RETURN_PC` write, distinguishing initializing
+   M-mode CSRRW instructions.
+2. Check Rename's `Serialize after instruction encountered.`,
+   `Serialize before instruction encountered.`, and serialization stalls.
+   Match IQ's `Issuing instruction PC` by thread and sequence number; younger
+   instructions must not issue before the call commits.
+3. The successful call must not have an `Executing squash after` event with
+   its sequence number. A correct prediction needs no refetch solely because
+   the call succeeded. Ordinary `branch mispred`, Decode's
+   `incorrect branch prediction detected at decode`, and exception squashes
+   remain valid. Do not attribute another CSR or control instruction's
+   SquashAfter to the call.
 
 ## Diagnostics
 
