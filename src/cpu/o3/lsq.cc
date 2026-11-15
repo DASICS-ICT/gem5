@@ -54,6 +54,7 @@
 #include "base/stats/units.hh"
 #include "base/trace.hh"
 #include "base/types.hh"
+#include "config/use_dasics.hh"
 #include "cpu/inst_seq.hh"
 #include "cpu/o3/cpu.hh"
 #include "cpu/o3/dyn_inst.hh"
@@ -816,6 +817,18 @@ LSQ::pushRequest(const DynInstPtr& inst, bool isLoad, uint8_t *data,
 
     /* This is the place were instructions get the effAddr. */
     if (request->isTranslationComplete()) {
+#if USE_DASICS
+        if (inst->memAccessFault != NoFault) {
+            // Translation faults take priority over the saved ISA fault.
+            if (inst->getFault() == NoFault) {
+                inst->getFault() = inst->memAccessFault;
+            }
+            // Reject the whole access, including any translated prefix of a
+            // split load, before store forwarding or target data access.
+            request->setStateToFault();
+        }
+#endif // USE_DASICS
+
         if (request->isMemAccessRequired()) {
             inst->effAddr = request->getVaddr();
             inst->effSize = size;

@@ -49,6 +49,7 @@
 
 #include "base/refcnt.hh"
 #include "base/trace.hh"
+#include "config/use_dasics.hh"
 #include "cpu/base.hh"
 #include "cpu/exec_context.hh"
 #include "cpu/inst_res.hh"
@@ -145,6 +146,12 @@ class DynInst : public ExecContext, public RefCounted
 
     /** The kind of fault this instruction has generated. */
     Fault fault = NoFault;
+
+#if USE_DASICS
+    // ISA access-check result, separate from the final instruction fault.
+    // Retain it while translation or a retry reuses the same memory request.
+    Fault memAccessFault = NoFault;
+#endif // USE_DASICS
 
     /** InstRecord that tracks this instructions. */
     trace::InstRecord *traceData = nullptr;
@@ -399,6 +406,10 @@ class DynInst : public ExecContext, public RefCounted
     ////////////////////////////////////////////
 
     void demapPage(Addr vaddr, uint64_t asn) override;
+
+#if USE_DASICS
+    Fault deferMemAccessFault(const Fault &fault) override;
+#endif // USE_DASICS
 
     Fault initiateMemRead(Addr addr, unsigned size, Request::Flags flags,
             const std::vector<bool> &byte_enable) override;
@@ -962,6 +973,9 @@ class DynInst : public ExecContext, public RefCounted
         translationStarted(false);
         translationCompleted(false);
         savedRequest = nullptr;
+#if USE_DASICS
+        memAccessFault = NoFault;
+#endif // USE_DASICS
     }
 
     /** Returns iterator to this instruction in the list of all insts. */

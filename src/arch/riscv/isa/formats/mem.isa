@@ -183,14 +183,15 @@ def template LoadInitiateAcc {{
 
 #if USE_DASICS
         // Prefetch hints share this template but bypass scalar checks.
-        // Reject denied accesses before translation or result writeback.
+        // The CPU may defer this result until translation completes.
         if (!isPrefetch()) {
             auto *isa = static_cast<RiscvISA::ISA *>(
                 xc->tcBase()->getIsaPtr());
             Fault dasics_fault = dasicsMemAccessCheck(
                 xc, EA, sizeof(Mem), false, isa->getDasicsVAddrBits());
-            if (dasics_fault != NoFault) {
-                return dasics_fault;
+            Fault access_fault = xc->deferMemAccessFault(dasics_fault);
+            if (access_fault != NoFault) {
+                return access_fault;
             }
         }
 #endif // USE_DASICS
@@ -266,12 +267,13 @@ def template StoreInitiateAcc {{
         %(ea_code)s;
 
 #if USE_DASICS
-        // Reject denied accesses before translation or memory side effects.
+        // The CPU may defer this result until translation completes.
         auto *isa = static_cast<RiscvISA::ISA *>(xc->tcBase()->getIsaPtr());
         Fault dasics_fault = dasicsMemAccessCheck(
             xc, EA, sizeof(Mem), true, isa->getDasicsVAddrBits());
-        if (dasics_fault != NoFault) {
-            return dasics_fault;
+        Fault access_fault = xc->deferMemAccessFault(dasics_fault);
+        if (access_fault != NoFault) {
+            return access_fault;
         }
 #endif // USE_DASICS
 

@@ -50,6 +50,7 @@
 #include "base/intmath.hh"
 #include "base/trace.hh"
 #include "base/types.hh"
+#include "config/use_dasics.hh"
 #include "cpu/base.hh"
 #include "cpu/checker/cpu.hh"
 #include "cpu/exetrace.hh"
@@ -426,6 +427,23 @@ DynInst::trap(const Fault &fault)
 {
     cpu->trap(fault, threadNumber, staticInst);
 }
+
+#if USE_DASICS
+Fault
+DynInst::deferMemAccessFault(const Fault &check_fault)
+{
+    // The checker executes atomic semantics with immediate access faults.
+    panic_if(cpu->checker,
+             "Deferred memory access faults are unsupported with CheckerCPU");
+
+    // Recompute on a new attempt, including replacing a fault with NoFault.
+    // Re-execution after translation or a cache retry keeps the saved result.
+    if (!translationStarted()) {
+        memAccessFault = check_fault;
+    }
+    return NoFault;
+}
+#endif // USE_DASICS
 
 Fault
 DynInst::initiateMemRead(Addr addr, unsigned size, Request::Flags flags,

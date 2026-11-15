@@ -43,6 +43,7 @@
 #define __CPU_EXEC_CONTEXT_HH__
 
 #include "base/types.hh"
+#include "config/use_dasics.hh"
 #include "cpu/base.hh"
 #include "cpu/reg_class.hh"
 #include "cpu/static_inst_fwd.hh"
@@ -114,6 +115,20 @@ class ExecContext
      * @{
      * @name Memory Interface
      */
+#if USE_DASICS
+    /**
+     * Submit a side-effect-free ISA access check for the full virtual byte
+     * range before initiating memory access. By default, return the fault
+     * for immediate handling. Contexts that defer it return NoFault and
+     * must resolve it after translation, before accessing data.
+     */
+    virtual Fault
+    deferMemAccessFault(const Fault &fault)
+    {
+        return fault;
+    }
+#endif // USE_DASICS
+
     /**
      * Perform an atomic memory read operation.  Must be overridden
      * for exec contexts that support atomic memory mode.  Not pure
