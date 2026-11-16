@@ -44,6 +44,7 @@ make clean-riscv-dasics
 | `riscv-dasics-control-flow` | [README](../tests/test-progs/dasics/riscv-dasics-control-flow/README.md) | [命令](#riscv-dasics-control-flow) |
 | `riscv-dasics-call` | [README](../tests/test-progs/dasics/riscv-dasics-call/README.md) | [命令](#riscv-dasics-call) |
 | `riscv-dasics-mem` | [README](../tests/test-progs/dasics/riscv-dasics-mem/README.md) | [命令](#riscv-dasics-mem) |
+| `riscv-dasics-mem-translation` | [README](../tests/test-progs/dasics/riscv-dasics-mem-translation/README.md) | [命令](#riscv-dasics-mem-translation) |
 | `riscv-dasics-user-trap` | [README](../tests/test-progs/dasics/riscv-dasics-user-trap/README.md) | [命令](#riscv-dasics-user-trap) |
 
 ## 测试复现
@@ -172,6 +173,23 @@ make dasics-test TEST=riscv-dasics-mem CPU=all
 
 ```bash
 make dasics-clean TEST=riscv-dasics-mem
+```
+
+### riscv-dasics-mem-translation
+
+```bash
+make riscv-dasics &&
+  make dasics-test TEST=riscv-dasics-mem-translation CPU=v5_full
+```
+
+```bash
+make dasics-test TEST=riscv-dasics-mem-translation CPU=all
+```
+
+#### 清理软件
+
+```bash
+make dasics-clean TEST=riscv-dasics-mem-translation
 ```
 
 ### riscv-dasics-user-trap

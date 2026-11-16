@@ -11,6 +11,8 @@ and Semihosting. The current [O3 models](../../../../configs/dasics/README.en.md
 use `RVA20S64` with `Zba/Zbb/Zbc/Zbs/V`; this test covers 27 integer, F/D,
 and RV64C memory instructions.
 Exit status `0` requires all 226 cases to complete.
+Bare disables paging while retaining alignment/PMP/PMA checks. TLB misses
+and page table walk waits are outside this test's coverage.
 
 Zfh, Zcb, and RV32-only forms are not included in the execution tests.
 AMO, LR/SC, vector memory accesses, prefetching, Hypervisor, CBO, paged
@@ -40,11 +42,11 @@ respectively. U traps enter M; S traps enter S.
 | 135–138 | The other domain's matching close bit does not bypass the check |
 | 139–142 | Trusted-PC bypass of data checks |
 | 143–154 | R/W isolation, the reserved U bit, and an invalid V bit |
-| 155–178 | Empty/reversed ranges, below/above range, final byte exactly inside, and crossing the upper bound |
+| 155–178 | Empty/reversed ranges, below/above range, final byte exactly inside; upper-bound crossings expect ordinary misalignment faults |
 | 179–182 | Masking of the low three bits in bound CSRs |
-| 183–186 | Rejection of high virtual addresses preserves the original TVAL |
-| 187–218 | U/S `ld/sd/fld/fsd`: DASICS denied/allowed combined with misalignment/PMP denial |
-| 219–222 | Adjacent bound groups cannot combine to authorize one access |
+| 183–186 | Bare address bit 63 produces ordinary access faults; check the original TVAL |
+| 187–218 | U/S `ld/sd/fld/fsd`: DASICS denied/allowed combined with misalignment/PMP denial, always expecting ordinary faults |
+| 219–222 | Misaligned accesses across adjacent bounds expect ordinary misalignment faults |
 | 223–226 | Read/write permission through bound group index 15 |
 
 ## Check contract
@@ -65,34 +67,41 @@ respectively. U traps enter M; S traps enter S.
   destination `fa0` to `0x8877665544332211`, and every byte of the 64-byte
   test memory to `0xF1`. Rejected accesses and ordinary faults must preserve
   both destinations and all test memory.
-- Allowed integer loads check sign/zero extension by width. FLW checks
+- Completed integer loads check sign/zero extension by width. FLW checks
   NaN-boxed `0xFFFFFFFFF1F1F1F1`; FLD and its compressed forms check
   `0xF1F1F1F1F1F1F1F1`. Integer stores use source `0x0807060504030201`,
   and FP stores use `0x1817161514131211`. Checks cover the written bytes
   at the access width and preserve `0xF1` elsewhere.
-- Each case starts with FS=`Clean(2)`. Allowed FP loads change it to
+- Each case starts with FS=`Clean(2)`. Completed FP loads change it to
   `Dirty(3)`; every other case preserves `Clean(2)`. The M handler checks FS
   before using `fmv.x.d` to inspect the FP destination. The S handler
   executes no FP instructions.
-- DASICS denials use U/S causes `24/25`, with FReason=`2` for loads and `3`
-  for stores, EPC at the probe PC, and TVAL holding the original effective
-  address. Normal completion and ordinary faults preserve FReason sentinel
-  `5`. Completion ECALLs are not delegated to S; exception return uses
+- When the DASICS fault is selected, U/S causes are `24/25`, with
+  FReason=`2` for loads and `3` for stores, EPC at the probe PC,
+  and TVAL holding the original effective address. Normal completion and
+  ordinary faults preserve FReason sentinel `5`. Completion ECALLs are not
+  delegated to S; exception return uses
   `resume_entry/resume_ecall`.
 
-The current gem5 implementation chooses DASICS checks before alignment/PMP
-checks. Conflict cases distinguish this ordering through exception causes:
-a DASICS denial must remain a DASICS exception; ordinary alignment/PMP faults
-become visible after DASICS allows the access. This is the current
-implementation's priority policy. The test does not use request traces to
-establish that no TLB or memory request was issued. Memory markers check
-architectural side effects only.
+O3 computes a candidate DASICS result at EA generation and continues
+translation. Ordinary faults take priority when translation finishes.
+If ordinary checks succeed and DASICS denies the access, no target data
+access is issued. This is the implementation contract. The test checks
+exceptions and architectural state without request traces establishing
+suppression of target data requests or absence of translation requests.
 
-| DASICS result | Subsequent condition | Load cause | Store cause |
+| Ordinary access condition | DASICS candidate | Load cause | Store cause |
 | --- | --- | --- | --- |
-| Denied | Misalignment or PMP denial | U=`24`, S=`25` | U=`24`, S=`25` |
-| Allowed | Misalignment | `4` | `6` |
-| Allowed | PMP denial | `5` | `7` |
+| Misalignment | Denied or allowed | `4` | `6` |
+| Ordinary access fault (PMP or Bare address rejection) | Denied or allowed | `5` | `7` |
+| Ordinary checks pass | Denied | U=`24`, S=`25` | U=`24`, S=`25` |
+
+Cases 160, 166, 172, 178, and 219–222 are masked by alignment faults and do
+not independently verify rejection of accesses crossing the upper bound or
+the rule against combining adjacent groups. Cases 183–186 check original
+TVAL for ordinary access faults and do not verify DASICS comparison of high
+address bits. Those rules need independent predicate tests or dedicated
+cases with legal ordinary accesses; this test does not add such coverage.
 
 ## Software build
 

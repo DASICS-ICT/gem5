@@ -671,35 +671,36 @@ cases_permissions:
     PERMISSION_CASES ld, PRV_S, 1, LIB_READ, LIB_WRITE
     PERMISSION_CASES sd, PRV_S, 1, LIB_WRITE, LIB_READ
 
-    .macro BOUNDARY_CASES name, mode, delegated
+    .macro BOUNDARY_CASES name, mode, delegated, misaligned
     CASE \name, \mode, \delegated, MAIN_CFG, LIB_RW, 0, 0, 0, EXPECT_DASICS
     CASE \name, \mode, \delegated, MAIN_CFG, LIB_RW, 8, 0, 0, EXPECT_DASICS
     CASE \name, \mode, \delegated, MAIN_CFG, LIB_RW, 8, 16, 0, EXPECT_DASICS
     CASE \name, \mode, \delegated, MAIN_CFG, LIB_RW, 0, 8, 8, EXPECT_DASICS
     CASE \name, \mode, \delegated, MAIN_CFG, LIB_RW, 0, 8, 0, 0
-    CASE \name, \mode, \delegated, MAIN_CFG, LIB_RW, 0, 8, 4, EXPECT_DASICS
+    /* Crossing the upper bound also misaligns this eight-byte access. */
+    CASE \name, \mode, \delegated, MAIN_CFG, LIB_RW, 0, 8, 4, \misaligned
     .endm
 cases_boundaries:
-    BOUNDARY_CASES ld, PRV_U, 0
-    BOUNDARY_CASES sd, PRV_U, 0
-    BOUNDARY_CASES ld, PRV_S, 1
-    BOUNDARY_CASES sd, PRV_S, 1
+    BOUNDARY_CASES ld, PRV_U, 0, 4
+    BOUNDARY_CASES sd, PRV_U, 0, 6
+    BOUNDARY_CASES ld, PRV_S, 1, 4
+    BOUNDARY_CASES sd, PRV_S, 1, 6
 cases_bound_alignment:
     CASE ld, PRV_U, 0, MAIN_CFG, LIB_RW, 4, 12, 0, 0
     CASE sd, PRV_U, 0, MAIN_CFG, LIB_RW, 4, 12, 0, 0
     CASE ld, PRV_S, 1, MAIN_CFG, LIB_RW, 4, 12, 0, 0
     CASE sd, PRV_S, 1, MAIN_CFG, LIB_RW, 4, 12, 0, 0
 cases_high_address:
-    /* Same low address bits as the allowed region, different full VA. */
-    CASE ld, PRV_U, 0, MAIN_CFG, LIB_RW, 0, 8, (1 << 63), EXPECT_DASICS
-    CASE sd, PRV_U, 0, MAIN_CFG, LIB_RW, 0, 8, (1 << 63), EXPECT_DASICS
-    CASE ld, PRV_S, 1, MAIN_CFG, LIB_RW, 0, 8, (1 << 63), EXPECT_DASICS
-    CASE sd, PRV_S, 1, MAIN_CFG, LIB_RW, 0, 8, (1 << 63), EXPECT_DASICS
+    /* Bare access faults take priority when physical bit 63 is set. */
+    CASE ld, PRV_U, 0, MAIN_CFG, LIB_RW, 0, 8, (1 << 63), 5
+    CASE sd, PRV_U, 0, MAIN_CFG, LIB_RW, 0, 8, (1 << 63), 7
+    CASE ld, PRV_S, 1, MAIN_CFG, LIB_RW, 0, 8, (1 << 63), 5
+    CASE sd, PRV_S, 1, MAIN_CFG, LIB_RW, 0, 8, (1 << 63), 7
 
     .macro PRIORITY_CASES name, mode, delegated, misaligned, access
-    CASE \name, \mode, \delegated, MAIN_CFG, 0, 0, 16, 1, EXPECT_DASICS
+    CASE \name, \mode, \delegated, MAIN_CFG, 0, 0, 16, 1, \misaligned
     CASE \name, \mode, \delegated, MAIN_CFG, LIB_RW, 0, 16, 1, \misaligned
-    CASE \name, \mode, \delegated, MAIN_CFG, 0, 0, 8, 0, EXPECT_DASICS, 1
+    CASE \name, \mode, \delegated, MAIN_CFG, 0, 0, 8, 0, \access, 1
     CASE \name, \mode, \delegated, MAIN_CFG, LIB_RW, 0, 8, 0, \access, 1
     .endm
 cases_priority:
@@ -713,10 +714,11 @@ cases_priority:
     PRIORITY_CASES fsd, PRV_S, 1, 6, 7
 cases_adjacent:
     /* Neither adjacent range alone covers this eight-byte access. */
-    CASE ld, PRV_U, 0, MAIN_CFG, 0xBB, 0, 8, 4, EXPECT_DASICS
-    CASE sd, PRV_U, 0, MAIN_CFG, 0xBB, 0, 8, 4, EXPECT_DASICS
-    CASE ld, PRV_S, 1, MAIN_CFG, 0xBB, 0, 8, 4, EXPECT_DASICS
-    CASE sd, PRV_S, 1, MAIN_CFG, 0xBB, 0, 8, 4, EXPECT_DASICS
+    /* The alignment fault takes priority over this full-range denial. */
+    CASE ld, PRV_U, 0, MAIN_CFG, 0xBB, 0, 8, 4, 4
+    CASE sd, PRV_U, 0, MAIN_CFG, 0xBB, 0, 8, 4, 6
+    CASE ld, PRV_S, 1, MAIN_CFG, 0xBB, 0, 8, 4, 4
+    CASE sd, PRV_S, 1, MAIN_CFG, 0xBB, 0, 8, 4, 6
 cases_last_slot:
     CASE ld, PRV_U, 0, MAIN_CFG, (LIB_READ << 60), 0, 8, 0, 0
     CASE sd, PRV_U, 0, MAIN_CFG, (LIB_WRITE << 60), 0, 8, 0, 0
