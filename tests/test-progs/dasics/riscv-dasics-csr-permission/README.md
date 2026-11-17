@@ -8,15 +8,15 @@
 
 | 覆盖范围 | 两域合计 |
 | --- | --- |
-| LibCfg 的六种 CSR 指令及 `rd=x0`、`rs1=x0`、`zimm=0` 形式 | 24 项指令测试、72 个权限场景 |
+| LibCfg、ContextBase 的六种 CSR 指令及 `rd=x0`、`rs1=x0`、`zimm=0` 形式 | 48 项指令测试、144 个权限场景 |
 | LibCfg 的 PC 边界检查 | 24 个场景 |
-| 本文 52 个自定义 DASICS CSR 地址的只读探测 | 312 个场景：285 个门禁场景、27 个普通特权拒绝场景 |
+| 本文 53 个自定义 DASICS CSR 地址的只读探测 | 318 个场景：291 个门禁场景、27 个普通特权拒绝场景 |
 | 普通 CSR 对照 | U/S 各允许读取 `cycle`，S 态检查非可信 `sscratch` CSRRW 被拒绝 |
 
 测试采用单 hart、RV64、裸机全系统与 O3 模型，使用 Semihosting 退出。
 输出位于本目录的 `build/m5out-o3/<CPU>/`。
-地址表保留原有 52 个自定义 CSR，新增的 7 个 U 态异常支持 CSR
-（包含 S 级 `SEDELEG`）不在该表覆盖范围。
+地址表覆盖 53 个自定义 CSR，包含 `DASICS_CONTEXT_BASE（0x8B4）`。
+7 个 U 态异常支持 CSR（包含 S 级 `SEDELEG`）不在该表覆盖范围。
 
 `enable_domain` 在 U 域设置 `UENA/CUET`，在 S 域设置 `SENA/CSET`，
 关闭对应域的 ECALL 保护。本文普通 cause `8/9` 的 ECALL 仅为测试框架的
@@ -41,35 +41,42 @@
 | U | `0` | `UENA`（bit 1） | UMainBoundLo/Hi | `8` | U |
 | S | `1` | `SENA`（bit 0） | SMainBoundLo/Hi | `9` | S |
 
-## LibCfg 权限用例
+## LibCfg 与 ContextBase 权限用例
 
 每项指令依次经过下表的阶段。阶段 2～4 均由 M 态重新设置
-LibCfg 初值 `P=0x13579BDF2468ACEF`、目标寄存器哨兵
+LibCfg 和 ContextBase 初值 `P=0x13579BDF2468ACEF`、目标寄存器哨兵
 `a0=D=0xA5A5A5A5A5A5A5A5` 和 `FReason=5`。
 使用 `a1` 的指令取源值 `Q=0xFEDCBA9876543210`，非零立即数为 `I=0x15`。
-两域复用同一张 12 项指令表及下面的阶段流程。
+两域复用同一张 24 项指令表及下面的阶段流程：前 12 项目标为
+LibCfg（`csr=0x880`），后 12 项为 ContextBase（`csr=0x8B4`），
+两者使用下表相同的指令形式和预期结果。
+
+ContextBase 保存 64 位原始值，不在 CSR 读写时检查地址合法性或对齐。
+这里的混合位模式用于检查全部位的读写，不作为实际指针解引用。
+可信 U/S 态和关闭对应域保护时允许访问，保护开启时非可信 U/S 态均拒绝。
+M 态在各阶段准备、读取该 CSR，也检查其在 S/U 保护开启时仍可访问。
 
 | 阶段 | 当前域使能位 | CSR 指令位置 | 预期 |
 | --- | --- | --- | --- |
 | 2：关闭保护 | `0` | 可信区上边界 | 允许访问，结果见下表；FReason=`5` |
 | 3：可信访问 | `1` | 可信区下边界 | 允许访问，结果见下表；FReason=`5` |
-| 4：非可信访问 | `1` | 可信区上边界，与阶段 2 为同一条指令 | 非法指令；`a0=D`、LibCfg=`P`、FReason=`5` |
-| 5：异常返回 | `1` | 非可信 CSR 后的 ECALL | 返回后状态仍为 `a0=D`、LibCfg=`P`、FReason=`5` |
+| 4：非可信访问 | `1` | 可信区上边界，与阶段 2 为同一条指令 | 非法指令；`a0=D`、两个目标 CSR 均为 `P`、FReason=`5` |
+| 5：异常返回 | `1` | 非可信 CSR 后的 ECALL | 返回后状态仍为 `a0=D`、两个目标 CSR 均为 `P`、FReason=`5` |
 
-| 编号 | 指令 | 允许访问后的 `a0` | 允许访问后的 LibCfg |
+| 编号 | 指令 | 允许访问后的 `a0` | 允许访问后的目标 CSR |
 | --- | --- | --- | --- |
-| 1 | `csrrw a0, 0x880, a1` | `P` | `Q` |
-| 2 | `csrrs a0, 0x880, a1` | `P` | `P \| Q` |
-| 3 | `csrrc a0, 0x880, a1` | `P` | `P & ~Q` |
-| 4 | `csrrwi a0, 0x880, 0x15` | `P` | `I` |
-| 5 | `csrrsi a0, 0x880, 0x15` | `P` | `P \| I` |
-| 6 | `csrrci a0, 0x880, 0x15` | `P` | `P & ~I` |
-| 7 | `csrrw zero, 0x880, a1` | `D` | `Q` |
-| 8 | `csrrwi zero, 0x880, 0x15` | `D` | `I` |
-| 9 | `csrrs a0, 0x880, zero` | `P` | `P` |
-| 10 | `csrrc a0, 0x880, zero` | `P` | `P` |
-| 11 | `csrrsi a0, 0x880, 0` | `P` | `P` |
-| 12 | `csrrci a0, 0x880, 0` | `P` | `P` |
+| 1 | `csrrw a0, csr, a1` | `P` | `Q` |
+| 2 | `csrrs a0, csr, a1` | `P` | `P \| Q` |
+| 3 | `csrrc a0, csr, a1` | `P` | `P & ~Q` |
+| 4 | `csrrwi a0, csr, 0x15` | `P` | `I` |
+| 5 | `csrrsi a0, csr, 0x15` | `P` | `P \| I` |
+| 6 | `csrrci a0, csr, 0x15` | `P` | `P & ~I` |
+| 7 | `csrrw zero, csr, a1` | `D` | `Q` |
+| 8 | `csrrwi zero, csr, 0x15` | `D` | `I` |
+| 9 | `csrrs a0, csr, zero` | `P` | `P` |
+| 10 | `csrrc a0, csr, zero` | `P` | `P` |
+| 11 | `csrrsi a0, csr, 0` | `P` | `P` |
+| 12 | `csrrci a0, csr, 0` | `P` | `P` |
 
 每项的可信块和非可信块各占 8 字节，均由 CSR 指令及紧随的 ECALL 组成。
 当前域的 MainBoundLo/Hi 定义半开区间 `[trustedPC, trustedPC + 8)`；
@@ -81,7 +88,8 @@ LibCfg 初值 `P=0x13579BDF2468ACEF`、目标寄存器哨兵
 `mtval` 等于该地址处的原始指令编码。M 态检查状态未被修改后，
 将 `mepc` 加 4 并返回当前域；随后必须执行紧随的 ECALL，检查
 当前域对应的 ECALL 原因、`MPP`、`mepc=untrustedPC+4` 和状态保持。
-只读形式和 `rd=x0` 形式同样必须被拒绝。
+只读形式和 `rd=x0` 形式同样必须被拒绝。允许访问时，另一个目标 CSR
+必须保持 `P`；拒绝访问及异常返回时，两个 CSR 均须保持 `P`。
 
 元数据表每项包含 `trustedPC`、`untrustedPC`、`sourceValue`、
 `allowedRd`、`allowedCSR` 五个 64 位字段，共 40 字节。
@@ -112,7 +120,7 @@ M 态跳过故障指令后，必须在 `B+4` 再次收到 ECALL，并重新检�
 
 ## DASICS CSR 地址表门禁
 
-地址表按以下顺序覆盖本文 52 个自定义 DASICS CSR 地址。SMainCfg 与 UMainCfg
+地址表按以下顺序覆盖本文 53 个自定义 DASICS CSR 地址。SMainCfg 与 UMainCfg
 共用内部状态，仍作为两个地址分别探测。每项包含 `trustedPC`、
 `untrustedPC`、`readerPC`、`minpriv` 四个 64 位字段，共 32 字节。
 
@@ -121,10 +129,11 @@ M 态跳过故障指令后，必须在 `B+4` 再次收到 ECALL，并重新检�
 | 1 | LibCfg | `0x880` | U |
 | 2～33 | LibBoundLo/Hi 0～15 | `0x890～0x8AF` | U |
 | 34～37 | MainCallEntry、ReturnPC、ActiveZoneReturnPC、FReason | `0x8B0～0x8B3` | U |
-| 38 | JumpCfg | `0x8C8` | U |
-| 39～46 | JumpBoundLo/Hi 0～3 | `0x8C0～0x8C7` | U |
-| 47～49 | UMainCfg、UMainBoundLo/Hi | `0x9E1～0x9E3` | S |
-| 50～52 | SMainCfg、SMainBoundLo/Hi | `0xBC0`、`0xBC2`、`0xBC3` | M |
+| 38 | ContextBase | `0x8B4` | U |
+| 39 | JumpCfg | `0x8C8` | U |
+| 40～47 | JumpBoundLo/Hi 0～3 | `0x8C0～0x8C7` | U |
+| 48～50 | UMainCfg、UMainBoundLo/Hi | `0x9E1～0x9E3` | S |
+| 51～53 | SMainCfg、SMainBoundLo/Hi | `0xBC0`、`0xBC2`、`0xBC3` | M |
 
 各地址使用静态生成的 `csrrs a0, csr, zero` 探针，不写入目标 CSR。
 可信块与非可信块各占 8 字节，均由探针和后续 ECALL 组成；
@@ -137,14 +146,14 @@ M 态跳过故障指令后，必须在 `B+4` 再次收到 ECALL，并重新检�
 | `1` | 开启 | 可信 | 允许 | cause 2 |
 | `2` | 开启 | 区外 | cause 2 | cause 2 |
 
-U 态有 46 个地址、S 态有 49 个地址满足普通特权要求，构成
-`(46+49)×3=285` 个门禁场景。其余 U 态 6 个、S 态 3 个地址在三种场景下
+U 态有 47 个地址、S 态有 50 个地址满足普通特权要求，构成
+`(47+50)×3=291` 个门禁场景。其余 U 态 6 个、S 态 3 个地址在三种场景下
 均因普通特权不足而拒绝，共 27 个场景；这些拒绝不能计为 DASICS 门禁验证。
 
-每个场景在 M 态配置保护开关和边界、重置 LibCfg=`P`、FReason=`5`、
+每个场景在 M 态配置保护开关和边界、重置 LibCfg=ContextBase=`P`、FReason=`5`、
 `a0=D` 后，通过该地址的 M 态读函数重新取得目标快照 `s4`。
 允许时检查 `a0=s4`；拒绝时检查 `a0=D`。两者均要求目标 CSR 等于快照、
-LibCfg=`P`、FReason=`5`，不对随配置变化的 MainCfg/MainBound 假设固定初值。
+LibCfg=ContextBase=`P`、FReason=`5`，不对随配置变化的 MainCfg/MainBound 假设固定初值。
 
 所有拒绝都检查 `mcause=2`、当前域 `MPP`、精确的探针 `mepc` 和原始编码 `mtval`。
 跳过探针后，必须在该探针的 `PC+4` 收到 ECALL，并重新检查状态保持。
@@ -176,7 +185,7 @@ M 态跳过 4 字节并返回 S 后，必须在 `ordinary_sscratch_ecall` 收到
 
 ## CSR 写后刷新策略
 
-本文地址表中 52 个自定义 CSR 的写指令保留 `IsNonSpeculative` 和 `IsSerializeAfter`，
+本文地址表中 53 个自定义 CSR 的写指令保留 `IsNonSpeculative` 和 `IsSerializeAfter`，
 并按写意图增加 `IsSquashAfter`。O3 成功提交时先使 CSR 更新生效，再刷新年轻指令，
 从下一条 PC 重新取指。指令具有写意图时，S/U 域保护关闭、实际源值为零或写入值不变
 均不取消刷新；`rd=x0` 也不取消写意图。
@@ -196,12 +205,14 @@ M 态跳过 4 字节并返回 S 后，必须在 `ordinary_sscratch_ecall` 收到
 `9/10/11` 分别为地址表允许 ECALL、拒绝 CSR、拒绝返回后的 ECALL，
 `12` 为普通 `cycle` 允许对照的 ECALL，`13` 为 SSCRATCH 非法指令异常，
 `14` 为 SSCRATCH 恢复后的 ECALL。
-`s2=0` 表示初始框架；指令表和边界表分别编号 `1～12`，地址表编号 `1～52`，
+`s2=0` 表示初始框架；指令表编号 `1～24`（LibCfg `1～12`，ContextBase `13～24`），
+边界表编号 `1～12`，地址表编号 `1～53`，
 普通对照编号 `1/2`。结合 `s3`（`0=U`、`1=S`）和 `s1` 定位域、表及用例。
 地址表额外使用 `s4` 保存目标快照、`s5` 记录场景 `0/1/2`。
+指令表使用 `s6` 选择目标：`0=LibCfg`、`1=ContextBase`。
 
 所有指令禁用压缩编码，ECALL 返回地址固定增加 4。测试不使用栈，
-`ra`、`t0/t1`、`a2/a3` 和 `s0～s5` 为异常框架保留寄存器；
+`ra`、`t0/t1`、`a2/a3` 和 `s0～s6` 为异常框架保留寄存器；
 `a0/a1` 保存用例操作数，不提供通用上下文保存恢复。
 
 ## 退出码
@@ -219,7 +230,7 @@ M 态跳过 4 字节并返回 S 后，必须在 `ordinary_sscratch_ecall` 收到
 | `8` | 关闭保护用例的 ECALL `mepc` 错误 |
 | `9` | 可信用例的 ECALL `mepc` 错误 |
 | `10` | 允许访问时，`a0` 不符合预期，包括 `rd=x0` 时的哨兵保持 |
-| `11` | 允许访问时，LibCfg 不符合对应指令的预期结果 |
+| `11` | 允许访问时，目标 CSR 不符合对应指令的预期结果 |
 | `12` | 允许访问时，FReason 被修改 |
 | `13` | 拒绝访问时，`mepc` 未指向预期 CSR 指令 |
 | `14` | 拒绝访问时，`mtval` 不等于原始 32 位指令编码 |
@@ -237,4 +248,5 @@ M 态跳过 4 字节并返回 S 后，必须在 `ordinary_sscratch_ecall` 收到
 | `26` | `sscratch` 恢复后 ECALL 的 `mepc` 错误 |
 | `27` | `sscratch` 拒绝或恢复后的 `a0` 哨兵被修改 |
 | `28` | `sscratch` 初值被修改 |
+| `29` | 应保持的 ContextBase 初值被修改 |
 | `124` | 宿主运行超时 |

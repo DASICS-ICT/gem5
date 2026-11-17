@@ -321,6 +321,8 @@ enum MiscRegIndex
     MISCREG_DASICS_ACTIVE_ZONE_RETURN_PC,
     // Per-hart DASICS fault reason shared by S and U modes.
     MISCREG_DASICS_FREASON,
+    // Per-hart software-context virtual base; validity is managed by software.
+    MISCREG_DASICS_CONTEXT_BASE,
     // Per-hart lower bound of the U-mode trusted code region.
     MISCREG_DASICS_U_MAIN_BOUND_LO,
     // Per-hart exclusive upper bound of the U-mode trusted code region.
@@ -708,6 +710,8 @@ enum CSRIndex
     CSR_DASICS_ACTIVE_ZONE_RETURN_PC = 0x8B2,
     // DASICS fault reason.
     CSR_DASICS_FREASON = 0x8B3,
+    // Experimental software-context base; minimum privilege is U.
+    CSR_DASICS_CONTEXT_BASE = 0x8B4,
 
     // clang-format off
     // Configuration for 16 data-bound regions; minimum privilege is U.
@@ -1517,6 +1521,9 @@ const std::unordered_map<int, CSRMetadata> CSRData = {
       rvTypeFlags(RV64), isaExtsFlags()}},
     {CSR_DASICS_FREASON,
      {"dasics_freason", MISCREG_DASICS_FREASON, rvTypeFlags(RV64),
+      isaExtsFlags()}},
+    {CSR_DASICS_CONTEXT_BASE,
+     {"dasics_context_base", MISCREG_DASICS_CONTEXT_BASE, rvTypeFlags(RV64),
       isaExtsFlags()}},
 
     // clang-format off

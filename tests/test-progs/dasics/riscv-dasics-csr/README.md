@@ -10,6 +10,7 @@
 | `DASICS_RETURN_PC` | `0x8B1` |
 | `DASICS_ACTIVE_ZONE_RETURN_PC` | `0x8B2` |
 | `DASICS_FREASON` | `0x8B3` |
+| `DASICS_CONTEXT_BASE` | `0x8B4` |
 | `DASICS_U_MAIN_BOUND_LO` | `0x9E2` |
 | `DASICS_U_MAIN_BOUND_HI` | `0x9E3` |
 | `DASICS_S_MAIN_BOUND_LO` | `0xBC2` |
@@ -23,7 +24,7 @@
 | `DASICS_JUMP_BOUND_LOi`（`i=0..3`） | `0x8C0 + 2*i` |
 | `DASICS_JUMP_BOUND_HIi`（`i=0..3`） | `0x8C1 + 2*i` |
 
-共 52 个 CSR 地址、51 份 DASICS 状态。UMainCfg/SMainCfg 共享 MainCfg，
+共 53 个 CSR 地址、52 份 DASICS 状态。UMainCfg/SMainCfg 共享 MainCfg，
 读写掩码分别为 `0x3E`、`0x3FF`；U 视图写入保留 S 专属字段 `0x3C1`。
 
 | 项目 | 值 |
@@ -57,7 +58,7 @@ ROB/IQ/LQ/SQ 容量，以及各级缓存容量和相联度；详细参数见模�
 
 `_start` 初始化 `mtvec` 后，依次调用 `test_csr_initial_values`、
 `test_main_call_entry`、`test_return_pc`、`test_active_zone_return_pc`、`test_freason`、
-`test_u_main_bound_lo`、`test_u_main_bound_hi`、`test_s_main_bound_lo`、
+`test_context_base`、`test_u_main_bound_lo`、`test_u_main_bound_hi`、`test_s_main_bound_lo`、
 `test_s_main_bound_hi`、`test_u_main_cfg`、`test_s_main_cfg`、`test_lib_cfg`，
 再按 Lo/Hi 交错顺序调用 `test_lib_bound_lo0`、`test_lib_bound_hi0`，
 直到 `test_lib_bound_lo15`、`test_lib_bound_hi15`（共 32 个函数），
@@ -70,18 +71,24 @@ CSR 号为编译期常量；四个 MainBound 函数仍显式定义。
 
 前三个全 64 位 CSR 的测试函数各自准备 `P = 0xFEDCBA9876543217` 和 `Q = 0x0123456789ABCDE3`。
 FReason 单独验证低 3 位读写、高位读零及交换、置位和清位。
-独立性检查另用 `R = 0x89ABCDEF01234565`，并将 FReason 设为 `2`。
+独立性检查另用 `R = 0x89ABCDEF01234565`，并将 FReason 设为 `2`、ContextBase 设为 `0xA5C3967812E04BF9`。
 MainBound 交换检查使用对齐值 `PA = 0xFEDCBA9876543210`、`QA = 0x0123456789ABCDE0`。
-LibCfg/JumpCfg 另用 `~P = 0x0123456789ABCDE8`，完整保存全部 64 位。
+LibCfg/JumpCfg/ContextBase 另用 `~P = 0x0123456789ABCDE8`，完整保存全部 64 位。
 JumpCfg 的 V 位位于 0/16/32/48，其余位同样保存读回；本测试不验证有效性消费。
 本测试在 `RiscvO3CPU` 的 M 态验证已有 CSR 的存储、读写掩码、共享视图和独立性；
 不覆盖授权、特权切换、保护使能效果、PC 可信检查或区间生效。
 
+`DASICS_CONTEXT_BASE` 是本项目的实验扩展，保存上下文区的虚拟基地址。
+其初值为 `0`，全部 64 位原样读写；不强制对齐，不自动检查虚拟地址合法性，
+也不自动访问保存区。保存区的映射、权限和地址有效性由软件负责。
+一次调用活动期间保持基址不变是软件约定，CSR 没有活动调用锁定机制。
+
 | 用例 | 操作 | 预期结果 |
 | --- | --- | --- |
-| 冷初始化 | `test_csr_initial_values` 在任何 DASICS CSR 写入前读取 52 个地址的初值 | 各自返回 `0` |
+| 冷初始化 | `test_csr_initial_values` 在任何 DASICS CSR 写入前读取 53 个地址的初值 | 各自返回 `0` |
 | 64 位读写 | 前三个 CSR 分别写入 P 后读回 | 各自完整返回 P，包含高 32 位、bit 63 和低 3 位 |
 | 读写交换 | 前三个 CSR 分别使用 `CSRRW` 写入 Q，随后读取 | 各自返回旧值 P，后续读取返回 Q |
+| ContextBase 读写、交换与置清位 | 写 P、交换写 `~P`，再用 P 置位和清位，另写 `0`、`-1` 和 `7` | 全部 64 位原样保存，包含 bit 63 和低 3 位；每次交换、置位和清位均检查旧值与新值 |
 | FReason 掩码与交换 | 写入 `-1` 后读回，再用 `CSRRW` 写入 `-6`；另检查写入 `0` 和 `-8` | 初次读回 `7`，交换返回旧值 `7`、新值为 `2`；写入 `0` 和 `-8` 均读回 `0` |
 | FReason 置位与清位 | 值为 `2` 时以 `-7` 为源执行 `CSRRS`，随后用同一源执行 `CSRRC` | 置位返回旧值 `2`、新值 `3`；清位返回旧值 `3`、新值 `2` |
 | MainBound 读写 | 四个函数各自验证对齐、非对齐、高位保留、交换及仅低位写入 | 低 3 位读零，写入向下对齐；交换返回对齐后的旧值，具体输入与错误码见下表 |
@@ -92,7 +99,7 @@ JumpCfg 的 V 位位于 0/16/32/48，其余位同样保存读回；本测试不�
 | LibBound 读写 | 32 个函数各自写 P、交换写 Q、再写 `7` | P 读回 PA；交换返回 PA，随后读 QA；写 `7` 读 `0` |
 | JumpCfg 读写、交换与置清位 | 采用与 LibCfg 相同的 P/`~P`、`CSRRW`、`CSRRS`、`CSRRC`、写 `0`/`-1` 检查 | 全部 64 位保存读回，旧值、新值与 LibCfg 对应检查相同 |
 | JumpBound 读写 | 8 个函数各自写 P、交换写 Q、再写 `7` | P 读回 PA；交换返回 PA，随后读 QA；写 `7` 读 `0` |
-| 存储独立性 | `test_csr_independence` 保留原 Q/P/R/2、四个 MainBound 的 `0x1000/0x2000/0x3000/0x4000` 和 S=`0x155`、U=`0x2A` 的自备数据；LibCfg=`0x13579BDF2468ACE1`，LibBound Lo_i=`0x10000 + 0x100*i`、Hi_i=`0x10080 + 0x100*i`；JumpCfg=`0x2468ACE113579BD5`，JumpBound Lo_i=`0x20000 + 0x100*i`、Hi_i=`0x20080 + 0x100*i` | 全部 51 份状态写完后读取 52 个视图；各值保持，S=`0x16B`、U=`0x2A`，不依赖其他函数状态 |
+| 存储独立性 | `test_csr_independence` 保留原 Q/P/R/2、四个 MainBound 的 `0x1000/0x2000/0x3000/0x4000` 和 S=`0x155`、U=`0x2A` 的自备数据；LibCfg=`0x13579BDF2468ACE1`，LibBound Lo_i=`0x10000 + 0x100*i`、Hi_i=`0x10080 + 0x100*i`；JumpCfg=`0x2468ACE113579BD5`，JumpBound Lo_i=`0x20000 + 0x100*i`、Hi_i=`0x20080 + 0x100*i`；ContextBase=`0xA5C3967812E04BF9` | 全部 52 份状态写完后读取 53 个视图；各值保持，S=`0x16B`、U=`0x2A`，不依赖其他函数状态 |
 
 ## 测试退出码
 
@@ -216,6 +223,24 @@ JumpBound 的 `i=0..3`；以下失败码均显示红色 `[FAIL]`。
 | 独立性（读各自的 Lo_i/Hi_i 预期值） | `226 + 2*i` | `227 + 2*i` | 226–233 |
 
 每个 JumpBound 读写函数的四个断言也共用一个失败码，只能定位到 CSR。
+
+ContextBase 的失败码如下，均显示红色 `[FAIL]`。原退出码 1–233 保持不变，
+`124` 仍仅表示宿主超时。
+
+| 检查 | 失败码 | 预期值 |
+| --- | --- | --- |
+| 冷初始化 | `234` | `0` |
+| 写 P 后读回 | `235` | P |
+| `CSRRW` 写 `~P` 的旧值 | `236` | P |
+| 交换后读回 | `237` | `~P` |
+| `CSRRS` 使用 P 的旧值 | `238` | `~P` |
+| 置位后读回 | `239` | `-1` |
+| `CSRRC` 使用 P 的旧值 | `240` | `-1` |
+| 清位后读回 | `241` | `~P` |
+| 写 `0` 后读回 | `242` | `0` |
+| 写 `-1` 后读回 | `243` | `-1` |
+| 仅低位写入后读回 | `244` | `7` |
+| 存储独立性 | `245` | `0xA5C3967812E04BF9` |
 
 ## 源码
 

@@ -9,15 +9,16 @@ access checks, and ordinary CSR controls.
 
 | Coverage | Total across both domains |
 | --- | --- |
-| Six LibCfg CSR instructions and `rd=x0`, `rs1=x0`, and `zimm=0` forms | 24 instruction tests, 72 permission scenarios |
+| Six CSR instructions for LibCfg and ContextBase and `rd=x0`, `rs1=x0`, and `zimm=0` forms | 48 instruction tests, 144 permission scenarios |
 | LibCfg PC boundaries | 24 scenarios |
-| Read-only probes of the 52 custom DASICS CSR addresses in this table | 312 scenarios: 285 DASICS access scenarios and 27 ordinary privilege rejections |
+| Read-only probes of the 53 custom DASICS CSR addresses in this table | 318 scenarios: 291 DASICS access scenarios and 27 ordinary privilege rejections |
 | Ordinary CSR controls | U/S may read `cycle`; S checks rejection of untrusted `sscratch` CSRRW |
 
 The test uses one RV64 hart, bare-metal full-system execution, an O3 model,
 and Semihosting termination. Outputs are under `build/m5out-o3/<CPU>/`.
-The address table retains the original 52 custom CSRs; it does not cover
-the seven newly added CSRs for U-mode exception support, including
+The address table covers 53 custom CSRs, including
+`DASICS_CONTEXT_BASE (0x8B4)`. It does not cover the seven CSRs for
+U-mode exception support, including
 `SEDELEG`, which requires S privilege.
 
 `enable_domain` sets `UENA/CUET` in U mode and `SENA/CSET` in S mode,
@@ -50,36 +51,46 @@ not test ECALL protection; see the dedicated
 | U | `0` | `UENA` (bit 1) | UMainBoundLo/Hi | `8` | U |
 | S | `1` | `SENA` (bit 0) | SMainBoundLo/Hi | `9` | S |
 
-## LibCfg permission cases
+## LibCfg and ContextBase permission cases
 
 Each instruction entry runs through the stages below. Before stages 2–4,
-M mode resets LibCfg to `P=0x13579BDF2468ACEF`, the destination sentinel
+M mode resets LibCfg and ContextBase to `P=0x13579BDF2468ACEF`, the
+destination sentinel
 to `a0=D=0xA5A5A5A5A5A5A5A5`, and FReason to `5`.
 Instructions using `a1` take the source value `Q=0xFEDCBA9876543210`;
-the nonzero immediate is `I=0x15`. Both domains reuse the same 12-entry
-instruction table and the stages below.
+the nonzero immediate is `I=0x15`. Both domains reuse the same 24-entry
+instruction table and the stages below. Entries 1–12 target LibCfg
+(`csr=0x880`); entries 13–24 target ContextBase (`csr=0x8B4`) using the
+same forms and expectations listed below.
+
+ContextBase stores all 64 bits without checking address validity or
+alignment during CSR access. The mixed-bit values test raw storage and
+are never dereferenced. Trusted U/S accesses and accesses with the matching
+domain disabled are allowed; untrusted U/S accesses are rejected when
+protection is enabled. M mode prepares and reads the CSR at every stage,
+including while S/U protection is enabled.
 
 | Stage | Current domain's enable bit | CSR instruction location | Expected result |
 | --- | --- | --- | --- |
 | 2: Protection disabled | `0` | Trusted region upper bound | Allowed; results below, FReason=`5` |
 | 3: Trusted access | `1` | Trusted region lower bound | Allowed; results below, FReason=`5` |
-| 4: Untrusted access | `1` | Upper bound; the same instruction as stage 2 | Illegal instruction; `a0=D`, LibCfg=`P`, FReason=`5` |
-| 5: Trap return | `1` | ECALL following the untrusted CSR | State remains `a0=D`, LibCfg=`P`, FReason=`5` |
+| 4: Untrusted access | `1` | Upper bound; the same instruction as stage 2 | Illegal instruction; `a0=D`, both CSRs=`P`, FReason=`5` |
+| 5: Trap return | `1` | ECALL following the untrusted CSR | State remains `a0=D`, both CSRs=`P`, FReason=`5` |
 
-| Entry | Instruction | Allowed `a0` result | Allowed LibCfg result |
+| Entry | Instruction | Allowed `a0` result | Allowed target CSR result |
 | --- | --- | --- | --- |
-| 1 | `csrrw a0, 0x880, a1` | `P` | `Q` |
-| 2 | `csrrs a0, 0x880, a1` | `P` | `P \| Q` |
-| 3 | `csrrc a0, 0x880, a1` | `P` | `P & ~Q` |
-| 4 | `csrrwi a0, 0x880, 0x15` | `P` | `I` |
-| 5 | `csrrsi a0, 0x880, 0x15` | `P` | `P \| I` |
-| 6 | `csrrci a0, 0x880, 0x15` | `P` | `P & ~I` |
-| 7 | `csrrw zero, 0x880, a1` | `D` | `Q` |
-| 8 | `csrrwi zero, 0x880, 0x15` | `D` | `I` |
-| 9 | `csrrs a0, 0x880, zero` | `P` | `P` |
-| 10 | `csrrc a0, 0x880, zero` | `P` | `P` |
-| 11 | `csrrsi a0, 0x880, 0` | `P` | `P` |
-| 12 | `csrrci a0, 0x880, 0` | `P` | `P` |
+| 1 | `csrrw a0, csr, a1` | `P` | `Q` |
+| 2 | `csrrs a0, csr, a1` | `P` | `P \| Q` |
+| 3 | `csrrc a0, csr, a1` | `P` | `P & ~Q` |
+| 4 | `csrrwi a0, csr, 0x15` | `P` | `I` |
+| 5 | `csrrsi a0, csr, 0x15` | `P` | `P \| I` |
+| 6 | `csrrci a0, csr, 0x15` | `P` | `P & ~I` |
+| 7 | `csrrw zero, csr, a1` | `D` | `Q` |
+| 8 | `csrrwi zero, csr, 0x15` | `D` | `I` |
+| 9 | `csrrs a0, csr, zero` | `P` | `P` |
+| 10 | `csrrc a0, csr, zero` | `P` | `P` |
+| 11 | `csrrsi a0, csr, 0` | `P` | `P` |
+| 12 | `csrrci a0, csr, 0` | `P` | `P` |
 
 Each entry has an 8-byte trusted block and an 8-byte untrusted block,
 each containing its CSR instruction and following ECALL.
@@ -94,7 +105,9 @@ domain, and `mepc=untrustedPC`, with `mtval` equal to the original instruction
 encoding at that address. After checking unchanged state, M mode advances
 `mepc` by 4 and returns to that domain. The following ECALL must then report
 the domain's ECALL cause and `MPP`, `mepc=untrustedPC+4`, and unchanged state.
-The read-only and `rd=x0` forms must also be rejected.
+The read-only and `rd=x0` forms must also be rejected. Allowed accesses
+must preserve the other CSR at `P`; rejections and their trap returns
+must preserve both CSRs at `P`.
 
 Each metadata entry contains five 64-bit fields, totaling 40 bytes:
 `trustedPC`, `untrustedPC`, `sourceValue`, `allowedRd`, and `allowedCSR`.
@@ -129,7 +142,7 @@ at the first boundary entry after completing its instruction table.
 
 ## DASICS CSR address table
 
-The address table covers the 52 custom DASICS CSR addresses below.
+The address table covers the 53 custom DASICS CSR addresses below.
 SMainCfg and UMainCfg share internal state but are probed separately.
 Each entry contains four 64-bit fields, totaling 32 bytes: `trustedPC`,
 `untrustedPC`, `readerPC`, and `minpriv`.
@@ -139,10 +152,11 @@ Each entry contains four 64-bit fields, totaling 32 bytes: `trustedPC`,
 | 1 | LibCfg | `0x880` | U |
 | 2–33 | LibBoundLo/Hi 0–15 | `0x890–0x8AF` | U |
 | 34–37 | MainCallEntry, ReturnPC, ActiveZoneReturnPC, FReason | `0x8B0–0x8B3` | U |
-| 38 | JumpCfg | `0x8C8` | U |
-| 39–46 | JumpBoundLo/Hi 0–3 | `0x8C0–0x8C7` | U |
-| 47–49 | UMainCfg, UMainBoundLo/Hi | `0x9E1–0x9E3` | S |
-| 50–52 | SMainCfg, SMainBoundLo/Hi | `0xBC0`, `0xBC2`, `0xBC3` | M |
+| 38 | ContextBase | `0x8B4` | U |
+| 39 | JumpCfg | `0x8C8` | U |
+| 40–47 | JumpBoundLo/Hi 0–3 | `0x8C0–0x8C7` | U |
+| 48–50 | UMainCfg, UMainBoundLo/Hi | `0x9E1–0x9E3` | S |
+| 51–53 | SMainCfg, SMainBoundLo/Hi | `0xBC0`, `0xBC2`, `0xBC3` | M |
 
 Each address has statically generated `csrrs a0, csr, zero` probes that do
 not write the target CSR. The trusted and untrusted blocks each contain a
@@ -156,17 +170,17 @@ Each address runs three scenarios:
 | `1` | Enabled | Trusted | Allow | Cause 2 |
 | `2` | Enabled | Outside | Cause 2 | Cause 2 |
 
-U mode satisfies ordinary privilege for 46 addresses and S mode for 49,
-giving `(46+49)×3=285` DASICS access scenarios. The other 6 U-mode and
+U mode satisfies ordinary privilege for 47 addresses and S mode for 50,
+giving `(47+50)×3=291` DASICS access scenarios. The other 6 U-mode and
 3 S-mode addresses are rejected by ordinary privilege in all three scenarios,
 giving 27 rejections. Those rejections do not validate DASICS access checks.
 
 For each scenario, M mode configures protection and bounds, resets
-LibCfg=`P`, FReason=`5`, and `a0=D`, then calls that address's M-mode reader
-to capture its current value in `s4`. Allowed reads must return `a0=s4`;
-rejected reads must preserve `a0=D`. Both require the target CSR to equal
-the snapshot, LibCfg=`P`, and FReason=`5`. MainCfg and MainBound values may
-depend on the scenario and are not assumed to be fixed constants.
+LibCfg=ContextBase=`P`, FReason=`5`, and `a0=D`, then calls that address's
+M-mode reader to capture its current value in `s4`. Allowed reads must return
+`a0=s4`; rejected reads must preserve `a0=D`. Both require the target CSR to equal
+the snapshot, LibCfg=ContextBase=`P`, and FReason=`5`. MainCfg and MainBound
+values may depend on the scenario and are not assumed to be fixed constants.
 
 Every rejection checks `mcause=2`, the current domain's `MPP`, the exact
 probe `mepc`, and its original encoding in `mtval`. After skipping the probe,
@@ -203,7 +217,7 @@ S-mode CSRs. This test exercises only `SSCRATCH` among these six.
 
 ## CSR write flush policy
 
-Writes to the 52 custom CSR addresses in this table retain `IsNonSpeculative` and
+Writes to the 53 custom CSR addresses in this table retain `IsNonSpeculative` and
 `IsSerializeAfter`, and add `IsSquashAfter` according to write intent.
 At successful O3 commit, the CSR update takes effect before younger
 instructions are squashed and fetch restarts at the next PC.
@@ -229,14 +243,16 @@ and `8` for its return ECALL. Stages `9/10/11` identify the address table's
 allowed ECALL, rejected CSR, and return ECALL. Stage `12` identifies the
 allowed `cycle` control's ECALL, `13` the SSCRATCH illegal-instruction trap,
 and `14` its return ECALL.
-Register `s2=0` identifies the initial harness; the instruction and boundary
-tables are each numbered `1–12`, the address table `1–52`, and the ordinary
-controls `1/2`. Use `s3` (`0=U`, `1=S`) and `s1` to locate the domain, table,
-and entry. The address table also uses `s4` for the target snapshot and
-`s5` for scenario `0/1/2`.
+Register `s2=0` identifies the initial harness; the instruction table is
+numbered `1–24` (LibCfg `1–12`, ContextBase `13–24`), the boundary table
+`1–12`, the address table `1–53`, and the ordinary controls `1/2`.
+Use `s3` (`0=U`, `1=S`) and `s1` to locate the domain, table, and entry.
+The address table also uses `s4` for the target snapshot and
+`s5` for scenario `0/1/2`. The instruction table uses `s6` to select its
+target: `0=LibCfg`, `1=ContextBase`.
 
 Compressed instructions are disabled, so ECALL return advances by 4 bytes.
-The test uses no stack. Registers `ra`, `t0/t1`, `a2/a3`, and `s0–s5` are
+The test uses no stack. Registers `ra`, `t0/t1`, `a2/a3`, and `s0–s6` are
 reserved for the harness. Registers `a0/a1` hold case operands;
 the handler does not implement general context preservation.
 
@@ -255,7 +271,7 @@ the handler does not implement general context preservation.
 | `8` | Incorrect ECALL `mepc` in the disabled case |
 | `9` | Incorrect ECALL `mepc` in the trusted case |
 | `10` | Unexpected allowed `a0` result, including sentinel preservation with `rd=x0` |
-| `11` | Unexpected LibCfg result for an allowed instruction |
+| `11` | Unexpected target CSR result for an allowed instruction |
 | `12` | Allowed access changed FReason |
 | `13` | Rejected access `mepc` is not at the expected CSR instruction |
 | `14` | Rejected access `mtval` does not match the original 32-bit instruction |
@@ -273,4 +289,5 @@ the handler does not implement general context preservation.
 | `26` | Incorrect return-ECALL `mepc` in the `sscratch` control |
 | `27` | Rejected `sscratch` access or its return changed the `a0` sentinel |
 | `28` | The initial `sscratch` value changed |
+| `29` | The initial ContextBase value changed when preservation was required |
 | `124` | Host timeout |

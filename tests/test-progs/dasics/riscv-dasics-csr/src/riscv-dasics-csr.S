@@ -32,6 +32,7 @@
     .equ CSR_DASICS_RETURN_PC, 0x8B1
     .equ CSR_DASICS_ACTIVE_ZONE_RETURN_PC, 0x8B2
     .equ CSR_DASICS_FREASON, 0x8B3
+    .equ CSR_DASICS_CONTEXT_BASE, 0x8B4
     .equ CSR_DASICS_U_MAIN_CFG, 0x9E1
     .equ CSR_DASICS_U_MAIN_BOUND_LO, 0x9E2
     .equ CSR_DASICS_U_MAIN_BOUND_HI, 0x9E3
@@ -102,6 +103,8 @@ _start:
     call    test_active_zone_return_pc
     bnez    a0, .Lfinish_tests
     call    test_freason
+    bnez    a0, .Lfinish_tests
+    call    test_context_base
     bnez    a0, .Lfinish_tests
     call    test_u_main_bound_lo
     bnez    a0, .Lfinish_tests
@@ -218,6 +221,9 @@ test_csr_initial_values:
     bnez    t0, .Linitial_values_done
     li      a0, 17
     csrr    t0, CSR_DASICS_FREASON
+    bnez    t0, .Linitial_values_done
+    li      a0, 234
+    csrr    t0, CSR_DASICS_CONTEXT_BASE
     bnez    t0, .Linitial_values_done
     li      a0, 28
     csrr    t0, CSR_DASICS_U_MAIN_BOUND_LO
@@ -476,6 +482,61 @@ test_freason:
     bnez    t1, .Lfreason_done
     li      a0, 0
 .Lfreason_done:
+    ret
+
+test_context_base:
+    /* ContextBase stores raw bits; pointer validity is a software contract. */
+    li      a0, 235
+    li      t0, 0xFEDCBA9876543217
+    csrw    CSR_DASICS_CONTEXT_BASE, t0
+    csrr    t1, CSR_DASICS_CONTEXT_BASE
+    bne     t1, t0, .Lcontext_base_done
+
+    li      a0, 236
+    not     t2, t0
+    csrrw   t1, CSR_DASICS_CONTEXT_BASE, t2
+    bne     t1, t0, .Lcontext_base_done
+
+    li      a0, 237
+    csrr    t1, CSR_DASICS_CONTEXT_BASE
+    bne     t1, t2, .Lcontext_base_done
+
+    li      a0, 238
+    csrrs   t1, CSR_DASICS_CONTEXT_BASE, t0
+    bne     t1, t2, .Lcontext_base_done
+
+    li      a0, 239
+    li      t2, -1
+    csrr    t1, CSR_DASICS_CONTEXT_BASE
+    bne     t1, t2, .Lcontext_base_done
+
+    li      a0, 240
+    csrrc   t1, CSR_DASICS_CONTEXT_BASE, t0
+    bne     t1, t2, .Lcontext_base_done
+
+    li      a0, 241
+    not     t2, t0
+    csrr    t1, CSR_DASICS_CONTEXT_BASE
+    bne     t1, t2, .Lcontext_base_done
+
+    li      a0, 242
+    csrw    CSR_DASICS_CONTEXT_BASE, zero
+    csrr    t1, CSR_DASICS_CONTEXT_BASE
+    bnez    t1, .Lcontext_base_done
+
+    li      a0, 243
+    li      t0, -1
+    csrw    CSR_DASICS_CONTEXT_BASE, t0
+    csrr    t1, CSR_DASICS_CONTEXT_BASE
+    bne     t1, t0, .Lcontext_base_done
+
+    li      a0, 244
+    li      t0, 7
+    csrw    CSR_DASICS_CONTEXT_BASE, t0
+    csrr    t1, CSR_DASICS_CONTEXT_BASE
+    bne     t1, t0, .Lcontext_base_done
+    li      a0, 0
+.Lcontext_base_done:
     ret
 
     /* MainBound tests preserve high bits and discard low alignment bits. */
@@ -957,6 +1018,8 @@ test_csr_independence:
     /* Distinct low bits detect aliasing with the masked FReason register. */
     li      t3, 2
     csrw    CSR_DASICS_FREASON, t3
+    li      t5, 0xA5C3967812E04BF9
+    csrw    CSR_DASICS_CONTEXT_BASE, t5
     li      t5, 0x1000
     csrw    CSR_DASICS_U_MAIN_BOUND_LO, t5
     li      t5, 0x2000
@@ -1264,6 +1327,10 @@ test_csr_independence:
     li      a0, 233
     li      t5, 0x20380
     csrr    t4, CSR_DASICS_JUMP_BOUND_HI3
+    bne     t4, t5, .Lindependence_done
+    li      a0, 245
+    li      t5, 0xA5C3967812E04BF9
+    csrr    t4, CSR_DASICS_CONTEXT_BASE
     bne     t4, t5, .Lindependence_done
     li      a0, 0
 .Lindependence_done:

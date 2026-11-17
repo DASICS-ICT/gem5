@@ -7,6 +7,7 @@
     .equ CSR_DASICS_S_MAIN_BOUND_HI, 0xBC3
     .equ CSR_DASICS_LIB_CFG, 0x880
     .equ CSR_DASICS_FREASON, 0x8B3
+    .equ CSR_DASICS_CONTEXT_BASE, 0x8B4
     .equ DASICS_UENA, (1 << 1)
     .equ DASICS_SENA, (1 << 0)
     .equ DASICS_CUET, (1 << 2)
@@ -85,6 +86,8 @@ _start:
     /* s4 preserves a target CSR snapshot; s5 selects its access scenario. */
     li      s4, 0
     li      s5, 0
+    /* s6 selects the instruction-form target: LibCfg or ContextBase. */
+    li      s6, 0
     /* s1 selects entry 0/1, forms 2-5, boundaries 6-8, addresses 9-11,
      * cycle control 12, or sscratch rejection/return 13/14. */
     li      s1, 0
@@ -107,13 +110,14 @@ mode_ecall_second:
     j       halt
 
     /* Emit the instruction pair and its expectations from the same case. */
-    .macro DEFINE_CSR_CASE name, op, rd, operand, source, old, value
+    .macro DEFINE_CSR_CASE name, op, rd, operand, source, old, value, \
+                           csr=CSR_DASICS_LIB_CFG
     .balign 8
 mode_\name\()_trusted:
-    \op     \rd, CSR_DASICS_LIB_CFG, \operand
+    \op     \rd, \csr, \operand
     ecall
 mode_\name\()_untrusted:
-    \op     \rd, CSR_DASICS_LIB_CFG, \operand
+    \op     \rd, \csr, \operand
     ecall
     j       halt
 
@@ -152,6 +156,37 @@ csr_cases:
                     LIB_CFG_INITIAL, LIB_CFG_INITIAL
     DEFINE_CSR_CASE csrrci_uimm_zero, csrrci, a0, 0, 0, \
                     LIB_CFG_INITIAL, LIB_CFG_INITIAL
+
+    .pushsection .rodata
+context_csr_cases:
+    .popsection
+
+    /* Exercise write intent and suppressed writes at the new CSR address. */
+    DEFINE_CSR_CASE context_csrrw, csrrw, a0, a1, LIB_CFG_SOURCE, \
+                    LIB_CFG_INITIAL, LIB_CFG_SOURCE, CSR_DASICS_CONTEXT_BASE
+    DEFINE_CSR_CASE context_csrrs, csrrs, a0, a1, LIB_CFG_SOURCE, \
+                    LIB_CFG_INITIAL, LIB_CFG_SET, CSR_DASICS_CONTEXT_BASE
+    DEFINE_CSR_CASE context_csrrc, csrrc, a0, a1, LIB_CFG_SOURCE, \
+                    LIB_CFG_INITIAL, LIB_CFG_CLEAR, CSR_DASICS_CONTEXT_BASE
+    DEFINE_CSR_CASE context_csrrwi, csrrwi, a0, CSR_IMMEDIATE, CSR_IMMEDIATE, \
+                    LIB_CFG_INITIAL, CSR_IMMEDIATE, CSR_DASICS_CONTEXT_BASE
+    DEFINE_CSR_CASE context_csrrsi, csrrsi, a0, CSR_IMMEDIATE, CSR_IMMEDIATE, \
+                    LIB_CFG_INITIAL, LIB_CFG_IMM_SET, CSR_DASICS_CONTEXT_BASE
+    DEFINE_CSR_CASE context_csrrci, csrrci, a0, CSR_IMMEDIATE, CSR_IMMEDIATE, \
+                    LIB_CFG_INITIAL, LIB_CFG_IMM_CLEAR, CSR_DASICS_CONTEXT_BASE
+    DEFINE_CSR_CASE context_csrrw_rd_zero, csrrw, zero, a1, LIB_CFG_SOURCE, \
+                    RD_SENTINEL, LIB_CFG_SOURCE, CSR_DASICS_CONTEXT_BASE
+    DEFINE_CSR_CASE context_csrrwi_rd_zero, csrrwi, zero, CSR_IMMEDIATE, \
+                    CSR_IMMEDIATE, RD_SENTINEL, CSR_IMMEDIATE, \
+                    CSR_DASICS_CONTEXT_BASE
+    DEFINE_CSR_CASE context_csrrs_rs1_zero, csrrs, a0, zero, 0, \
+                    LIB_CFG_INITIAL, LIB_CFG_INITIAL, CSR_DASICS_CONTEXT_BASE
+    DEFINE_CSR_CASE context_csrrc_rs1_zero, csrrc, a0, zero, 0, \
+                    LIB_CFG_INITIAL, LIB_CFG_INITIAL, CSR_DASICS_CONTEXT_BASE
+    DEFINE_CSR_CASE context_csrrsi_uimm_zero, csrrsi, a0, 0, 0, \
+                    LIB_CFG_INITIAL, LIB_CFG_INITIAL, CSR_DASICS_CONTEXT_BASE
+    DEFINE_CSR_CASE context_csrrci_uimm_zero, csrrci, a0, 0, 0, \
+                    LIB_CFG_INITIAL, LIB_CFG_INITIAL, CSR_DASICS_CONTEXT_BASE
 
     .pushsection .rodata
 csr_cases_end:
@@ -250,6 +285,7 @@ access_cases:
     DEFINE_ACCESS_PROBE return_pc            , 0x8B1
     DEFINE_ACCESS_PROBE active_zone_return_pc, 0x8B2
     DEFINE_ACCESS_PROBE freason              , 0x8B3
+    DEFINE_ACCESS_PROBE context_base         , 0x8B4
     DEFINE_ACCESS_PROBE jump_cfg             , 0x8C8
     DEFINE_ACCESS_PROBE jump_bound_lo0       , 0x8C0
     DEFINE_ACCESS_PROBE jump_bound_hi0       , 0x8C1
@@ -286,7 +322,7 @@ ordinary_sscratch_ecall:
 
     .balign 4
 trap_handler:
-    /* ra, t0/t1, a2/a3 and s0-s5 are reserved; a0/a1 hold case operands. */
+    /* ra, t0/t1, a2/a3 and s0-s6 are reserved; a0/a1 hold case operands. */
     csrr    a3, mcause
     li      a2, 1
     li      t0, 4
@@ -447,10 +483,15 @@ trap_handler:
     addi    s0, s0, CASE_SIZE
     la      t0, csr_cases_end
     beq     s0, t0, .Lstart_boundary_suite
+    la      t0, context_csr_cases
+    bne     s0, t0, .Lnext_form
+    li      s6, 1
+.Lnext_form:
     addi    s2, s2, 1
     j       .Lstart_case
 
 .Lstart_boundary_suite:
+    li      s6, 0
     la      s0, boundary_cases
     li      s2, 1
 .Lstart_boundary_case:
@@ -708,15 +749,25 @@ enable_domain:
     ret
 
 check_allowed_state:
-    /* t0/t1 supply the expected a0/LibCfg values; both are scratch. */
+    /* t0/t1 supply expected a0/target values; s6 selects the target CSR. */
     li      a2, 10
     bne     a0, t0, exit_test
     li      a2, 11
+    beqz    s6, .Lread_allowed_lib_cfg
+    csrr    t0, CSR_DASICS_CONTEXT_BASE
+    j       .Lcheck_allowed_csr
+.Lread_allowed_lib_cfg:
     csrr    t0, CSR_DASICS_LIB_CFG
+.Lcheck_allowed_csr:
     bne     t0, t1, exit_test
     li      a2, 12
     csrr    t0, CSR_DASICS_FREASON
     li      t1, FREASON_SENTINEL
+    bne     t0, t1, exit_test
+    beqz    s6, check_context_initial
+    li      a2, 16
+    csrr    t0, CSR_DASICS_LIB_CFG
+    li      t1, LIB_CFG_INITIAL
     bne     t0, t1, exit_test
     ret
 
@@ -734,12 +785,18 @@ check_protection_state:
     csrr    t0, CSR_DASICS_FREASON
     li      t1, FREASON_SENTINEL
     bne     t0, t1, exit_test
+check_context_initial:
+    li      a2, 29
+    csrr    t0, CSR_DASICS_CONTEXT_BASE
+    li      t1, LIB_CFG_INITIAL
+    bne     t0, t1, exit_test
     ret
 
 prepare_lib_cfg:
     /* M mode resets each case independently, including the CSR operands. */
     li      t0, LIB_CFG_INITIAL
     csrw    CSR_DASICS_LIB_CFG, t0
+    csrw    CSR_DASICS_CONTEXT_BASE, t0
     li      t0, FREASON_SENTINEL
     csrw    CSR_DASICS_FREASON, t0
     li      a0, RD_SENTINEL
