@@ -559,6 +559,9 @@ def configure_memory(system):
 def run_model(profile):
     parser = argparse.ArgumentParser(description=profile["name"])
     parser.add_argument("binary", help="RV64 bare-metal ELF")
+    parser.add_argument(
+        "--vlen", type=int, choices=(128, 256, 512, 1024), default=128
+    )
     args = parser.parse_args()
 
     system = RiscvSystem(mem_mode="timing", cache_line_size=64)
@@ -592,6 +595,7 @@ def run_model(profile):
     system.iobridge.mem_side_port = system.membus.cpu_side_ports
 
     configure_cpu_caches(system, profile)
+    system.cpu.isa[0].vlen = args.vlen
     system.cpu.mmu.pma_checker = PMAChecker(
         uncacheable=[
             *system.platform._on_chip_ranges(),
