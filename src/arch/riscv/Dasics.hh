@@ -87,15 +87,13 @@ Fault dasicsCsrAccessCheck(ExecContext *xc, ExtMachInst machInst,
                            unsigned vaddrBits);
 
 /**
- * Authorize DASICSCALL in an enabled, non-virtualized U/S domain.
- * The source PC must be trusted. M mode and disabled protection do not
- * authorize this instruction.
- * The caller handles decoding; machInst supplies the original encoding for
- * an ordinary illegal-instruction fault. This check does not change the PC,
- * link register, ReturnPC, FReason, or any other architectural state.
+ * Authorize DASICSCALL and PROREG only from a trusted source PC in an
+ * enabled, non-virtualized U or S domain. Deny other callers with an
+ * illegal-instruction fault carrying the original instruction encoding.
+ * The check has no architectural side effects.
  */
-Fault dasicsCallAccessCheck(ExecContext *xc, ExtMachInst machInst,
-                            unsigned vaddrBits);
+Fault dasicsTrustedDomainAccessCheck(ExecContext *xc, ExtMachInst machInst,
+                                     unsigned vaddrBits);
 
 /**
  * Check a resolved control transfer while xc still holds the source PC.

@@ -26,7 +26,7 @@ def template DasicsCallExecute {{
         %(op_rd)s;
 
         auto *isa = static_cast<RiscvISA::ISA *>(xc->tcBase()->getIsaPtr());
-        Fault fault = dasicsCallAccessCheck(
+        Fault fault = dasicsTrustedDomainAccessCheck(
             xc, machInst, isa->getDasicsVAddrBits());
         if (fault != NoFault) {
             return fault;
@@ -108,4 +108,54 @@ def format DasicsCallJR(code, *opt_flags) {{
     decoder_output = DasicsCallJRConstructor.subst(iop)
     decode_block = BasicDecode.subst(iop)
     exec_output = DasicsCallExecute.subst(iop) + DasicsCallJRMethods.subst(iop)
+}};
+
+def template DasicsProregGIDeclare {{
+    class %(class_name)s : public %(base_class)s
+    {
+      private:
+        %(reg_idx_arr_decl)s;
+
+      public:
+        %(class_name)s(ExtMachInst machInst);
+        Fault checkRenameAccess(ExecContext *xc) const override;
+        Fault execute(ExecContext *xc, trace::InstRecord *traceData)
+            const override;
+        std::string generateDisassembly(Addr pc,
+            const loader::SymbolTable *symtab) const override;
+    };
+}};
+
+def template DasicsProregGIMethods {{
+    Fault
+    %(class_name)s::checkRenameAccess(ExecContext *xc) const
+    {
+        auto *isa = static_cast<RiscvISA::ISA *>(xc->tcBase()->getIsaPtr());
+        return dasicsTrustedDomainAccessCheck(
+            xc, machInst, isa->getDasicsVAddrBits());
+    }
+
+    Fault
+    %(class_name)s::execute(ExecContext *xc,
+        trace::InstRecord *traceData) const
+    {
+        return NoFault;
+    }
+
+    std::string
+    %(class_name)s::generateDisassembly(
+            Addr pc, const loader::SymbolTable *symtab) const
+    {
+        return csprintf("%s 0x%03x", mnemonic, imm);
+    }
+}};
+
+def format DasicsProregGI(*opt_flags) {{
+    # The selector occupies the usual rd bits; it is not a register operand.
+    iop = InstObjParams("proreg.g.i", Name, "ImmOp<uint16_t>",
+        {"imm_code": "imm = IMM12;"}, opt_flags)
+    header_output = DasicsProregGIDeclare.subst(iop)
+    decoder_output = ImmConstructor.subst(iop)
+    decode_block = BasicDecode.subst(iop)
+    exec_output = DasicsProregGIMethods.subst(iop)
 }};

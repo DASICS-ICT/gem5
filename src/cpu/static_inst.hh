@@ -52,6 +52,7 @@
 #include "arch/generic/pcstate.hh"
 #include "base/logging.hh"
 #include "base/refcnt.hh"
+#include "config/use_dasics.hh"
 #include "cpu/op_class.hh"
 #include "cpu/reg_class.hh"
 #include "cpu/static_inst_fwd.hh"
@@ -172,6 +173,13 @@ class StaticInst : public RefCounted, public StaticInstFlags
     bool isSerializeBefore() const { return flags[IsSerializeBefore]; }
     bool isSerializeAfter() const { return flags[IsSerializeAfter]; }
     bool isSquashAfter() const { return flags[IsSquashAfter]; }
+#if USE_DASICS
+    bool
+    requiresRenamePermission() const
+    {
+        return flags[IsRenamePermissionRequired];
+    }
+#endif
     bool
     isFullMemBarrier() const
     {
@@ -290,6 +298,15 @@ class StaticInst : public RefCounted, public StaticInstFlags
 
   public:
     virtual ~StaticInst() {};
+
+#if USE_DASICS
+    /** Check permission without changing architectural state. */
+    virtual Fault
+    checkRenameAccess(ExecContext *) const
+    {
+        panic("%s has no Rename permission check", mnemonic);
+    }
+#endif
 
     virtual Fault execute(ExecContext *xc,
             trace::InstRecord *traceData) const = 0;

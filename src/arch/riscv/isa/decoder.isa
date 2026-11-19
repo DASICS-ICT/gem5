@@ -1336,8 +1336,13 @@ decode QUADRANT default Unknown::unknown() {
         }
 
 #if USE_DASICS
+        // The outer QUADRANT decode matched inst[1:0] = 0b11.
+        // OPCODE5 = 0x02 (inst[6:2] = 0b00010) completes custom-0 (0x0B).
         0x02: decode RVTYPE {
+            // RVTYPE comes from the PC state: 0 selects RV32, 1 selects RV64.
             0x1: decode FUNCT3 {
+                // FUNCT3 (inst[14:12]) selects the DASICS operation:
+                // 0 = DASICSCALL.J, 1 = DASICSCALL.JR, 3 = PROREG.G.
                 0x0: DasicsCallJ::dasicscall_j({{
                     ra = rvSext(PC + 4);
                     NPC = rvSext(PC + imm);
@@ -1348,6 +1353,17 @@ decode QUADRANT default Unknown::unknown() {
                     NPC = rvSext((Rs1 + imm) & ~0x1);
                 }}, IsIndirectControl, IsUncondControl, IsNonSpeculative,
                     IsSerializeAfter);
+                0x3: decode RD {
+                    // PROREG.G uses RD (inst[11:7]) as its mask selector:
+                    // 0 = immediate mask, 1 = reserved for a register mask.
+                    0x0: decode RS1 {
+                        // PROREG.G.I reads no source register, so RS1
+                        // (inst[19:15]) must be zero. IMM12 (inst[31:20])
+                        // holds the unsigned mask for s0 through s11.
+                        0x0: DasicsProregGI::proreg_g_i(
+                            IsRenamePermissionRequired, No_OpClass);
+                    }
+                }
             }
         }
 #endif // USE_DASICS

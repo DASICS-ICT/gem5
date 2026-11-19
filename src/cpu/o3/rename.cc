@@ -749,6 +749,16 @@ Rename::renameInsts(ThreadID tid)
             serializeAfter(insts_to_rename, tid);
         }
 
+#if USE_DASICS
+        // Carry a Rename denial with the instruction until commit.
+        if (inst->staticInst->requiresRenamePermission() &&
+            inst->getFault() == NoFault) {
+            inst->getFault() = inst->staticInst->checkRenameAccess(inst.get());
+            DPRINTF(Rename, "[tid:%i] [sn:%llu] %s rename access: %s\n", tid,
+                    inst->seqNum, inst->staticInst->getName(),
+                    inst->getFault() == NoFault ? "allowed" : "denied");
+        }
+#endif
         renameSrcRegs(inst, inst->threadNumber);
 
         renameDestRegs(inst, inst->threadNumber);

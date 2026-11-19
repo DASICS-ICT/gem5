@@ -285,12 +285,12 @@ dasicsCsrAccessCheck(ExecContext *xc, ExtMachInst machInst, unsigned vaddrBits)
 }
 
 Fault
-dasicsCallAccessCheck(ExecContext *xc, ExtMachInst machInst,
-                      unsigned vaddrBits)
+dasicsTrustedDomainAccessCheck(ExecContext *xc, ExtMachInst machInst,
+                               unsigned vaddrBits)
 {
     const auto mode = static_cast<PrivilegeMode>(xc->readMiscReg(MISCREG_PRV));
 
-    // Calls require an enabled U/S domain before source-PC trust is checked.
+    // The generic trust check returns true when domain protection is off.
     if ((mode == PRV_U || mode == PRV_S) && !virtualizationEnabled(xc)) {
         const DasicsMainCfg config = xc->readMiscReg(MISCREG_DASICS_MAIN_CFG);
         const bool enabled = mode == PRV_U ? static_cast<bool>(config.uena)
@@ -301,7 +301,8 @@ dasicsCallAccessCheck(ExecContext *xc, ExtMachInst machInst,
     }
 
     return std::make_shared<IllegalInstFault>(
-        "DASICS call requires enabled, trusted non-virtualized U/S execution",
+        "Instruction requires trusted execution in an enabled "
+        "non-virtualized U/S domain",
         machInst);
 }
 
