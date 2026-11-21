@@ -46,10 +46,10 @@
 #include <array>
 #include <iostream>
 #include <limits>
-#include <utility>
 #include <vector>
 
 #include "arch/generic/isa.hh"
+#include "config/use_dasics.hh"
 #include "cpu/o3/dyn_inst_ptr.hh"
 #include "cpu/o3/free_list.hh"
 #include "cpu/o3/regfile.hh"
@@ -74,6 +74,12 @@ class SimpleRenameMap
     using Arch2PhysMap = std::vector<PhysRegIdPtr>;
     /** The acutal arch-to-phys register map */
     Arch2PhysMap map;
+
+#if USE_DASICS
+    /** DASICS source-read restriction for each corresponding map entry. */
+    std::vector<bool> unreadable;
+#endif
+
   public:
     using iterator = Arch2PhysMap::iterator;
     using const_iterator = Arch2PhysMap::const_iterator;
@@ -96,20 +102,22 @@ class SimpleRenameMap
      */
     void init(const RegClass &reg_class, SimpleFreeList *_freeList);
 
-    /**
-     * Pair of a physical register and a physical register.  Used to
-     * return the physical register that a logical register has been
-     * renamed to, and the previous physical register that the same
-     * logical register was previously mapped to.
-     */
-    typedef std::pair<PhysRegIdPtr, PhysRegIdPtr> RenameInfo;
+    /** Result of renaming one destination register. */
+    struct RenameInfo
+    {
+        PhysRegIdPtr newPhysReg;
+        PhysRegIdPtr prevPhysReg;
+#if USE_DASICS
+        /** Source-read restriction on the previous integer mapping. */
+        bool prevUnreadable = false;
+#endif
+    };
 
     /**
      * Tell rename map to get a new free physical register to remap
      * the specified architectural register.
      * @param arch_reg The architectural register to remap.
-     * @return A RenameInfo pair indicating both the new and previous
-     * physical registers.
+     * @return The new mapping and the previous mapping's state.
      */
     RenameInfo rename(const RegId& arch_reg);
 
@@ -124,6 +132,22 @@ class SimpleRenameMap
         assert(arch_reg.index() <= map.size());
         return map[arch_reg.index()];
     }
+
+#if USE_DASICS
+    bool
+    isUnreadable(const RegId &arch_reg) const
+    {
+        assert(arch_reg.index() < unreadable.size());
+        return unreadable[arch_reg.index()];
+    }
+
+    void
+    setUnreadable(const RegId &arch_reg, bool value)
+    {
+        assert(arch_reg.index() < unreadable.size());
+        unreadable[arch_reg.index()] = value;
+    }
+#endif
 
     /**
      * Update rename map with a specific mapping.  Generally used to
@@ -199,8 +223,7 @@ class UnifiedRenameMap
      * the specified architectural register. This version takes a
      * RegId and reads the  appropriate class-specific rename table.
      * @param arch_reg The architectural register id to remap.
-     * @return A RenameInfo pair indicating both the new and previous
-     * physical registers.
+     * @return The new mapping and the previous mapping's state.
      */
     RenameInfo
     rename(const RegId& arch_reg)
@@ -215,7 +238,7 @@ class UnifiedRenameMap
             }
             // Set the new register to the previous one to keep the same
             // mapping throughout the execution.
-            return RenameInfo(phys_reg, phys_reg);
+            return {phys_reg, phys_reg};
         }
 
         return renameMaps[arch_reg.classValue()].rename(arch_reg);
@@ -241,6 +264,32 @@ class UnifiedRenameMap
         }
         return renameMaps[reg_class].lookup(arch_reg);
     }
+
+#if USE_DASICS
+    /** Bind unreadable integer sources to the zero source used for x0. */
+    PhysRegIdPtr
+    lookupSource(const RegId &arch_reg) const
+    {
+        if (arch_reg.is(IntRegClass) && isIntRegUnreadable(arch_reg)) {
+            return &invalidPhysRegId;
+        }
+        return lookup(arch_reg);
+    }
+
+    bool
+    isIntRegUnreadable(const RegId &arch_reg) const
+    {
+        assert(arch_reg.is(IntRegClass));
+        return renameMaps[IntRegClass].isUnreadable(arch_reg);
+    }
+
+    void
+    setIntRegUnreadable(const RegId &arch_reg, bool value)
+    {
+        assert(arch_reg.is(IntRegClass));
+        renameMaps[IntRegClass].setUnreadable(arch_reg, value);
+    }
+#endif
 
     /**
      * Update rename map with a specific mapping.  Generally used to

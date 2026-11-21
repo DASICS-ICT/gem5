@@ -47,6 +47,7 @@
 #include <bitset>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "arch/generic/pcstate.hh"
@@ -300,6 +301,23 @@ class StaticInst : public RefCounted, public StaticInstFlags
     virtual ~StaticInst() {};
 
 #if USE_DASICS
+    /**
+     * Bit N selects integer register xN. An empty optional means there
+     * is no PROREG request. A present zero mask selects no registers.
+     */
+    virtual std::optional<uint32_t>
+    intRegProtectionMask() const
+    {
+        return std::nullopt;
+    }
+
+    /** Supply the ISA fault for a protection request with occupied slots. */
+    virtual Fault
+    intRegProtectionConflictFault() const
+    {
+        panic("%s has no register protection conflict fault", mnemonic);
+    }
+
     /** Check permission without changing architectural state. */
     virtual Fault
     checkRenameAccess(ExecContext *) const

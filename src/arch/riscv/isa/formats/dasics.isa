@@ -118,6 +118,8 @@ def template DasicsProregGIDeclare {{
 
       public:
         %(class_name)s(ExtMachInst machInst);
+        std::optional<uint32_t> intRegProtectionMask() const override;
+        Fault intRegProtectionConflictFault() const override;
         Fault checkRenameAccess(ExecContext *xc) const override;
         Fault execute(ExecContext *xc, trace::InstRecord *traceData)
             const override;
@@ -127,6 +129,24 @@ def template DasicsProregGIDeclare {{
 }};
 
 def template DasicsProregGIMethods {{
+    std::optional<uint32_t>
+    %(class_name)s::intRegProtectionMask() const
+    {
+        // The ABI places s0-s1 at x8-x9 and s2-s11 at x18-x27.
+        const uint32_t s0_s1 = bits(imm, 1, 0);
+        const uint32_t s2_s11 = bits(imm, 11, 2);
+        return (s0_s1 << int_reg::S0.index()) |
+               (s2_s11 << int_reg::S2.index());
+    }
+
+    Fault
+    %(class_name)s::intRegProtectionConflictFault() const
+    {
+        return std::make_shared<IllegalInstFault>(
+            "PROREG.G.I requires all integer restore slots to be empty",
+            machInst);
+    }
+
     Fault
     %(class_name)s::checkRenameAccess(ExecContext *xc) const
     {

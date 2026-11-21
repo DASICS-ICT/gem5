@@ -12,6 +12,7 @@
     .equ ILLEGAL, 2
     .equ BREAKPOINT, 3
     .equ MSTATUS_MPP, 3 << 11
+    .equ CALLER_S3, 0x53
     /* custom-0, funct3=3, rd=rs1=0, imm12=0x008 (s3). */
     .equ PROREG_G_I_S3, 0x0080300B
 
@@ -53,6 +54,9 @@ start_case:
     ld      s4, 16(s0)              /* Expected mcause. */
     ld      s5, 24(s0)              /* Expected mepc. */
     ld      s6, 32(s0)              /* Failure message. */
+    li      s3, CALLER_S3
+    li      a3, -1
+    li      a4, -1
     li      a5, 0
     csrw    mepc, t0
     li      t0, MSTATUS_MPP
@@ -61,11 +65,14 @@ start_case:
     csrs    mstatus, t0
     mret
 
-    /* a5 becomes architecturally visible only after PROREG retires. */
+    /* Capture s3 on both sides of the first write to its protected mapping. */
     .macro PROBE name
     .balign 8
 \name:
     .word   PROREG_G_I_S3
+    mv      a3, s3
+    addi    s3, s3, 1
+    mv      a4, s3
     addi    a5, zero, 1
 \name\()_break:
     ebreak
@@ -89,11 +96,18 @@ machine_trap:
     bne     t0, s5, fail
     li      t0, BREAKPOINT
     bne     s4, t0, check_illegal
+    bnez    a3, fail
     li      t0, 1
+    bne     a4, t0, fail
     bne     a5, t0, fail
     j       case_passed
 check_illegal:
     bnez    a5, fail
+    li      t0, -1
+    bne     a3, t0, fail
+    bne     a4, t0, fail
+    li      t0, CALLER_S3
+    bne     s3, t0, fail
     csrr    t0, mtval
     li      t1, PROREG_G_I_S3
     bne     t0, t1, fail
@@ -128,10 +142,16 @@ halt:
     .section .rodata
     .balign 8
 cases:
-    .dword probe_a, PRV_U, BREAKPOINT, probe_a_break, trusted_u_failure
-    .dword probe_b, PRV_S, BREAKPOINT, probe_b_break, trusted_s_failure
+    /* Test trust denial before the successful probe occupies slot 18. */
+#if defined(PROREG_TEST_U)
     .dword probe_b, PRV_U, ILLEGAL,    probe_b,       untrusted_u_failure
+    .dword probe_a, PRV_U, BREAKPOINT, probe_a_break, trusted_u_failure
+#elif defined(PROREG_TEST_S)
     .dword probe_a, PRV_S, ILLEGAL,    probe_a,       untrusted_s_failure
+    .dword probe_b, PRV_S, BREAKPOINT, probe_b_break, trusted_s_failure
+#else
+#error "Select a U or S boot for the PROREG test"
+#endif
 cases_end:
 setup_failure:       .asciz "PROREG.G.I: setup failed\n"
 trusted_u_failure:   .asciz "PROREG.G.I: trusted U failed\n"

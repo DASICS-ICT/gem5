@@ -43,6 +43,7 @@
 
 #include <list>
 
+#include "base/bitfield.hh"
 #include "cpu/o3/cpu.hh"
 #include "cpu/o3/dyn_inst.hh"
 #include "cpu/o3/limits.hh"
@@ -754,6 +755,12 @@ Rename::renameInsts(ThreadID tid)
         if (inst->staticInst->requiresRenamePermission() &&
             inst->getFault() == NoFault) {
             inst->getFault() = inst->staticInst->checkRenameAccess(inst.get());
+            if (inst->getFault() == NoFault) {
+                const auto mask = inst->staticInst->intRegProtectionMask();
+                if (mask.has_value()) {
+                    inst->getFault() = protectIntRegs(inst, tid, *mask);
+                }
+            }
             DPRINTF(Rename, "[tid:%i] [sn:%llu] %s rename access: %s\n", tid,
                     inst->seqNum, inst->staticInst->getName(),
                     inst->getFault() == NoFault ? "allowed" : "denied");
@@ -949,20 +956,36 @@ Rename::unblock(ThreadID tid)
 void
 Rename::doSquash(const InstSeqNum &squashed_seq_num, ThreadID tid)
 {
-    auto hb_it = historyBuffer[tid].begin();
-
-    // After a syscall squashes everything, the history buffer may be empty
-    // but the ROB may still be squashing instructions.
-    // Go through the most recent instructions, undoing the mappings
-    // they did and freeing up the registers.
-    while (!historyBuffer[tid].empty() &&
-           hb_it->instSeqNum > squashed_seq_num) {
-        assert(hb_it != historyBuffer[tid].end());
-
+    auto &history = historyBuffer[tid];
+    // Undo changes youngest first, keeping the record at the squash boundary.
+    for (auto hb_it = history.begin();
+         hb_it != history.end() && hb_it->instSeqNum > squashed_seq_num;
+         hb_it = history.erase(hb_it)) {
         DPRINTF(Rename, "[tid:%i] Removing history entry with sequence "
                 "number %i (archReg: %d, newPhysReg: %d, prevPhysReg: %d).\n",
                 tid, hb_it->instSeqNum, hb_it->archReg.index(),
                 hb_it->newPhysReg->index(), hb_it->prevPhysReg->index());
+
+        ++stats.undoneMaps;
+#if USE_DASICS
+        if (hb_it->renameKind == RenameKind::Proreg) {
+            const auto reg_idx = hb_it->archReg.index();
+            assert(hb_it->archReg.is(IntRegClass) && reg_idx > 0 &&
+                   reg_idx <= RestoreState::NumIntSlots);
+            const auto slot = reg_idx - 1;
+            auto &state = restoreState[tid];
+            assert(hb_it->prevPhysReg == hb_it->newPhysReg);
+            assert(state.valid.test(slot) &&
+                   state.intRegs[slot] == hb_it->prevPhysReg);
+
+            renameMap[tid]->setIntRegUnreadable(hb_it->archReg,
+                                                hb_it->prevUnreadable);
+            hb_it->prevPhysReg->setReclaimBlocked(hb_it->prevReclaimBlocked);
+            state.valid.reset(slot);
+            // PROREG allocated no destination and did not produce its value.
+            continue;
+        }
+#endif
 
         // Undo the rename mapping only if it was really a change.
         // Special regs that are not really renamed (like misc regs
@@ -974,6 +997,13 @@ Rename::doSquash(const InstSeqNum &squashed_seq_num, ThreadID tid)
             // Tell the rename map to set the architected register to the
             // previous physical register that it was renamed to.
             renameMap[tid]->setEntry(hb_it->archReg, hb_it->prevPhysReg);
+#if USE_DASICS
+            if (hb_it->archReg.is(IntRegClass)) {
+                // Source reads must use the restored mapping's visibility.
+                renameMap[tid]->setIntRegUnreadable(hb_it->archReg,
+                                                    hb_it->prevUnreadable);
+            }
+#endif
 
             // The phys regs can still be owned by squashing but
             // executing instructions in IEW at this moment. To avoid
@@ -992,36 +1022,30 @@ Rename::doSquash(const InstSeqNum &squashed_seq_num, ThreadID tid)
         scoreboard->setReg(hb_it->newPhysReg);
 
         // Notify potential listeners that the register mapping needs to be
-        // removed because the instruction it was mapped to got squashed. Note
-        // that this is done before hb_it is incremented.
-        ppSquashInRename->notify(std::make_pair(hb_it->instSeqNum,
-                                                hb_it->newPhysReg));
-
-        historyBuffer[tid].erase(hb_it++);
-
-        ++stats.undoneMaps;
+        // removed because the instruction it was mapped to got squashed.
+        ppSquashInRename->notify(
+            std::make_pair(hb_it->instSeqNum, hb_it->newPhysReg));
     }
 }
 
 void
 Rename::removeFromHistory(InstSeqNum inst_seq_num, ThreadID tid)
 {
-    DPRINTF(Rename, "[tid:%i] Removing a committed instruction from the "
+    auto &history = historyBuffer[tid];
+    DPRINTF(Rename,
+            "[tid:%i] Removing a committed instruction from the "
             "history buffer %u (size=%i), until [sn:%llu].\n",
-            tid, tid, historyBuffer[tid].size(), inst_seq_num);
+            tid, tid, history.size(), inst_seq_num);
 
-    auto hb_it = historyBuffer[tid].end();
-
-    --hb_it;
-
-    if (historyBuffer[tid].empty()) {
+    if (history.empty()) {
         DPRINTF(Rename, "[tid:%i] History buffer is empty.\n", tid);
         return;
-    } else if (hb_it->instSeqNum > inst_seq_num) {
-        DPRINTF(Rename, "[tid:%i] [sn:%llu] "
+    } else if (history.back().instSeqNum > inst_seq_num) {
+        DPRINTF(Rename,
+                "[tid:%i] [sn:%llu] "
                 "Old sequence number encountered. "
                 "Ensure that a syscall happened recently.\n",
-                tid,inst_seq_num);
+                tid, inst_seq_num);
         return;
     }
 
@@ -1029,35 +1053,72 @@ Rename::removeFromHistory(InstSeqNum inst_seq_num, ThreadID tid)
     // number. Some or even all of the committed instructions may not have
     // rename histories if they did not have destination registers that were
     // renamed.
-    while (!historyBuffer[tid].empty() &&
-           hb_it != historyBuffer[tid].end() &&
-           hb_it->instSeqNum <= inst_seq_num) {
-
-        DPRINTF(Rename, "[tid:%i] Freeing up older rename of reg %i (%s), "
+    while (!history.empty() && history.back().instSeqNum <= inst_seq_num) {
+        const auto &entry = history.back();
+        PhysRegIdPtr prev_reg = entry.prevPhysReg;
+        const bool mapping_changed = entry.newPhysReg != prev_reg;
+        DPRINTF(Rename,
+                "[tid:%i] Retiring rename of reg %i (%s), "
                 "[sn:%llu].\n",
-                tid, hb_it->prevPhysReg->index(),
-                hb_it->prevPhysReg->className(),
-                hb_it->instSeqNum);
+                tid, prev_reg->index(), prev_reg->className(),
+                entry.instSeqNum);
 
-        // Don't free special phys regs like misc and zero regs, which
-        // can be recognized because the new mapping is the same as
-        // the old one.
-        if (hb_it->newPhysReg != hb_it->prevPhysReg) {
-            freeList->addReg(hb_it->prevPhysReg);
-        }
-        if (hb_it->prevPhysReg->classValue()== FloatRegClass) {
-           ++stats.fpReturned;
-        }
-        if (hb_it->prevPhysReg->classValue()== IntRegClass) {
-           ++stats.intReturned;
-        }
-
-
+        history.pop_back();
         ++stats.committedMaps;
-
-        historyBuffer[tid].erase(hb_it--);
+#if USE_DASICS
+        // The restore slot still holds this register after the rename retires.
+        if (prev_reg->isReclaimBlocked()) {
+            continue;
+        }
+#endif
+        if (mapping_changed) {
+            freeList->addReg(prev_reg);
+        }
+        if (prev_reg->is(FloatRegClass)) {
+            ++stats.fpReturned;
+        }
+        if (prev_reg->is(IntRegClass)) {
+            ++stats.intReturned;
+        }
     }
 }
+
+#if USE_DASICS
+Fault
+Rename::protectIntRegs(const DynInstPtr &inst, ThreadID tid, uint32_t mask)
+{
+    auto &state = restoreState[tid];
+    // Check the whole request before changing any slot, even for a zero mask.
+    if (state.valid.any()) {
+        return inst->staticInst->intRegProtectionConflictFault();
+    }
+
+    auto &map = *renameMap[tid];
+    const auto &classes = inst->tcBase()->getIsaPtr()->regClasses();
+    const auto &int_regs = *classes.at(IntRegClass);
+    for (RegIndex idx = 1; idx <= RestoreState::NumIntSlots; ++idx) {
+        if (!bits(mask, idx)) {
+            continue;
+        }
+
+        const RegId arch_reg = int_regs[idx];
+        PhysRegIdPtr phys_reg = map.lookup(arch_reg);
+        // PROREG keeps the physical mapping and changes its protection state.
+        auto &entry = historyBuffer[tid].emplace_front(inst->seqNum, arch_reg,
+                                                       phys_reg, phys_reg);
+        entry.renameKind = RenameKind::Proreg;
+        entry.prevUnreadable = map.isIntRegUnreadable(arch_reg);
+        entry.prevReclaimBlocked = phys_reg->isReclaimBlocked();
+
+        const auto slot = idx - 1;
+        state.intRegs[slot] = phys_reg;
+        state.valid.set(slot);
+        map.setIntRegUnreadable(arch_reg, true);
+        phys_reg->setReclaimBlocked(true);
+    }
+    return NoFault;
+}
+#endif
 
 void
 Rename::renameSrcRegs(const DynInstPtr &inst, ThreadID tid)
@@ -1074,7 +1135,11 @@ Rename::renameSrcRegs(const DynInstPtr &inst, ThreadID tid)
         const RegId flat_reg = src_reg.flatten(*isa);
         PhysRegIdPtr renamed_reg;
 
+#if USE_DASICS
+        renamed_reg = map->lookupSource(flat_reg);
+#else
         renamed_reg = map->lookup(flat_reg);
+#endif
         switch (flat_reg.classValue()) {
           case InvalidRegClass:
             break;
@@ -1142,29 +1207,30 @@ Rename::renameDestRegs(const DynInstPtr &inst, ThreadID tid)
 
     // Rename the destination registers.
     for (int dest_idx = 0; dest_idx < num_dest_regs; dest_idx++) {
-        const RegId& dest_reg = inst->destRegIdx(dest_idx);
-        UnifiedRenameMap::RenameInfo rename_result;
-
+        const RegId &dest_reg = inst->destRegIdx(dest_idx);
         RegId flat_dest_regid = dest_reg.flatten(*isa);
         flat_dest_regid.setNumPinnedWrites(dest_reg.getNumPinnedWrites());
 
-        rename_result = map->rename(flat_dest_regid);
+        const auto rename_result = map->rename(flat_dest_regid);
 
         inst->flattenedDestIdx(dest_idx, flat_dest_regid);
 
-        scoreboard->unsetReg(rename_result.first);
+        scoreboard->unsetReg(rename_result.newPhysReg);
 
         DPRINTF(Rename,
                 "[tid:%i] "
                 "Renaming arch reg %i (%s) to physical reg %i (%i).\n",
                 tid, dest_reg.index(), dest_reg.className(),
-                rename_result.first->index(),
-                rename_result.first->flatIndex());
+                rename_result.newPhysReg->index(),
+                rename_result.newPhysReg->flatIndex());
 
         // Record the rename information so that a history can be kept.
         RenameHistory hb_entry(inst->seqNum, flat_dest_regid,
-                               rename_result.first,
-                               rename_result.second);
+                               rename_result.newPhysReg,
+                               rename_result.prevPhysReg);
+#if USE_DASICS
+        hb_entry.prevUnreadable = rename_result.prevUnreadable;
+#endif
 
         historyBuffer[tid].push_front(hb_entry);
 
@@ -1173,14 +1239,9 @@ Rename::renameDestRegs(const DynInstPtr &inst, ThreadID tid)
                 tid,(*historyBuffer[tid].begin()).instSeqNum,
                 historyBuffer[tid].size());
 
-        // Tell the instruction to rename the appropriate destination
-        // register (dest_idx) to the new physical register
-        // (rename_result.first), and record the previous physical
-        // register that the same logical register was renamed to
-        // (rename_result.second).
-        inst->renameDestReg(dest_idx,
-                            rename_result.first,
-                            rename_result.second);
+        // Bind this destination and record its previous physical mapping.
+        inst->renameDestReg(dest_idx, rename_result.newPhysReg,
+                            rename_result.prevPhysReg);
 
         ++stats.renamedOperands;
     }

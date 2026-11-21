@@ -65,44 +65,54 @@ SimpleRenameMap::init(const RegClass &reg_class, SimpleFreeList *_freeList)
     assert(map.empty());
 
     map.resize(reg_class.numRegs());
+#if USE_DASICS
+    unreadable.resize(map.size(), false);
+#endif
     freeList = _freeList;
 }
 
 SimpleRenameMap::RenameInfo
 SimpleRenameMap::rename(const RegId& arch_reg)
 {
-    PhysRegIdPtr renamed_reg;
     // Record the current physical register that is renamed to the
     // requested architected register.
     PhysRegIdPtr prev_reg = map[arch_reg.index()];
+    RenameInfo result{prev_reg, prev_reg};
+#if USE_DASICS
+    result.prevUnreadable = arch_reg.is(IntRegClass) && isUnreadable(arch_reg);
+#endif
 
     if (arch_reg.is(InvalidRegClass)) {
         assert(prev_reg->is(InvalidRegClass));
-        renamed_reg = prev_reg;
     } else if (prev_reg->getNumPinnedWrites() > 0) {
         // Do not rename if the register is pinned
         assert(arch_reg.getNumPinnedWrites() == 0);  // Prevent pinning the
                                                      // same register twice
         DPRINTF(Rename, "Renaming pinned reg, numPinnedWrites %d\n",
                 prev_reg->getNumPinnedWrites());
-        renamed_reg = prev_reg;
-        renamed_reg->decrNumPinnedWrites();
+        prev_reg->decrNumPinnedWrites();
     } else {
-        renamed_reg = freeList->getReg();
-        map[arch_reg.index()] = renamed_reg;
-        renamed_reg->setNumPinnedWrites(arch_reg.getNumPinnedWrites());
-        renamed_reg->setNumPinnedWritesToComplete(
+        result.newPhysReg = freeList->getReg();
+        map[arch_reg.index()] = result.newPhysReg;
+#if USE_DASICS
+        if (result.prevUnreadable) {
+            unreadable[arch_reg.index()] = false;
+        }
+#endif
+        result.newPhysReg->setNumPinnedWrites(arch_reg.getNumPinnedWrites());
+        result.newPhysReg->setNumPinnedWritesToComplete(
             arch_reg.getNumPinnedWrites() + 1);
     }
 
-    DPRINTF(Rename, "Renamed reg %d to physical reg %d (%d) old mapping was"
+    DPRINTF(Rename,
+            "Renamed reg %d to physical reg %d (%d) old mapping was"
             " %d (%d)\n",
-            arch_reg, renamed_reg->flatIndex(), renamed_reg->flatIndex(),
-            prev_reg->flatIndex(), prev_reg->flatIndex());
+            arch_reg, result.newPhysReg->flatIndex(),
+            result.newPhysReg->flatIndex(), prev_reg->flatIndex(),
+            prev_reg->flatIndex());
 
-    return RenameInfo(renamed_reg, prev_reg);
+    return result;
 }
-
 
 /**** UnifiedRenameMap methods ****/
 

@@ -42,10 +42,13 @@
 #ifndef __CPU_O3_RENAME_HH__
 #define __CPU_O3_RENAME_HH__
 
+#include <bitset>
+#include <cstdint>
 #include <list>
 #include <utility>
 
 #include "base/statistics.hh"
+#include "config/use_dasics.hh"
 #include "cpu/o3/comm.hh"
 #include "cpu/o3/commit.hh"
 #include "cpu/o3/dyn_inst_ptr.hh"
@@ -215,6 +218,11 @@ class Rename
      */
     void renameInsts(ThreadID tid);
 
+#if USE_DASICS
+    /** Save the integer mappings selected by a trusted PROREG request. */
+    Fault protectIntRegs(const DynInstPtr &inst, ThreadID tid, uint32_t mask);
+#endif
+
     /** Inserts unused instructions from a given thread into the skid buffer,
      * to be renamed once rename unblocks.
      */
@@ -294,6 +302,15 @@ class Rename
      */
     void serializeAfter(InstQueue &inst_list, ThreadID tid);
 
+#if USE_DASICS
+    /** A destination rename or a PROREG protection change. */
+    enum class RenameKind : uint8_t
+    {
+        Normal,
+        Proreg
+    };
+#endif
+
     /** Holds the information for each destination register rename. It holds
      * the instruction's sequence number, the arch register, the old physical
      * register for that arch. register, and the new physical register.
@@ -317,12 +334,34 @@ class Rename
         /** The old physical register that the arch. register was renamed to.
          */
         PhysRegIdPtr prevPhysReg;
+
+#if USE_DASICS
+        RenameKind renameKind = RenameKind::Normal;
+        /** Whether the old RAT entry supplied zero for source reads. */
+        bool prevUnreadable : 1 = false;
+        /** Previous reclaim block on prevPhysReg, used by Proreg records. */
+        bool prevReclaimBlocked : 1 = false;
+#endif
     };
 
     /** A per-thread list of all destination register renames, used to either
      * undo rename mappings or free old physical registers.
      */
     std::list<RenameHistory> historyBuffer[MaxThreads];
+
+#if USE_DASICS
+    struct RestoreState
+    {
+        static constexpr unsigned NumIntSlots = 31;
+
+        /** Slot N-1 holds the saved physical mapping of xN (x1-x31). */
+        PhysRegIdPtr intRegs[NumIntSlots] = {};
+        /** intRegs[i] is usable only while valid[i] is set. */
+        std::bitset<NumIntSlots> valid{};
+    };
+
+    RestoreState restoreState[MaxThreads];
+#endif
 
     /** Pointer to CPU. */
     CPU *cpu;

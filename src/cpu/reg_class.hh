@@ -50,6 +50,7 @@
 #include "base/debug.hh"
 #include "base/intmath.hh"
 #include "base/types.hh"
+#include "config/use_dasics.hh"
 #include "debug/InvalidReg.hh"
 
 namespace gem5
@@ -434,6 +435,11 @@ class PhysRegId : private RegId
     int numPinnedWritesToComplete;
     bool pinned;
 
+#if USE_DASICS
+    /** True while a DASICS restore slot holds this physical register. */
+    bool reclaimBlocked : 1 = false;
+#endif
+
   public:
     explicit PhysRegId() : RegId(invalidRegClass, -1), flatIdx(-1),
                            numPinnedWritesToComplete(0)
@@ -483,6 +489,20 @@ class PhysRegId : private RegId
      * architectural register.
      */
     bool isFixedMapping() const { return !isRenameable(); }
+
+#if USE_DASICS
+    bool
+    isReclaimBlocked() const
+    {
+        return reclaimBlocked;
+    }
+
+    void
+    setReclaimBlocked(bool value)
+    {
+        reclaimBlocked = value;
+    }
+#endif
 
     bool
     isAlwaysReady() const
