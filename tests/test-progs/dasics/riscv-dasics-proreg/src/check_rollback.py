@@ -22,12 +22,20 @@ def check_trace(nm, elf, trace):
     pcs = {}
     allowed = set()
     exit_branches = set()
-    retired_leaves = set()
+    leave_returns = {}
+    squash_returns = {}
     rollbacks = {}
     mispredict = boundary = None
+    returns = None
     pc_pattern = r"\((0x[0-9a-f]+)=>"
     with gzip.open(trace, "rt") as stream:
         for line in stream:
+            # FreeList emits consecutive enqueues inside a single Rename
+            # retirement or delayed squash batch. Both can run in one tick.
+            if returns is not None and "Enqueue integer P" in line:
+                returns.add(int(line.rsplit("P", 1)[1]))
+                continue
+            returns = None
             if "[tid:0]" not in line:
                 continue
             if "Processing instruction [sn:" in line:
@@ -61,10 +69,12 @@ def check_trace(nm, elf, trace):
                 )
                 if match:
                     rollbacks[boundary].append(tuple(map(int, match.groups())))
+            elif boundary in rollbacks and "Freeing phys regs of" in line:
+                returns = squash_returns.setdefault(boundary, set())
             elif "Retiring rename of reg" in line:
                 sn = int(re.search(r"\[sn:(\d+)\]", line)[1])
                 if pcs.get(sn) == symbols["generation_final_leave"]:
-                    retired_leaves.add(sn)
+                    returns = leave_returns.setdefault(sn, set())
 
     expected_pcs = [
         symbols["generation_" + name] for name in ("leave", "write", "proreg")
@@ -87,11 +97,15 @@ def check_trace(nm, elf, trace):
             and previous == caller
             and saved == same == fresh
             and len({caller, local, fresh}) == 3
-            and any(sn > protect for sn in retired_leaves & allowed)
+            and fresh in squash_returns.get(branch, ())
+            and any(
+                sn > protect and sn in allowed and local in regs
+                for sn, regs in leave_returns.items()
+            )
         ):
             print(
                 f"Loop-exit squash sn={branch}: caller P{caller}, "
-                f"local P{local}, discarded P{fresh}"
+                f"squash returned P{fresh}, committed LEAVE returned P{local}"
             )
             return True
     return False
@@ -111,7 +125,7 @@ def main():
         [
             args.gem5,
             f"--outdir={args.outdir}",
-            "--debug-flags=Rename,Commit",
+            "--debug-flags=Rename,Commit,FreeList",
             f"--debug-file={trace.name}",
             args.config,
             args.elf,
@@ -125,7 +139,7 @@ def main():
         )
     if check_trace(args.nm, args.elf, trace):
         return 0
-    print("Missing loop-exit rollback coverage", file=sys.stderr)
+    print("Missing loop-exit rollback or free-list coverage", file=sys.stderr)
     return 1
 
 

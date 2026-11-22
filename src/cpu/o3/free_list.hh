@@ -46,9 +46,11 @@
 #include <array>
 #include <iostream>
 #include <queue>
+#include <vector>
 
 #include "base/logging.hh"
 #include "base/trace.hh"
+#include "config/use_dasics.hh"
 #include "cpu/o3/comm.hh"
 #include "cpu/o3/regfile.hh"
 #include "debug/FreeList.hh"
@@ -75,19 +77,40 @@ class SimpleFreeList
     /** The actual free list */
     std::queue<PhysRegIdPtr> freeRegs;
 
+#if USE_DASICS
+    // Integer FIFO membership across all threads sharing this free list.
+    std::vector<bool> intRegInFreeList;
+#endif
+
   public:
 
     SimpleFreeList() {};
 
     /** Add a physical register to the free list */
-    void addReg(PhysRegIdPtr reg) { freeRegs.push(reg); }
+    void
+    addReg(PhysRegIdPtr reg)
+    {
+#if USE_DASICS
+        if (reg->is(IntRegClass)) {
+            const auto idx = reg->index();
+            if (idx >= intRegInFreeList.size()) {
+                intRegInFreeList.resize(idx + 1);
+            }
+            panic_if(intRegInFreeList[idx],
+                     "Integer P%u is already on the free list", idx);
+            intRegInFreeList[idx] = true;
+            DPRINTF(FreeList, "Enqueue integer P%u\n", idx);
+        }
+#endif
+        freeRegs.push(reg);
+    }
 
     /** Add physical registers to the free list */
     template<class InputIt>
     void
     addRegs(InputIt first, InputIt last) {
-        std::for_each(first, last, [this](typename InputIt::value_type& reg) {
-            freeRegs.push(&reg);
+        std::for_each(first, last, [this](typename InputIt::value_type &reg) {
+            addReg(&reg);
         });
     }
 
@@ -96,6 +119,15 @@ class SimpleFreeList
     {
         assert(!freeRegs.empty());
         PhysRegIdPtr free_reg = freeRegs.front();
+#if USE_DASICS
+        if (free_reg->is(IntRegClass)) {
+            const auto idx = free_reg->index();
+            panic_if(idx >= intRegInFreeList.size() || !intRegInFreeList[idx],
+                     "Integer P%u is missing from free-list membership", idx);
+            intRegInFreeList[idx] = false;
+            DPRINTF(FreeList, "Dequeue integer P%u\n", idx);
+        }
+#endif
         freeRegs.pop();
         return free_reg;
     }
