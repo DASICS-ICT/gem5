@@ -18,6 +18,7 @@
     .equ PROREG_G_I_S3, 0x0080300B
     .equ PROREG_G_I_S4, 0x0100300B
     .equ PROREG_G_I_S7, 0x0800300B
+    .equ PROREG_G_I_S1_S3_S11, 0x80A0300B
     .equ LEAVE, 0x0000500B
 
     .option norelax
@@ -26,7 +27,7 @@
     .section .text.init
     .globl _start
 _start:
-    li      s1, 255
+    li      s9, 255                 /* Keep the exit code outside the mask. */
     la      s6, setup_failure
     la      t0, machine_trap
     csrw    mtvec, t0
@@ -51,15 +52,15 @@ _start:
     csrw    CSR_DASICS_S_MAIN_CFG, t0
 
     la      s0, cases
-    li      s1, 1
+    li      s9, 1
     li      s7, CALLER_S7
 start_case:
     ld      t0, 0(s0)               /* Probe entry PC. */
-    lwu     s8, 0(t0)               /* Expected instruction word. */
     ld      s2, 8(s0)               /* Expected source privilege. */
     ld      s4, 16(s0)              /* Expected mcause. */
     ld      s5, 24(s0)              /* Expected mepc. */
     ld      s6, 32(s0)              /* Failure message. */
+    ld      s8, 40(s0)              /* Expected probe opcode. */
     li      s3, CALLER_S3
     li      a3, -1
     li      a4, -1
@@ -73,7 +74,7 @@ start_case:
     csrs    mstatus, t0
     mret
 
-    .macro PROBE name
+    .macro PROBE name, with_sparse
     .balign 8
 \name:
     .word   PROREG_G_I_S3
@@ -96,11 +97,50 @@ start_case:
     addi    a5, zero, 1
 \name\()_leave_break:
     ebreak
+    .if \with_sparse
+sparse_caller:
+    li      s1, 0x11
+    li      s3, 0x33
+    li      s11, 0xbb
+    li      s10, 0x5a
+    la      t0, sparse_callee
+    .word   PROREG_G_I_S1_S3_S11
+    .insn   i 0x0b, 1, ra, t0, 0     /* DASICSCALL.JR ra, t0, 0 */
+sparse_return:
+    .word   LEAVE
+    mv      t2, s1
+    mv      t3, s3
+    mv      t4, s11
+    mv      t5, s10
+sparse_break:
+    ebreak
+    .endif
     .balign 8
 \name\()_end:
     .endm
-    PROBE probe_a
-    PROBE probe_b
+#if defined(PROREG_TEST_U)
+    PROBE probe_a, 1
+    PROBE probe_b, 0
+#else
+    PROBE probe_a, 0
+    PROBE probe_b, 1
+#endif
+
+    /* This leaf is outside both trusted ranges and uses only registers. */
+    .balign 8
+sparse_callee:
+    mv      a0, s1
+    mv      a1, s3
+    mv      a2, s11
+    mv      a3, s10
+    li      s3, 0xa3
+    li      s11, 0xab
+    li      s10, 0x6a
+    mv      a4, s1
+    mv      a5, s3
+    mv      a6, s11
+    mv      a7, s10
+    ret
 
     .balign 4
 machine_trap:
@@ -114,6 +154,8 @@ machine_trap:
     bne     t0, s4, fail
     csrr    t0, mepc
     bne     t0, s5, fail
+    la      t1, sparse_break
+    beq     t0, t1, check_sparse
     li      t0, BREAKPOINT
     bne     s4, t0, check_illegal
     li      t0, 1
@@ -145,12 +187,37 @@ check_illegal:
     bne     s8, t0, case_passed
     bnez    s7, fail                /* Denial preserved the hidden mapping. */
 case_passed:
-    addi    s0, s0, 40
-    addi    s1, s1, 1
+    addi    s0, s0, 48
+    addi    s9, s9, 1
     la      t0, cases_end
     bne     s0, t0, start_case
     li      a2, 0
     j       exit_test
+
+    .macro CHECK_SPARSE observed, expected, stage, reg
+    .pushsection .rodata
+.Lsparse_failure\@:
+    .asciz "Sparse protection: \stage \reg failed\n"
+    .popsection
+    la      s6, .Lsparse_failure\@
+    li      t0, \expected
+    bne     \observed, t0, fail
+    .endm
+
+check_sparse:
+    CHECK_SPARSE a0,  0,    entry, s1
+    CHECK_SPARSE a1,  0,    entry, s3
+    CHECK_SPARSE a2,  0,    entry, s11
+    CHECK_SPARSE a3,  0x5a, entry, s10
+    CHECK_SPARSE a4,  0,    after_write, s1
+    CHECK_SPARSE a5,  0xa3, after_write, s3
+    CHECK_SPARSE a6,  0xab, after_write, s11
+    CHECK_SPARSE a7,  0x6a, after_write, s10
+    CHECK_SPARSE t2,  0x11, after_leave, s1
+    CHECK_SPARSE t3,  0x33, after_leave, s3
+    CHECK_SPARSE t4,  0xbb, after_leave, s11
+    CHECK_SPARSE t5,  0x6a, after_leave, s10
+    j       case_passed
 
 fail:
     li      a0, 0x04                /* SYS_WRITE0 */
@@ -159,7 +226,9 @@ fail:
     slli    zero, zero, 0x1F
     ebreak
     srai    zero, zero, 7
-    mv      a2, s1
+    mv      a2, s9
+    bnez    a2, exit_test
+    li      a2, 255
 exit_test:
     la      a1, exit_args
     sd      a2, 8(a1)
@@ -177,19 +246,27 @@ halt:
 cases:
     /* Deny PROREG with empty slots, then deny LEAVE while s7 is protected. */
 #if defined(PROREG_TEST_U)
-    .dword probe_b, PRV_U, ILLEGAL,    probe_b,       untrusted_u_failure
-    .dword probe_a, PRV_U, BREAKPOINT, probe_a_break, trusted_u_failure
+    .dword probe_b, PRV_U, ILLEGAL, probe_b
+    .dword untrusted_u_failure, PROREG_G_I_S3
+    .dword probe_a, PRV_U, BREAKPOINT, probe_a_break
+    .dword trusted_u_failure, PROREG_G_I_S3
     .dword probe_b_leave, PRV_U, ILLEGAL, probe_b_leave
-    .dword untrusted_leave_failure
+    .dword untrusted_leave_failure, LEAVE
     .dword probe_a_leave, PRV_U, BREAKPOINT, probe_a_leave_break
-    .dword trusted_leave_failure
+    .dword trusted_leave_failure, LEAVE
+    .dword sparse_caller, PRV_U, BREAKPOINT, sparse_break
+    .dword sparse_call_failure, PROREG_G_I_S1_S3_S11
 #elif defined(PROREG_TEST_S)
-    .dword probe_a, PRV_S, ILLEGAL,    probe_a,       untrusted_s_failure
-    .dword probe_b, PRV_S, BREAKPOINT, probe_b_break, trusted_s_failure
+    .dword probe_a, PRV_S, ILLEGAL, probe_a
+    .dword untrusted_s_failure, PROREG_G_I_S3
+    .dword probe_b, PRV_S, BREAKPOINT, probe_b_break
+    .dword trusted_s_failure, PROREG_G_I_S3
     .dword probe_a_leave, PRV_S, ILLEGAL, probe_a_leave
-    .dword untrusted_leave_failure
+    .dword untrusted_leave_failure, LEAVE
     .dword probe_b_leave, PRV_S, BREAKPOINT, probe_b_leave_break
-    .dword trusted_leave_failure
+    .dword trusted_leave_failure, LEAVE
+    .dword sparse_caller, PRV_S, BREAKPOINT, sparse_break
+    .dword sparse_call_failure, PROREG_G_I_S1_S3_S11
 #else
 #error "Select a U or S boot for the PROREG test"
 #endif
@@ -201,6 +278,7 @@ untrusted_u_failure: .asciz "PROREG.G.I: untrusted U failed\n"
 untrusted_s_failure: .asciz "PROREG.G.I: untrusted S failed\n"
 trusted_leave_failure:   .asciz "LEAVE: trusted restore failed\n"
 untrusted_leave_failure: .asciz "LEAVE: untrusted denial failed\n"
+sparse_call_failure: .asciz "Sparse protection: unexpected trap\n"
 
     .section .data
     .balign 8
