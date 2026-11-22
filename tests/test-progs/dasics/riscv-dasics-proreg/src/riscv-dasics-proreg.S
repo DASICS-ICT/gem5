@@ -19,7 +19,17 @@
     .equ PROREG_G_I_S4, 0x0100300B
     .equ PROREG_G_I_S7, 0x0800300B
     .equ PROREG_G_I_S1_S3_S11, 0x80A0300B
+    .equ PROREG_G_I_ZERO, 0x0000300B
+    .equ PROREG_G_I_S11, 0x8000300B
+    .equ PROREG_G_I_S3_S11, 0x8080300B
     .equ LEAVE, 0x0000500B
+    .equ REUSE_ROUNDS, 192
+    .equ GENERATION_ROUNDS, 32
+    .equ GENERATION_SEED, 0x35
+    .equ GENERATION_LOCAL, 0x2b
+    .equ OCCUPIED_S3, 0x43
+    .equ DISJOINT_S11, 0x6b
+    .equ UPDATED_S11, 0x78
 
     .option norelax
     .option nopic
@@ -74,7 +84,7 @@ start_case:
     csrs    mstatus, t0
     mret
 
-    .macro PROBE name, with_sparse
+    .macro PROBE name, trusted_cases
     .balign 8
 \name:
     .word   PROREG_G_I_S3
@@ -97,7 +107,7 @@ start_case:
     addi    a5, zero, 1
 \name\()_leave_break:
     ebreak
-    .if \with_sparse
+    .if \trusted_cases
 sparse_caller:
     li      s1, 0x11
     li      s3, 0x33
@@ -113,6 +123,92 @@ sparse_return:
     mv      t4, s11
     mv      t5, s10
 sparse_break:
+    ebreak
+
+reuse_caller:
+    li      t2, 0x31
+    li      t3, REUSE_ROUNDS
+.Lreuse_round:
+    mv      s3, t2
+    addi    t4, t2, 0x100
+    mv      s11, t4
+    .word   PROREG_G_I_S3
+    mv      a0, s3
+    addi    s3, s3, 1
+    mv      a1, s3
+    .word   LEAVE
+    .word   PROREG_G_I_S3_S11       /* Capture the same caller s3 again. */
+    mv      a2, s3
+    mv      a3, s11
+    addi    s3, s3, 2
+    mv      a4, s3
+    mv      a5, s11                 /* Still hidden until LEAVE. */
+    .word   LEAVE
+    bnez    a0, .Lreuse_fail
+    li      t0, 1
+    bne     a1, t0, .Lreuse_fail
+    bnez    a2, .Lreuse_fail
+    bnez    a3, .Lreuse_fail
+    li      t0, 2
+    bne     a4, t0, .Lreuse_fail
+    bnez    a5, .Lreuse_fail
+    bne     s3, t2, .Lreuse_fail
+    bne     s11, t4, .Lreuse_fail
+    addi    t2, t2, 17
+    addi    t3, t3, -1
+    bnez    t3, .Lreuse_round
+reuse_break:
+    ebreak
+.Lreuse_fail:
+    ebreak                          /* Unexpected mepc identifies a failure. */
+
+    /* Each iteration ends with a live slot and a different visible s3. */
+generation_caller:
+    li      s3, GENERATION_SEED
+    .word   PROREG_G_I_S3
+    li      s3, GENERATION_LOCAL
+    li      t1, GENERATION_ROUNDS
+generation_leave:
+    .word   LEAVE
+generation_write:
+    addi    s3, s3, 1
+generation_proreg:
+    .word   PROREG_G_I_S3
+    addi    s3, s3, GENERATION_LOCAL
+    addi    t1, t1, -1
+generation_branch:
+    bnez    t1, generation_leave
+generation_exit:
+    mv      t2, s3
+generation_final_leave:
+    .word   LEAVE
+    li      t0, GENERATION_LOCAL
+    bne     t2, t0, .Lgeneration_fail
+    li      t0, GENERATION_SEED + GENERATION_ROUNDS
+    bne     s3, t0, .Lgeneration_fail
+generation_break:
+    ebreak
+.Lgeneration_fail:
+    ebreak
+
+occupied_caller:
+    li      s3, OCCUPIED_S3
+    li      s11, DISJOINT_S11
+    .word   PROREG_G_I_S3
+occupied_zero:
+    .word   PROREG_G_I_ZERO
+    addi    a5, a5, 1               /* Executed only upon trap return. */
+occupied_disjoint:
+    .word   PROREG_G_I_S11
+    addi    a5, a5, 1
+    mv      a3, s3
+    mv      a4, s11
+    li      s3, 0x24
+    li      s11, UPDATED_S11
+    .word   LEAVE
+    mv      a6, s3
+    mv      a7, s11
+occupied_break:
     ebreak
     .endif
     .balign 8
@@ -156,6 +252,16 @@ machine_trap:
     bne     t0, s5, fail
     la      t1, sparse_break
     beq     t0, t1, check_sparse
+    la      t1, reuse_break
+    beq     t0, t1, case_passed
+    la      t1, generation_break
+    beq     t0, t1, case_passed
+    la      t1, occupied_zero
+    beq     t0, t1, resume_occupied
+    la      t1, occupied_disjoint
+    beq     t0, t1, resume_occupied
+    la      t1, occupied_break
+    beq     t0, t1, check_occupied
     li      t0, BREAKPOINT
     bne     s4, t0, check_illegal
     li      t0, 1
@@ -193,6 +299,41 @@ case_passed:
     bne     s0, t0, start_case
     li      a2, 0
     j       exit_test
+
+resume_occupied:
+    csrr    t1, mtval
+    bne     t1, s8, fail
+    bnez    s3, fail
+    li      t1, DISJOINT_S11
+    bne     s11, t1, fail
+    addi    t0, t0, 4               /* Resume just past this failed PROREG. */
+    csrw    mepc, t0
+    li      t1, PROREG_G_I_ZERO
+    bne     s8, t1, .Lafter_disjoint
+    bnez    a5, fail
+    la      s5, occupied_disjoint
+    li      s8, PROREG_G_I_S11
+    la      s6, disjoint_failure
+    mret
+.Lafter_disjoint:
+    li      t1, 1
+    bne     a5, t1, fail
+    li      s4, BREAKPOINT
+    la      s5, occupied_break
+    la      s6, occupied_restore_failure
+    mret
+
+check_occupied:
+    li      t0, 2
+    bne     a5, t0, fail
+    bnez    a3, fail
+    li      t0, DISJOINT_S11
+    bne     a4, t0, fail
+    li      t0, OCCUPIED_S3
+    bne     a6, t0, fail
+    li      t0, UPDATED_S11
+    bne     a7, t0, fail
+    j       case_passed
 
     .macro CHECK_SPARSE observed, expected, stage, reg
     .pushsection .rodata
@@ -246,6 +387,7 @@ halt:
 cases:
     /* Deny PROREG with empty slots, then deny LEAVE while s7 is protected. */
 #if defined(PROREG_TEST_U)
+    .equ BOOT_PRIV, PRV_U
     .dword probe_b, PRV_U, ILLEGAL, probe_b
     .dword untrusted_u_failure, PROREG_G_I_S3
     .dword probe_a, PRV_U, BREAKPOINT, probe_a_break
@@ -257,6 +399,7 @@ cases:
     .dword sparse_caller, PRV_U, BREAKPOINT, sparse_break
     .dword sparse_call_failure, PROREG_G_I_S1_S3_S11
 #elif defined(PROREG_TEST_S)
+    .equ BOOT_PRIV, PRV_S
     .dword probe_a, PRV_S, ILLEGAL, probe_a
     .dword untrusted_s_failure, PROREG_G_I_S3
     .dword probe_b, PRV_S, BREAKPOINT, probe_b_break
@@ -270,6 +413,12 @@ cases:
 #else
 #error "Select a U or S boot for the PROREG test"
 #endif
+    .dword reuse_caller, BOOT_PRIV, BREAKPOINT, reuse_break
+    .dword reuse_failure, PROREG_G_I_S3
+    .dword generation_caller, BOOT_PRIV, BREAKPOINT, generation_break
+    .dword generation_failure, PROREG_G_I_S3
+    .dword occupied_caller, BOOT_PRIV, ILLEGAL, occupied_zero
+    .dword occupied_zero_failure, PROREG_G_I_ZERO
 cases_end:
 setup_failure:       .asciz "PROREG.G.I: setup failed\n"
 trusted_u_failure:   .asciz "PROREG.G.I: trusted U failed\n"
@@ -279,6 +428,11 @@ untrusted_s_failure: .asciz "PROREG.G.I: untrusted S failed\n"
 trusted_leave_failure:   .asciz "LEAVE: trusted restore failed\n"
 untrusted_leave_failure: .asciz "LEAVE: untrusted denial failed\n"
 sparse_call_failure: .asciz "Sparse protection: unexpected trap\n"
+reuse_failure: .asciz "PROREG: repeated s3 mapping reuse failed\n"
+generation_failure: .asciz "PROREG: wrong s3 generation at loop exit\n"
+occupied_zero_failure: .asciz "PROREG: occupied zero-mask rejection failed\n"
+disjoint_failure: .asciz "PROREG: occupied disjoint-mask rejection failed\n"
+occupied_restore_failure: .asciz "PROREG: state after conflicts failed\n"
 
     .section .data
     .balign 8

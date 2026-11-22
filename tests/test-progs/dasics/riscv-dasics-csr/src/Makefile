@@ -59,7 +59,7 @@ run: $(OUT)
 		rm -f "$(GEM5_OUTDIR)/stats.txt" \
 			"$(GEM5_OUTDIR)/run-result.txt" || exit; \
 		cd "$(GEM5_REPO_DIR)" || exit; \
-		timeout 60s "$(GEM5_BINARY)" \
+		timeout 60s $(GEM5_TEST_RUNNER) "$(GEM5_BINARY)" \
 		--outdir="$(GEM5_OUTDIR)" \
 		"$(GEM5_CONFIG)" \
 		"$(abspath $(OUT))"; \
