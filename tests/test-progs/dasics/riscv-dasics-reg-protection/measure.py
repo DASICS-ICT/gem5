@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Measure software register protection against the boundary-only reference."""
+"""Measure paired register-protection costs on the v5_full platform."""
 
 import argparse
 import csv
@@ -233,6 +233,16 @@ def run_job(args, job):
     return result
 
 
+def convergence(increments):
+    if len(increments) != 2:
+        return None, False
+    short, long = increments
+    if long == 0:
+        return (Fraction(0), True) if short == 0 else (None, False)
+    drift = abs(short - long) / abs(long)
+    return drift, drift <= Fraction(1, 100)
+
+
 def summarize(results):
     indexed = {
         (row["mode"], row["workload"], row["iterations"]): row
@@ -267,16 +277,7 @@ def summarize(results):
                         cycles[upper] - cycles[lower]
                     )
             pairs.append(pair)
-        drift = None
-        converged = False
-        if len(increments) == 2:
-            short, long = increments
-            # A zero long-run increment converges only to an exact zero.
-            if long:
-                drift = abs(short - long) / abs(long)
-                converged = drift <= Fraction(1, 100)
-            elif short == 0:
-                drift, converged = Fraction(0), True
+        drift, converged = convergence(increments)
         for pair in pairs:
             for label, *_ in CONTRASTS:
                 key = f"{label}_cycles_per_call"
@@ -337,18 +338,108 @@ def validate_instruction_deltas(results):
     return checks
 
 
+def report_proreg(outdir, results):
+    indexed = {(r["workload"], r["iterations"], r["mode"]): r for r in results}
+    # Twelve stores, clears, and loads become one PROREG and one LEAVE.
+    counters = (
+        ("instructions_saved_per_call", "numInsts", 34),
+        ("loads_saved_per_call", "numLoadInsts", 12),
+        ("stores_saved_per_call", "numStoreInsts", 12),
+    )
+    fields = [
+        "workload",
+        "iterations",
+        "software_cycles_per_call",
+        "proreg_cycles_per_call",
+        "saved_cycles_per_call",
+        *(key for key, _, _ in counters),
+        "counter_validation",
+        "savings_drift_percent",
+        "convergence",
+        "status",
+    ]
+    summary = []
+    for workload in WORKLOADS:
+        pairs = []
+        savings = []
+        for count in ITERATIONS:
+            sw = indexed[workload, count, "software"]
+            hw = indexed[workload, count, "proreg"]
+            pair = dict.fromkeys(fields)
+            pair.update(
+                workload=workload, iterations=count, counter_validation="FAIL"
+            )
+            if sw["status"] == hw["status"] == "PASS":
+                sw_stats, hw_stats = sw["statistics"], hw["statistics"]
+                cycle_stat = "system.cpu.numCycles"
+                saved = Fraction(
+                    sw_stats[cycle_stat] - hw_stats[cycle_stat], count
+                )
+                savings.append(saved)
+                pair.update(
+                    software_cycles_per_call=sw_stats[cycle_stat] / count,
+                    proreg_cycles_per_call=hw_stats[cycle_stat] / count,
+                    saved_cycles_per_call=float(saved),
+                    counter_validation="PASS",
+                )
+                for key, counter, expected in counters:
+                    stat = f"system.cpu.commitStats0.{counter}"
+                    delta = sw_stats[stat] - hw_stats[stat]
+                    pair[key] = delta / count
+                    if delta != expected * count:
+                        pair["counter_validation"] = "FAIL"
+            pairs.append(pair)
+        drift, converged = convergence(savings)
+        for pair in pairs:
+            passed = converged and pair["counter_validation"] == "PASS"
+            pair.update(
+                savings_drift_percent=(
+                    None if drift is None else float(100 * drift)
+                ),
+                convergence="PASS" if converged else "FAIL",
+                status="PASS" if passed else "FAIL",
+            )
+            print(
+                f"{pair['workload']} N={pair['iterations']}: "
+                f"SW={pair['software_cycles_per_call']}, "
+                f"PROREG={pair['proreg_cycles_per_call']}, "
+                f"saved={pair['saved_cycles_per_call']} cycles/call "
+                f"[{pair['status']}]"
+            )
+        summary.extend(pairs)
+    passed = all(r["status"] == "PASS" for r in summary)
+    write_csv(outdir / "summary.csv", summary, fields)
+    write_json(
+        outdir / "summary.json",
+        {
+            "status": "PASS" if passed else "FAIL",
+            "pairs": summary,
+        },
+    )
+    print(f"Results: {outdir}")
+    return 0 if passed else 124 if any(r["timed_out"] for r in results) else 1
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--outdir", required=True, type=Path)
     parser.add_argument("--jobs", type=int, choices=range(1, 9), default=8)
     parser.add_argument("--timeout", type=int, default=300)
+    parser.add_argument(
+        "--comparison",
+        choices=("components", "proreg"),
+        default="components",
+        help="Measure software components or compare software with PROREG.",
+    )
     args = parser.parse_args()
     if args.timeout <= 0:
         parser.error("--timeout must be positive")
     args.outdir = args.outdir.resolve()
     jobs = [
         dict(mode=mode, workload=workload, iterations=count)
-        for mode in MODES
+        for mode in (
+            ("software", "proreg") if args.comparison == "proreg" else MODES
+        )
         for workload in WORKLOADS
         for count in ITERATIONS
     ]
@@ -407,6 +498,8 @@ def main():
         )
         result_rows.append(row)
     write_csv(args.outdir / "results.csv", result_rows, list(result_rows[0]))
+    if args.comparison == "proreg":
+        return report_proreg(args.outdir, results)
     summary = summarize(results)
     checks = validate_instruction_deltas(results)
     for row in summary:

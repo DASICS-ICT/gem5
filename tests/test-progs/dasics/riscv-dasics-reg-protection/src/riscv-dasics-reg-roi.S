@@ -2,6 +2,9 @@
 #include <gem5/asm/generic/m5ops.h>
 
 #define ROI_MEASUREMENT 1
+#ifndef USE_INT_PROREG
+#define USE_INT_PROREG 0
+#endif
 #ifndef ROI_ITERATIONS
 #define ROI_ITERATIONS 1024
 #endif
@@ -18,6 +21,8 @@
     .equ roi_iterations, ROI_ITERATIONS
     .equ roi_workload, ROI_WORKLOAD
     .equ roi_gate_mode, GATE_MODE
+    .globl roi_int_proreg
+    .equ roi_int_proreg, USE_INT_PROREG
     .equ roi_protection, (GATE_MODE == GATE_SOFTWARE) & 1
 #if VECTOR_ABI
     .globl roi_vector_abi, roi_vector_protected, roi_vector_vlen
@@ -201,7 +206,8 @@ roi_work_end:
     bne     t0, t1, user_finish
     ld      t2, CTX_GPR_SAVE(t0)
 #if GATE_MODE >= GATE_SAVE
-    li      t1, 1
+    /* The last call has s0=1. PROREG leaves its zeroed frame slot alone. */
+    li      t1, 1 - roi_int_proreg
     bne     t2, t1, user_finish
     ld      t2, CTX_FPR_SAVE(t0)
     li      t1, FPR_SEED

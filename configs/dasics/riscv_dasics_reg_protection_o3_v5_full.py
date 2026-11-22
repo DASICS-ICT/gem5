@@ -25,7 +25,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-"""Measure DASICS software protection on the fixed v5_full FS platform."""
+"""Measure DASICS register protection on the fixed v5_full FS platform."""
 
 import argparse
 import configparser
@@ -73,6 +73,7 @@ def run():
             "save",
             "restore",
             "software",
+            "proreg",
             "standard_ref",
             "standard_guard",
             "variant_ref",

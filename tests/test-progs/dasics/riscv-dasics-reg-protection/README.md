@@ -1,6 +1,9 @@
 # riscv-dasics-reg-protection
 
-实验记录：[2026-11-18 · DASICS 调用门的软件寄存器保护开销](experiments/2026-11-18-register-protection.md)（标量分量、两种向量 ABI、VLEN 对比与时序分析）。
+## 实验记录
+
+- [2026-11-18 · 软件寄存器保护开销（标量分量、两种向量 ABI 与 VLEN）](experiments/2026-11-18-register-protection.md)
+- [2026-11-22 · B 不改写 s0–s11 时，硬件辅助调用门每次节省的周期](experiments/2026-11-22-proreg-roi.md)
 
 ## 测试范围
 
@@ -158,6 +161,19 @@ python3 "$test_dir/measure.py" --jobs 8 --outdir "$test_dir/build/runs/roi-$(dat
 以同一负载和循环长度的 ROI 周期除以调用次数得到各模式的每次调用周期。保存取 S−B，恢复取 SR−S，清零取 SCR−SR。清零的差值包含由保存与恢复间隔改变引起的流水线效应。三个差值之和等于完整保护增量 SCR−B。
 
 运行器核对 tick 差、实际 CPU 时钟周期、`simTicks` 与 `numCycles`。S−B、SR−S、SCR−SR 的每次提交指令差应分别为 24、24、55；各模式下固定计算比空负载多 53 条提交指令。用 1024 与 4096 次调用比较各分量，并以 1% 为总增量收敛阈值。每个作业保留 `run.log`、`config.ini`、`roi.json` 和 `roi-stats.txt`；批次内的 `results.csv` 和 `summary.csv` 分别记录原始统计及差值。
+
+### 整数硬件辅助门配对测量
+
+```bash
+test_dir=tests/test-progs/dasics/riscv-dasics-reg-protection
+make -j8 -C "$test_dir/src" proreg-roi
+python3 "$test_dir/measure.py" --comparison proreg --jobs 8 \
+    --outdir "$test_dir/build/runs/proreg-roi-$(date +%Y%m%d-%H%M%S)"
+```
+
+在同一批次比较 `software` 和 `proreg` 两种门。空函数和固定计算各预热 128 次，分别测量 1024 和 4096 次调用。
+`summary.csv` 的 `saved_cycles_per_call` 为软件门与硬件辅助门的 ROI 周期差除以调用次数。
+每个配对应少提交 34 条指令，其中包含 12 条加载和 12 条存储；同一负载以 4096 次调用为参照，两个批长的周期节省量相对偏差应在 1% 以内。
 
 ### v5_full 热态基线
 
