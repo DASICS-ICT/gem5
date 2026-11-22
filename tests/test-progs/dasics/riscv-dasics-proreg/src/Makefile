@@ -2,7 +2,7 @@
 
 PROGRAM := riscv-dasics-proreg
 
-# Each boot runs its untrusted probe before its sole successful PROREG.
+# Each privilege mode boots independently with empty restore slots.
 BOOTS := U S
 ifdef PROREG_BOOT
 override OUT := ../build/$(PROGRAM)-$(PROREG_BOOT).elf

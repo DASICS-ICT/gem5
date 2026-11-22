@@ -759,6 +759,8 @@ Rename::renameInsts(ThreadID tid)
                 const auto mask = inst->staticInst->intRegProtectionMask();
                 if (mask.has_value()) {
                     inst->getFault() = protectIntRegs(inst, tid, *mask);
+                } else if (inst->staticInst->restoresIntRegs()) {
+                    restoreIntRegs(inst, tid);
                 }
             }
             DPRINTF(Rename, "[tid:%i] [sn:%llu] %s rename access: %s\n", tid,
@@ -968,21 +970,30 @@ Rename::doSquash(const InstSeqNum &squashed_seq_num, ThreadID tid)
 
         ++stats.undoneMaps;
 #if USE_DASICS
-        if (hb_it->renameKind == RenameKind::Proreg) {
+        if (hb_it->renameKind != RenameKind::Normal) {
             const auto reg_idx = hb_it->archReg.index();
             assert(hb_it->archReg.is(IntRegClass) && reg_idx > 0 &&
                    reg_idx <= RestoreState::NumIntSlots);
             const auto slot = reg_idx - 1;
             auto &state = restoreState[tid];
-            assert(hb_it->prevPhysReg == hb_it->newPhysReg);
-            assert(state.valid.test(slot) &&
-                   state.intRegs[slot] == hb_it->prevPhysReg);
+            auto &map = *renameMap[tid];
+            if (hb_it->renameKind == RenameKind::Leave) {
+                assert(!state.valid.test(slot));
+                assert(map.lookup(hb_it->archReg) == hb_it->newPhysReg);
+                map.setEntry(hb_it->archReg, hb_it->prevPhysReg);
+                // A younger PROREG may have overwritten the slot's pointer.
+                state.intRegs[slot] = hb_it->newPhysReg;
+                state.valid.set(slot);
+            } else {
+                assert(hb_it->renameKind == RenameKind::Proreg);
+                assert(hb_it->prevPhysReg == hb_it->newPhysReg);
+                assert(state.valid.test(slot) &&
+                       state.intRegs[slot] == hb_it->prevPhysReg);
+                state.valid.reset(slot);
+            }
 
-            renameMap[tid]->setIntRegUnreadable(hb_it->archReg,
-                                                hb_it->prevUnreadable);
-            hb_it->prevPhysReg->setReclaimBlocked(hb_it->prevReclaimBlocked);
-            state.valid.reset(slot);
-            // PROREG allocated no destination and did not produce its value.
+            map.setIntRegUnreadable(hb_it->archReg, hb_it->prevUnreadable);
+            // Neither operation allocated a register or produced a value.
             continue;
         }
 #endif
@@ -1053,7 +1064,8 @@ Rename::removeFromHistory(InstSeqNum inst_seq_num, ThreadID tid)
     // number. Some or even all of the committed instructions may not have
     // rename histories if they did not have destination registers that were
     // renamed.
-    while (!history.empty() && history.back().instSeqNum <= inst_seq_num) {
+    for (; !history.empty() && history.back().instSeqNum <= inst_seq_num;
+         history.pop_back()) {
         const auto &entry = history.back();
         PhysRegIdPtr prev_reg = entry.prevPhysReg;
         const bool mapping_changed = entry.newPhysReg != prev_reg;
@@ -1063,10 +1075,20 @@ Rename::removeFromHistory(InstSeqNum inst_seq_num, ThreadID tid)
                 tid, prev_reg->index(), prev_reg->className(),
                 entry.instSeqNum);
 
-        history.pop_back();
         ++stats.committedMaps;
 #if USE_DASICS
-        // The restore slot still holds this register after the rename retires.
+        if (entry.renameKind == RenameKind::Proreg) {
+            assert(entry.newPhysReg == prev_reg);
+            prev_reg->setReclaimBlocked(true);
+            continue;
+        }
+        if (entry.renameKind == RenameKind::Leave) {
+            // The restored register remains mapped after its protection ends.
+            entry.newPhysReg->setReclaimBlocked(false);
+            if (!mapping_changed) {
+                continue;
+            }
+        }
         if (prev_reg->isReclaimBlocked()) {
             continue;
         }
@@ -1103,20 +1125,51 @@ Rename::protectIntRegs(const DynInstPtr &inst, ThreadID tid, uint32_t mask)
 
         const RegId arch_reg = int_regs[idx];
         PhysRegIdPtr phys_reg = map.lookup(arch_reg);
-        // PROREG keeps the physical mapping and changes its protection state.
+        // PROREG changes source visibility without allocating a destination.
         auto &entry = historyBuffer[tid].emplace_front(inst->seqNum, arch_reg,
                                                        phys_reg, phys_reg);
         entry.renameKind = RenameKind::Proreg;
         entry.prevUnreadable = map.isIntRegUnreadable(arch_reg);
-        entry.prevReclaimBlocked = phys_reg->isReclaimBlocked();
 
         const auto slot = idx - 1;
         state.intRegs[slot] = phys_reg;
         state.valid.set(slot);
         map.setIntRegUnreadable(arch_reg, true);
-        phys_reg->setReclaimBlocked(true);
     }
     return NoFault;
+}
+
+void
+Rename::restoreIntRegs(const DynInstPtr &inst, ThreadID tid)
+{
+    auto &state = restoreState[tid];
+    if (state.valid.none()) {
+        return;
+    }
+
+    auto &map = *renameMap[tid];
+    const auto &classes = inst->tcBase()->getIsaPtr()->regClasses();
+    const auto &int_regs = *classes.at(IntRegClass);
+    for (RegIndex slot = 0; slot < RestoreState::NumIntSlots; ++slot) {
+        if (!state.valid.test(slot)) {
+            continue;
+        }
+
+        const RegId arch_reg = int_regs[slot + 1];
+        PhysRegIdPtr saved_reg = state.intRegs[slot];
+        assert(saved_reg && saved_reg->is(IntRegClass));
+
+        // An unchanged physical mapping can still regain read access.
+        auto &entry = historyBuffer[tid].emplace_front(
+            inst->seqNum, arch_reg, saved_reg, map.lookup(arch_reg));
+        entry.renameKind = RenameKind::Leave;
+        entry.prevUnreadable = map.isIntRegUnreadable(arch_reg);
+        inst->addRestoredMapping(arch_reg, saved_reg);
+
+        map.setEntry(arch_reg, saved_reg);
+        map.setIntRegUnreadable(arch_reg, false);
+        state.valid.reset(slot);
+    }
 }
 #endif
 

@@ -13,8 +13,12 @@
     .equ BREAKPOINT, 3
     .equ MSTATUS_MPP, 3 << 11
     .equ CALLER_S3, 0x53
-    /* custom-0, funct3=3, rd=rs1=0, imm12=0x008 (s3). */
+    .equ CALLER_S7, 0x57
+    /* PROREG.G.I uses custom-0, funct3=3, rd=rs1=0 and mask bit N for sN. */
     .equ PROREG_G_I_S3, 0x0080300B
+    .equ PROREG_G_I_S4, 0x0100300B
+    .equ PROREG_G_I_S7, 0x0800300B
+    .equ LEAVE, 0x0000500B
 
     .option norelax
     .option nopic
@@ -48,8 +52,10 @@ _start:
 
     la      s0, cases
     li      s1, 1
+    li      s7, CALLER_S7
 start_case:
     ld      t0, 0(s0)               /* Probe entry PC. */
+    lwu     s8, 0(t0)               /* Expected instruction word. */
     ld      s2, 8(s0)               /* Expected source privilege. */
     ld      s4, 16(s0)              /* Expected mcause. */
     ld      s5, 24(s0)              /* Expected mepc. */
@@ -58,6 +64,8 @@ start_case:
     li      a3, -1
     li      a4, -1
     li      a5, 0
+    li      a6, -1
+    li      a7, -1
     csrw    mepc, t0
     li      t0, MSTATUS_MPP
     csrc    mstatus, t0
@@ -65,7 +73,6 @@ start_case:
     csrs    mstatus, t0
     mret
 
-    /* Capture s3 on both sides of the first write to its protected mapping. */
     .macro PROBE name
     .balign 8
 \name:
@@ -73,8 +80,21 @@ start_case:
     mv      a3, s3
     addi    s3, s3, 1
     mv      a4, s3
+    .word   LEAVE
+    .word   PROREG_G_I_S4
+    mv      a6, s3                  /* Restored caller mapping. */
+    mv      a7, s4                  /* Hidden, never written by this probe. */
+    .word   LEAVE
+    .word   LEAVE                   /* Empty restore state. */
+    .word   PROREG_G_I_S7           /* Held across the untrusted LEAVE. */
     addi    a5, zero, 1
 \name\()_break:
+    ebreak
+\name\()_leave:
+    .word   LEAVE
+    mv      a3, s7
+    addi    a5, zero, 1
+\name\()_leave_break:
     ebreak
     .balign 8
 \name\()_end:
@@ -96,10 +116,21 @@ machine_trap:
     bne     t0, s5, fail
     li      t0, BREAKPOINT
     bne     s4, t0, check_illegal
+    li      t0, 1
+    bne     a5, t0, fail
+    li      t0, LEAVE
+    beq     s8, t0, check_trusted_leave
     bnez    a3, fail
     li      t0, 1
     bne     a4, t0, fail
-    bne     a5, t0, fail
+    li      t0, CALLER_S3
+    bne     a6, t0, fail
+    bnez    a7, fail
+    bnez    s7, fail
+    j       case_passed
+check_trusted_leave:
+    li      t0, CALLER_S7
+    bne     a3, t0, fail
     j       case_passed
 check_illegal:
     bnez    a5, fail
@@ -109,8 +140,10 @@ check_illegal:
     li      t0, CALLER_S3
     bne     s3, t0, fail
     csrr    t0, mtval
-    li      t1, PROREG_G_I_S3
-    bne     t0, t1, fail
+    bne     t0, s8, fail
+    li      t0, LEAVE
+    bne     s8, t0, case_passed
+    bnez    s7, fail                /* Denial preserved the hidden mapping. */
 case_passed:
     addi    s0, s0, 40
     addi    s1, s1, 1
@@ -142,13 +175,21 @@ halt:
     .section .rodata
     .balign 8
 cases:
-    /* Test trust denial before the successful probe occupies slot 18. */
+    /* Deny PROREG with empty slots, then deny LEAVE while s7 is protected. */
 #if defined(PROREG_TEST_U)
     .dword probe_b, PRV_U, ILLEGAL,    probe_b,       untrusted_u_failure
     .dword probe_a, PRV_U, BREAKPOINT, probe_a_break, trusted_u_failure
+    .dword probe_b_leave, PRV_U, ILLEGAL, probe_b_leave
+    .dword untrusted_leave_failure
+    .dword probe_a_leave, PRV_U, BREAKPOINT, probe_a_leave_break
+    .dword trusted_leave_failure
 #elif defined(PROREG_TEST_S)
     .dword probe_a, PRV_S, ILLEGAL,    probe_a,       untrusted_s_failure
     .dword probe_b, PRV_S, BREAKPOINT, probe_b_break, trusted_s_failure
+    .dword probe_a_leave, PRV_S, ILLEGAL, probe_a_leave
+    .dword untrusted_leave_failure
+    .dword probe_b_leave, PRV_S, BREAKPOINT, probe_b_leave_break
+    .dword trusted_leave_failure
 #else
 #error "Select a U or S boot for the PROREG test"
 #endif
@@ -158,6 +199,8 @@ trusted_u_failure:   .asciz "PROREG.G.I: trusted U failed\n"
 trusted_s_failure:   .asciz "PROREG.G.I: trusted S failed\n"
 untrusted_u_failure: .asciz "PROREG.G.I: untrusted U failed\n"
 untrusted_s_failure: .asciz "PROREG.G.I: untrusted S failed\n"
+trusted_leave_failure:   .asciz "LEAVE: trusted restore failed\n"
+untrusted_leave_failure: .asciz "LEAVE: untrusted denial failed\n"
 
     .section .data
     .balign 8

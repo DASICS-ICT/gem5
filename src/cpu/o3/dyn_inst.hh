@@ -46,6 +46,7 @@
 #include <list>
 #include <queue>
 #include <string>
+#include <vector>
 
 #include "base/refcnt.hh"
 #include "base/trace.hh"
@@ -91,6 +92,15 @@ class DynInst : public ExecContext, public RefCounted
   public:
     // The list of instructions iterator type.
     typedef typename std::list<DynInstPtr>::iterator ListIt;
+
+#if USE_DASICS
+    /** A mapping captured by LEAVE at rename for publication at commit. */
+    struct RestoredMapping
+    {
+        RegId archReg;
+        PhysRegIdPtr newPhysReg;
+    };
+#endif
 
     struct Arrays
     {
@@ -214,6 +224,10 @@ class DynInst : public ExecContext, public RefCounted
 
     /** The status of this BaseDynInst.  Several bits can be set. */
     std::bitset<NumStatus> status;
+
+#if USE_DASICS
+    std::vector<RestoredMapping> restoredMappings;
+#endif
 
   protected:
     /** The result of the instruction; assumes an instruction can have many
@@ -495,6 +509,21 @@ class DynInst : public ExecContext, public RefCounted
     {
         renamedSrcIdx(idx, renamed_src);
     }
+
+#if USE_DASICS
+    void
+    addRestoredMapping(const RegId &arch_reg, PhysRegIdPtr new_phys_reg)
+    {
+        assert(new_phys_reg && new_phys_reg->is(arch_reg.classValue()));
+        restoredMappings.push_back({arch_reg, new_phys_reg});
+    }
+
+    const std::vector<RestoredMapping> &
+    getRestoredMappings() const
+    {
+        return restoredMappings;
+    }
+#endif
 
     /** Dumps out contents of this BaseDynInst. */
     void dump();

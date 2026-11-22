@@ -221,6 +221,8 @@ class Rename
 #if USE_DASICS
     /** Save the integer mappings selected by a trusted PROREG request. */
     Fault protectIntRegs(const DynInstPtr &inst, ThreadID tid, uint32_t mask);
+    /** Restore all valid integer mappings for a trusted LEAVE. */
+    void restoreIntRegs(const DynInstPtr &inst, ThreadID tid);
 #endif
 
     /** Inserts unused instructions from a given thread into the skid buffer,
@@ -303,11 +305,12 @@ class Rename
     void serializeAfter(InstQueue &inst_list, ThreadID tid);
 
 #if USE_DASICS
-    /** A destination rename or a PROREG protection change. */
+    /** The operation whose mapping change is recorded in history. */
     enum class RenameKind : uint8_t
     {
         Normal,
-        Proreg
+        Proreg,
+        Leave
     };
 #endif
 
@@ -339,8 +342,6 @@ class Rename
         RenameKind renameKind = RenameKind::Normal;
         /** Whether the old RAT entry supplied zero for source reads. */
         bool prevUnreadable : 1 = false;
-        /** Previous reclaim block on prevPhysReg, used by Proreg records. */
-        bool prevReclaimBlocked : 1 = false;
 #endif
     };
 

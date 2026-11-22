@@ -436,7 +436,7 @@ class PhysRegId : private RegId
     bool pinned;
 
 #if USE_DASICS
-    /** True while a DASICS restore slot holds this physical register. */
+    /** Reclaim protection as of the last retired rename history record. */
     bool reclaimBlocked : 1 = false;
 #endif
 

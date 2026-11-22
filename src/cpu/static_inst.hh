@@ -311,6 +311,13 @@ class StaticInst : public RefCounted, public StaticInstFlags
         return std::nullopt;
     }
 
+    /** Whether to restore this thread's saved integer mappings at rename. */
+    virtual bool
+    restoresIntRegs() const
+    {
+        return false;
+    }
+
     /** Supply the ISA fault for a protection request with occupied slots. */
     virtual Fault
     intRegProtectionConflictFault() const

@@ -1342,7 +1342,7 @@ decode QUADRANT default Unknown::unknown() {
             // RVTYPE comes from the PC state: 0 selects RV32, 1 selects RV64.
             0x1: decode FUNCT3 {
                 // FUNCT3 (inst[14:12]) selects the DASICS operation:
-                // 0 = DASICSCALL.J, 1 = DASICSCALL.JR, 3 = PROREG.G.
+                // 0: DASICSCALL.J, 1: DASICSCALL.JR, 3: PROREG.G, 5: LEAVE.
                 0x0: DasicsCallJ::dasicscall_j({{
                     ra = rvSext(PC + 4);
                     NPC = rvSext(PC + imm);
@@ -1363,6 +1363,12 @@ decode QUADRANT default Unknown::unknown() {
                         0x0: DasicsProregGI::proreg_g_i(
                             IsRenamePermissionRequired, No_OpClass);
                     }
+                }
+                0x5: decode ALL {
+                    // LEAVE reserves inst[31:15] and inst[11:7] as zero.
+                    0x0000500B: DasicsLeave::leave({{
+                        // O3 restores the integer mappings at Rename.
+                    }}, IsRenamePermissionRequired, No_OpClass);
                 }
             }
         }

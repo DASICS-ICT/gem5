@@ -110,6 +110,16 @@ def format DasicsCallJR(code, *opt_flags) {{
     exec_output = DasicsCallExecute.subst(iop) + DasicsCallJRMethods.subst(iop)
 }};
 
+def template DasicsTrustedRenameAccess {{
+    Fault
+    %(class_name)s::checkRenameAccess(ExecContext *xc) const
+    {
+        auto *isa = static_cast<RiscvISA::ISA *>(xc->tcBase()->getIsaPtr());
+        return dasicsTrustedDomainAccessCheck(
+            xc, machInst, isa->getDasicsVAddrBits());
+    }
+}};
+
 def template DasicsProregGIDeclare {{
     class %(class_name)s : public %(base_class)s
     {
@@ -148,14 +158,6 @@ def template DasicsProregGIMethods {{
     }
 
     Fault
-    %(class_name)s::checkRenameAccess(ExecContext *xc) const
-    {
-        auto *isa = static_cast<RiscvISA::ISA *>(xc->tcBase()->getIsaPtr());
-        return dasicsTrustedDomainAccessCheck(
-            xc, machInst, isa->getDasicsVAddrBits());
-    }
-
-    Fault
     %(class_name)s::execute(ExecContext *xc,
         trace::InstRecord *traceData) const
     {
@@ -177,5 +179,31 @@ def format DasicsProregGI(*opt_flags) {{
     header_output = DasicsProregGIDeclare.subst(iop)
     decoder_output = ImmConstructor.subst(iop)
     decode_block = BasicDecode.subst(iop)
-    exec_output = DasicsProregGIMethods.subst(iop)
+    exec_output = (DasicsTrustedRenameAccess.subst(iop) +
+                   DasicsProregGIMethods.subst(iop))
+}};
+
+def template DasicsLeaveDeclare {{
+    class %(class_name)s : public %(base_class)s
+    {
+      private:
+        %(reg_idx_arr_decl)s;
+
+      public:
+        %(class_name)s(ExtMachInst machInst);
+        bool restoresIntRegs() const override { return true; }
+        Fault checkRenameAccess(ExecContext *xc) const override;
+        Fault execute(ExecContext *xc, trace::InstRecord *traceData)
+            const override;
+        using %(base_class)s::generateDisassembly;
+    };
+}};
+
+def format DasicsLeave(code, *opt_flags) {{
+    iop = InstObjParams(name, Name, 'SystemOp', code, opt_flags)
+    header_output = DasicsLeaveDeclare.subst(iop)
+    decoder_output = BasicConstructor.subst(iop)
+    decode_block = BasicDecode.subst(iop)
+    exec_output = (DasicsTrustedRenameAccess.subst(iop) +
+                   BasicExecute.subst(iop))
 }};

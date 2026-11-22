@@ -48,6 +48,7 @@
 #include "base/compiler.hh"
 #include "base/loader/symtab.hh"
 #include "base/logging.hh"
+#include "config/use_dasics.hh"
 #include "cpu/base.hh"
 #include "cpu/checker/cpu.hh"
 #include "cpu/exetrace.hh"
@@ -1267,6 +1268,14 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
         renameMap[tid]->setEntry(head_inst->flattenedDestIdx(i),
                                  head_inst->renamedDestIdx(i));
     }
+
+#if USE_DASICS
+    // Publish the integer mappings captured by this LEAVE at rename.
+    for (const auto &mapping : head_inst->getRestoredMappings()) {
+        renameMap[tid]->setEntry(mapping.archReg, mapping.newPhysReg);
+        renameMap[tid]->setIntRegUnreadable(mapping.archReg, false);
+    }
+#endif
 
     // hardware transactional memory
     // the HTM UID is purely for correctness and debugging purposes
