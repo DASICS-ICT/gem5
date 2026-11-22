@@ -219,6 +219,8 @@ class Rename
     void renameInsts(ThreadID tid);
 
 #if USE_DASICS
+    /** Check DASICS permissions and apply the authorized rename operation. */
+    void handleDasicsRename(const DynInstPtr &inst, ThreadID tid);
     /** Save the integer mappings selected by a trusted PROREG request. */
     Fault protectIntRegs(const DynInstPtr &inst, ThreadID tid, uint32_t mask);
     /** Restore all valid integer mappings for a trusted LEAVE. */
@@ -314,40 +316,53 @@ class Rename
     };
 #endif
 
-    /** Holds the information for each destination register rename. It holds
-     * the instruction's sequence number, the arch register, the old physical
-     * register for that arch. register, and the new physical register.
-     */
+    /** One register's mapping change, used for squash and retirement. */
     struct RenameHistory
     {
-        RenameHistory(InstSeqNum _instSeqNum, const RegId& _archReg,
-                      PhysRegIdPtr _newPhysReg,
-                      PhysRegIdPtr _prevPhysReg)
-            : instSeqNum(_instSeqNum), archReg(_archReg),
-              newPhysReg(_newPhysReg), prevPhysReg(_prevPhysReg)
-        {
-        }
+#if USE_DASICS
+        RenameHistory(RenameKind kind, InstSeqNum seq_num, const RegId &reg,
+                      PhysRegIdPtr new_phys_reg, PhysRegIdPtr prev_phys_reg,
+                      bool prev_unreadable)
+            : instSeqNum(seq_num),
+              archReg(reg),
+              newPhysReg(new_phys_reg),
+              prevPhysReg(prev_phys_reg),
+              renameKind(kind),
+              prevUnreadable(prev_unreadable)
+        {}
+#endif
+
+        RenameHistory(InstSeqNum seq_num, const RegId &reg,
+                      const UnifiedRenameMap::RenameInfo &mapping)
+#if USE_DASICS
+            : RenameHistory(RenameKind::Normal, seq_num, reg,
+                            mapping.newPhysReg, mapping.prevPhysReg,
+                            mapping.prevUnreadable)
+#else
+            : instSeqNum(seq_num),
+              archReg(reg),
+              newPhysReg(mapping.newPhysReg),
+              prevPhysReg(mapping.prevPhysReg)
+#endif
+        {}
 
         /** The sequence number of the instruction that renamed. */
         InstSeqNum instSeqNum;
         /** The architectural register index that was renamed. */
         RegId archReg;
-        /** The new physical register that the arch. register is renamed to. */
+        /** Physical mapping after the operation, including a restored one. */
         PhysRegIdPtr newPhysReg;
-        /** The old physical register that the arch. register was renamed to.
-         */
+        /** Physical mapping before the operation. */
         PhysRegIdPtr prevPhysReg;
 
 #if USE_DASICS
-        RenameKind renameKind = RenameKind::Normal;
+        RenameKind renameKind;
         /** Whether the old RAT entry supplied zero for source reads. */
-        bool prevUnreadable : 1 = false;
+        bool prevUnreadable : 1;
 #endif
     };
 
-    /** A per-thread list of all destination register renames, used to either
-     * undo rename mappings or free old physical registers.
-     */
+    /** Per-thread mapping history, youngest changes first. */
     std::list<RenameHistory> historyBuffer[MaxThreads];
 
 #if USE_DASICS
@@ -359,6 +374,20 @@ class Rename
         PhysRegIdPtr intRegs[NumIntSlots] = {};
         /** intRegs[i] is usable only while valid[i] is set. */
         std::bitset<NumIntSlots> valid{};
+
+        static RegIndex
+        slotIndex(RegIndex reg_idx)
+        {
+            assert(reg_idx > 0 && reg_idx <= NumIntSlots);
+            return reg_idx - 1;
+        }
+
+        void
+        save(RegIndex slot_idx, PhysRegIdPtr phys_reg)
+        {
+            intRegs[slot_idx] = phys_reg;
+            valid.set(slot_idx);
+        }
     };
 
     RestoreState restoreState[MaxThreads];

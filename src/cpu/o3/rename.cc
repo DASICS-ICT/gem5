@@ -751,22 +751,7 @@ Rename::renameInsts(ThreadID tid)
         }
 
 #if USE_DASICS
-        // Carry a Rename denial with the instruction until commit.
-        if (inst->staticInst->requiresRenamePermission() &&
-            inst->getFault() == NoFault) {
-            inst->getFault() = inst->staticInst->checkRenameAccess(inst.get());
-            if (inst->getFault() == NoFault) {
-                const auto mask = inst->staticInst->intRegProtectionMask();
-                if (mask.has_value()) {
-                    inst->getFault() = protectIntRegs(inst, tid, *mask);
-                } else if (inst->staticInst->restoresIntRegs()) {
-                    restoreIntRegs(inst, tid);
-                }
-            }
-            DPRINTF(Rename, "[tid:%i] [sn:%llu] %s rename access: %s\n", tid,
-                    inst->seqNum, inst->staticInst->getName(),
-                    inst->getFault() == NoFault ? "allowed" : "denied");
-        }
+        handleDasicsRename(inst, tid);
 #endif
         renameSrcRegs(inst, inst->threadNumber);
 
@@ -971,25 +956,23 @@ Rename::doSquash(const InstSeqNum &squashed_seq_num, ThreadID tid)
         ++stats.undoneMaps;
 #if USE_DASICS
         if (hb_it->renameKind != RenameKind::Normal) {
-            const auto reg_idx = hb_it->archReg.index();
-            assert(hb_it->archReg.is(IntRegClass) && reg_idx > 0 &&
-                   reg_idx <= RestoreState::NumIntSlots);
-            const auto slot = reg_idx - 1;
+            assert(hb_it->archReg.is(IntRegClass));
+            const auto slot_idx =
+                RestoreState::slotIndex(hb_it->archReg.index());
             auto &state = restoreState[tid];
             auto &map = *renameMap[tid];
             if (hb_it->renameKind == RenameKind::Leave) {
-                assert(!state.valid.test(slot));
+                assert(!state.valid.test(slot_idx));
                 assert(map.lookup(hb_it->archReg) == hb_it->newPhysReg);
                 map.setEntry(hb_it->archReg, hb_it->prevPhysReg);
                 // A younger PROREG may have overwritten the slot's pointer.
-                state.intRegs[slot] = hb_it->newPhysReg;
-                state.valid.set(slot);
+                state.save(slot_idx, hb_it->newPhysReg);
             } else {
                 assert(hb_it->renameKind == RenameKind::Proreg);
                 assert(hb_it->prevPhysReg == hb_it->newPhysReg);
-                assert(state.valid.test(slot) &&
-                       state.intRegs[slot] == hb_it->prevPhysReg);
-                state.valid.reset(slot);
+                assert(state.valid.test(slot_idx) &&
+                       state.intRegs[slot_idx] == hb_it->prevPhysReg);
+                state.valid.reset(slot_idx);
             }
 
             map.setIntRegUnreadable(hb_it->archReg, hb_it->prevUnreadable);
@@ -1106,6 +1089,32 @@ Rename::removeFromHistory(InstSeqNum inst_seq_num, ThreadID tid)
 }
 
 #if USE_DASICS
+void
+Rename::handleDasicsRename(const DynInstPtr &inst, ThreadID tid)
+{
+    const auto &static_inst = inst->staticInst;
+    if (!static_inst->requiresRenamePermission() ||
+        inst->getFault() != NoFault) {
+        return;
+    }
+
+    // Carry a denial on this dynamic instruction for precise delivery at
+    // commit.
+    auto &fault = inst->getFault();
+    fault = static_inst->checkRenameAccess(inst.get());
+    if (fault == NoFault) {
+        const auto mask = static_inst->intRegProtectionMask();
+        if (mask.has_value()) {
+            fault = protectIntRegs(inst, tid, *mask);
+        } else if (static_inst->restoresIntRegs()) {
+            restoreIntRegs(inst, tid);
+        }
+    }
+    DPRINTF(Rename, "[tid:%i] [sn:%llu] %s rename access: %s\n", tid,
+            inst->seqNum, static_inst->getName(),
+            fault == NoFault ? "allowed" : "denied");
+}
+
 Fault
 Rename::protectIntRegs(const DynInstPtr &inst, ThreadID tid, uint32_t mask)
 {
@@ -1118,22 +1127,20 @@ Rename::protectIntRegs(const DynInstPtr &inst, ThreadID tid, uint32_t mask)
     auto &map = *renameMap[tid];
     const auto &classes = inst->tcBase()->getIsaPtr()->regClasses();
     const auto &int_regs = *classes.at(IntRegClass);
-    for (RegIndex idx = 1; idx <= RestoreState::NumIntSlots; ++idx) {
-        if (!bits(mask, idx)) {
+    for (RegIndex reg_idx = 1; reg_idx <= RestoreState::NumIntSlots;
+         ++reg_idx) {
+        if (!bits(mask, reg_idx)) {
             continue;
         }
 
-        const RegId arch_reg = int_regs[idx];
+        const RegId arch_reg = int_regs[reg_idx];
         PhysRegIdPtr phys_reg = map.lookup(arch_reg);
         // PROREG changes source visibility without allocating a destination.
-        auto &entry = historyBuffer[tid].emplace_front(inst->seqNum, arch_reg,
-                                                       phys_reg, phys_reg);
-        entry.renameKind = RenameKind::Proreg;
-        entry.prevUnreadable = map.isIntRegUnreadable(arch_reg);
+        historyBuffer[tid].emplace_front(RenameKind::Proreg, inst->seqNum,
+                                         arch_reg, phys_reg, phys_reg,
+                                         map.isIntRegUnreadable(arch_reg));
 
-        const auto slot = idx - 1;
-        state.intRegs[slot] = phys_reg;
-        state.valid.set(slot);
+        state.save(RestoreState::slotIndex(reg_idx), phys_reg);
         map.setIntRegUnreadable(arch_reg, true);
     }
     return NoFault;
@@ -1150,25 +1157,26 @@ Rename::restoreIntRegs(const DynInstPtr &inst, ThreadID tid)
     auto &map = *renameMap[tid];
     const auto &classes = inst->tcBase()->getIsaPtr()->regClasses();
     const auto &int_regs = *classes.at(IntRegClass);
-    for (RegIndex slot = 0; slot < RestoreState::NumIntSlots; ++slot) {
-        if (!state.valid.test(slot)) {
+    for (RegIndex reg_idx = 1; reg_idx <= RestoreState::NumIntSlots;
+         ++reg_idx) {
+        const auto slot_idx = RestoreState::slotIndex(reg_idx);
+        if (!state.valid.test(slot_idx)) {
             continue;
         }
 
-        const RegId arch_reg = int_regs[slot + 1];
-        PhysRegIdPtr saved_reg = state.intRegs[slot];
+        const RegId arch_reg = int_regs[reg_idx];
+        PhysRegIdPtr saved_reg = state.intRegs[slot_idx];
         assert(saved_reg && saved_reg->is(IntRegClass));
 
         // An unchanged physical mapping can still regain read access.
-        auto &entry = historyBuffer[tid].emplace_front(
-            inst->seqNum, arch_reg, saved_reg, map.lookup(arch_reg));
-        entry.renameKind = RenameKind::Leave;
-        entry.prevUnreadable = map.isIntRegUnreadable(arch_reg);
+        historyBuffer[tid].emplace_front(
+            RenameKind::Leave, inst->seqNum, arch_reg, saved_reg,
+            map.lookup(arch_reg), map.isIntRegUnreadable(arch_reg));
         inst->addRestoredMapping(arch_reg, saved_reg);
 
         map.setEntry(arch_reg, saved_reg);
         map.setIntRegUnreadable(arch_reg, false);
-        state.valid.reset(slot);
+        state.valid.reset(slot_idx);
     }
 }
 #endif
@@ -1278,14 +1286,8 @@ Rename::renameDestRegs(const DynInstPtr &inst, ThreadID tid)
                 rename_result.newPhysReg->flatIndex());
 
         // Record the rename information so that a history can be kept.
-        RenameHistory hb_entry(inst->seqNum, flat_dest_regid,
-                               rename_result.newPhysReg,
-                               rename_result.prevPhysReg);
-#if USE_DASICS
-        hb_entry.prevUnreadable = rename_result.prevUnreadable;
-#endif
-
-        historyBuffer[tid].push_front(hb_entry);
+        historyBuffer[tid].emplace_front(inst->seqNum, flat_dest_regid,
+                                         rename_result);
 
         DPRINTF(Rename, "[tid:%i] [sn:%llu] "
                 "Adding instruction to history buffer (size=%i).\n",
