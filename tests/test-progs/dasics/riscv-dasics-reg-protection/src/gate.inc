@@ -2,6 +2,9 @@
 /* clang-format off */
 
 /* The boundary reference retains control state but omits data protection. */
+#if USE_INT_PROREG && GATE_MODE != GATE_SOFTWARE
+#error The PROREG gate requires the full register protection policy
+#endif
 #if VECTOR_ABI == 2
     .variant_cc protected_gate
 #endif
@@ -14,11 +17,13 @@ protected_gate:
     csrr    t1, fcsr
     sd      t1, CTX_FCSR(t0)
 #if GATE_MODE >= GATE_SAVE
+#if !USE_INT_PROREG
     .set .Lsave_offset, CTX_GPR_SAVE
     .irp reg,s0,s1,s2,s3,s4,s5,s6,s7,s8,s9,s10,s11
     sd      \reg, .Lsave_offset(t0)
     .set .Lsave_offset, .Lsave_offset + 8
     .endr
+#endif
     .set .Lsave_offset, CTX_FPR_SAVE
     .irp reg,fs0,fs1,fs2,fs3,fs4,fs5,fs6,fs7,fs8,fs9,fs10,fs11
     fsd     \reg, .Lsave_offset(t0)
@@ -76,14 +81,21 @@ protected_gate:
     li      gp, 0
     li      tp, 0
 #if GATE_MODE == GATE_SOFTWARE
+#if USE_INT_PROREG
+    .irp reg,t0,t1,t2,a3,a4,a5,a6,a7,t3,t4,t5,t6
+#else
     .irp reg,t0,t1,t2,s0,s1,a3,a4,a5,a6,a7,\
              s2,s3,s4,s5,s6,s7,s8,s9,s10,s11,t3,t4,t5,t6
+#endif
     li      \reg, 0
     .endr
     .irp num,0,1,2,3,4,5,6,7,8,9,11,12,13,14,15,\
              16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31
     fmv.d.x f\num, zero
     .endr
+#if USE_INT_PROREG
+    .word   0xfff0300b              /* PROREG.G.I 0xfff: protect s0-s11. */
+#endif
 #endif
     .globl gate_call, return_gate
 gate_call:
@@ -109,11 +121,15 @@ return_gate:
     vl1re8.v v1, (t1)
 #endif
 #if GATE_MODE >= GATE_RESTORE
+#if USE_INT_PROREG
+    .word   0x0000500b              /* LEAVE restores A's integer mappings. */
+#else
     .set .Lrestore_offset, CTX_GPR_SAVE
     .irp reg,s0,s1,s2,s3,s4,s5,s6,s7,s8,s9,s10,s11
     ld      \reg, .Lrestore_offset(t0)
     .set .Lrestore_offset, .Lrestore_offset + 8
     .endr
+#endif
     .set .Lrestore_offset, CTX_FPR_SAVE
     .irp reg,fs0,fs1,fs2,fs3,fs4,fs5,fs6,fs7,fs8,fs9,fs10,fs11
     fld     \reg, .Lrestore_offset(t0)

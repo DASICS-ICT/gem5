@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 #include "runtime.inc"
 
+    .equ GPR_SLOT_SENTINEL, 0x500
+
     .section .text.trusted,"ax",@progbits
 trusted_entry:
     li      a0, 1
@@ -87,6 +89,19 @@ test_calls:
     la      t0, a_stack_bottom
     ld      t2, 0(t0)
     slli    t2, t2, 8
+#if TEST_SCENARIO == 0
+    /* Give each GPR slot its own value, distinct from either call's sN. */
+    la      t3, context_frame
+    addi    t3, t3, CTX_GPR_SAVE
+    addi    t4, t2, GPR_SLOT_SENTINEL
+    li      t5, 12
+.Lseed_gpr_slots:
+    sd      t4, 0(t3)
+    addi    t3, t3, 8
+    addi    t4, t4, 1
+    addi    t5, t5, -1
+    bnez    t5, .Lseed_gpr_slots
+#endif
     li      t0, GPR_SEED
     add     t0, t0, t2
     .irp reg,s0,s1,s2,s3,s4,s5,s6,s7,s8,s9,s10,s11
@@ -144,12 +159,38 @@ after_gate:
     bne     \reg, t0, user_finish
     addi    t0, t0, 1
     .endr
+#if TEST_SCENARIO == 0
+    /* Software spills s0-s11; PROREG leaves their memory slots untouched. */
+    li      a0, 32
+    la      t3, context_frame
+    addi    t3, t3, CTX_GPR_SAVE
+#if USE_INT_PROREG
+    addi    t0, t2, GPR_SLOT_SENTINEL
+#else
+    li      t0, GPR_SEED
+    add     t0, t0, t2
+#endif
+    li      t4, 12
+.Lcheck_gpr_slots:
+    ld      t1, 0(t3)
+    bne     t1, t0, user_finish
+    addi    t0, t0, 1
+    addi    t3, t3, 8
+    addi    t4, t4, -1
+    bnez    t4, .Lcheck_gpr_slots
+#endif
     li      a0, 13
     .irp num,8,9,18,19,20,21,22,23,24,25,26,27
     li      t0, FPR_SEED + \num
     add     t0, t0, t2
     fmv.x.d t1, f\num
     bne     t0, t1, user_finish
+#if TEST_SCENARIO == 0
+    /* t3 now walks the adjacent fs0-fs11 save slots in ABI order. */
+    ld      t1, 0(t3)
+    bne     t0, t1, user_finish
+    addi    t3, t3, 8
+#endif
     .endr
 
     li      a0, 19

@@ -17,8 +17,9 @@ from pathlib import Path
 from threading import Thread
 
 PROGRAM = "riscv-dasics-reg-protection"
+NORMAL_CASES = ("normal", "normal-proreg")
 CASES = (
-    "normal",
+    *NORMAL_CASES,
     "context-read",
     "context-write",
     "stack-read",
@@ -52,12 +53,12 @@ def forward_output(stream, log):
 
 
 def run_case(args, case):
-    # Normal outputs retain the root dispatcher's config/statistics layout.
+    # The software normal case supplies the root dispatcher's cycle count.
     directory = args.outdir if case == "normal" else args.outdir / case
     suffix = "" if case == "normal" else f"-{case}"
     elf = Path(__file__).resolve().parent.parent / "build"
     elf = elf / f"{PROGRAM}{suffix}.elf"
-    marker = "normal" if case == "normal" else "expected fault"
+    marker = case if case in NORMAL_CASES else "expected fault"
     expected = f"[OK] DASICS register protection: {marker}"
     directory.mkdir(parents=True, exist_ok=True)
     for name in ("stats.txt", "config.ini", "config.json", "case-result.json"):
@@ -120,7 +121,7 @@ def run_case(args, case):
     if rc == 0 and not marker_found:
         rc = 1
     cycles = read_cycles(directory / "stats.txt") if rc == 0 else "N/A"
-    if case == "normal" and cycles == "N/A" and rc == 0:
+    if case in NORMAL_CASES and cycles == "N/A" and rc == 0:
         rc = 1
     result.update(
         expected_marker=expected,
@@ -168,7 +169,7 @@ def main():
     write_json(
         args.outdir / "result.json", {"exit_code": rc, "cases": results}
     )
-    print(f"CPU cycles (normal full functional case, not ROI): {cycles}")
+    print(f"CPU cycles (software normal, full functional case): {cycles}")
     print(f"Case logs: {args.outdir}")
     status = "OK" if rc == 0 else "TIMEOUT" if rc == 124 else "FAIL"
     color = "32" if rc == 0 else "31"
