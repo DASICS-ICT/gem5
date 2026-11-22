@@ -3,7 +3,7 @@
 ## 实验记录
 
 - [2026-11-18 · 软件寄存器保护开销（标量分量、两种向量 ABI 与 VLEN）](experiments/2026-11-18-register-protection.md)
-- [2026-11-22 · B 不改写 s0–s11 时，硬件辅助调用门每次节省的周期](experiments/2026-11-22-proreg-roi.md)
+- [2026-11-22 · 硬件辅助调用门的周期收益与 B 改写 0、1、6、12 个 s 寄存器的影响](experiments/2026-11-22-proreg-roi.md)
 
 ## 测试范围
 
@@ -174,6 +174,23 @@ python3 "$test_dir/measure.py" --comparison proreg --jobs 8 \
 在同一批次比较 `software` 和 `proreg` 两种门。空函数和固定计算各预热 128 次，分别测量 1024 和 4096 次调用。
 `summary.csv` 的 `saved_cycles_per_call` 为软件门与硬件辅助门的 ROI 周期差除以调用次数。
 每个配对应少提交 34 条指令，其中包含 12 条加载和 12 条存储；同一负载以 4096 次调用为参照，两个批长的周期节省量相对偏差应在 1% 以内。
+
+### B 在返回前改写受保护的整数寄存器
+
+两种调用门始终保护全部 `s0–s11`。B 设置好 `a0/fa0` 后执行 12 条独立的整数立即数写，再返回。
+前 `k` 条写 `s0` 起的连续寄存器，剩余位置写返回前已用完的临时或参数寄存器。`k` 取 0、1、6、12。
+本轮 0 档也执行 12 条写；按同一负载和批长计算相对 0 档的节省量变化。
+
+```bash
+test_dir=tests/test-progs/dasics/riscv-dasics-reg-protection
+batch="$test_dir/build/runs/clobber-roi-$(date +%Y%m%d-%H%M%S)"
+make -j32 -C "$test_dir/src" clobber-roi ROI_COUNTS="4 1024 4096"
+python3 "$test_dir/check_clobber.py" --jobs 16 --outdir "$batch/checks" &&
+    python3 "$test_dir/measure.py" --comparison clobber --jobs 32 --outdir "$batch/measurements"
+```
+
+短用例检查 B 实际提交的写指令和返回后 A 的自检结果。计时用例分别测量 1024 和 4096 次调用，
+在 `measurements/summary.csv` 中给出两种门的周期、每次调用的节省量和相对同批 0 档的变化。
 
 ### v5_full 热态基线
 

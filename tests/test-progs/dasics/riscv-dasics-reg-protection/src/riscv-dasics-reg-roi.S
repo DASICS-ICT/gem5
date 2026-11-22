@@ -77,9 +77,7 @@ trusted_entry:
     vadd.vi v24, v24, 7
 #endif
 
-    /* s0 counts calls, and s1 selects warmup versus the measured batch.
-     * Timed B bodies use only caller-saved registers in every variant.
-     */
+    /* s0 counts calls and s1 selects warmup versus the measured batch. */
     li      s0, 128
     li      s1, 0
     j       roi_loop
@@ -276,7 +274,6 @@ callee_entry:
 #if ROI_WORKLOAD == 0
     li      a0, 0
     fmv.d.x fa0, zero
-    ret
 #else
     mv      t3, a0
     mv      t4, a1
@@ -301,5 +298,37 @@ callee_entry:
 #if VECTOR_ABI == 2
     vadd.vi v8, v8, 1
 #endif
-    ret
 #endif
+#ifdef ROI_CLOBBER_COUNT
+#if ROI_CLOBBER_COUNT != 0 && ROI_CLOBBER_COUNT != 1 && \
+    ROI_CLOBBER_COUNT != 6 && ROI_CLOBBER_COUNT != 12
+#error Unsupported protected-register clobber count
+#endif
+    .globl roi_clobber_count, clobber_writes_begin, clobber_writes_end
+    .equ roi_clobber_count, ROI_CLOBBER_COUNT
+    /* All variants retire twelve independent writes after both results
+     * are ready. Only the first k destinations are protected registers.
+     */
+    .macro CLOBBER slot, saved, scratch
+    .if \slot < roi_clobber_count
+    addi    \saved, zero, (0x101 + \slot)
+    .else
+    addi    \scratch, zero, (0x101 + \slot)
+    .endif
+    .endm
+clobber_writes_begin:
+    CLOBBER  0, s0,  t0
+    CLOBBER  1, s1,  t1
+    CLOBBER  2, s2,  t2
+    CLOBBER  3, s3,  t3
+    CLOBBER  4, s4,  t4
+    CLOBBER  5, s5,  t5
+    CLOBBER  6, s6,  t6
+    CLOBBER  7, s7,  a1
+    CLOBBER  8, s8,  a2
+    CLOBBER  9, s9,  a3
+    CLOBBER 10, s10, a4
+    CLOBBER 11, s11, a5
+clobber_writes_end:
+#endif
+    ret

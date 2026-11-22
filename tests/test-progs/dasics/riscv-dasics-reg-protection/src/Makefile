@@ -20,6 +20,9 @@ ROI_ELFS := $(foreach mode,boundary save restore software,\
     $(foreach count,$(ROI_COUNTS),../build/roi/$(mode)-$(body)-$(count).elf)))
 PROREG_ROI_ELFS := $(foreach body,empty compute,\
     $(foreach count,$(ROI_COUNTS),../build/roi/proreg-$(body)-$(count).elf))
+CLOBBER_ROI_ELFS := $(foreach mode,software proreg,$(foreach body,empty compute,\
+    $(foreach count,$(ROI_COUNTS),$(foreach k,0 1 6 12,\
+    ../build/roi/$(mode)-$(body)-$(count)-clobber$(k).elf))))
 roi_fields = $(subst -, ,$(basename $(notdir $@)))
 
 VLEN ?= 128
@@ -31,13 +34,15 @@ VEC_ELFS := $(foreach mode,$(VEC_MODES),$(foreach body,empty compute,\
     $(foreach n,$(ROI_COUNTS),$(VEC_BUILD)/roi/$(mode)-$(body)-$(n).elf)))
 VEC_CHECKS := $(addprefix $(VEC_BUILD)/vector-check-,standard.elf variant.elf)
 
-.PHONY: all roi proreg-roi vector-roi vector-roi-all $(VEC_WIDTH_TARGETS) run clean
+.PHONY: all roi proreg-roi clobber-roi vector-roi vector-roi-all $(VEC_WIDTH_TARGETS) run clean
 
 all: $(ELFS)
 
 roi: $(ROI_ELFS)
 
 proreg-roi: $(filter ../build/roi/software-%,$(ROI_ELFS)) $(PROREG_ROI_ELFS)
+
+clobber-roi: $(CLOBBER_ROI_ELFS)
 
 vector-roi: $(VEC_CHECKS) $(VEC_ELFS)
 
@@ -70,8 +75,9 @@ $(ELFS): $(PROGRAM).S $(COMMON) $(MAKEFILE_LIST)
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -DTEST_SCENARIO=$(TEST_SCENARIO) $(LDFLAGS) -o $@ $<
 
-$(PROREG_ROI_ELFS): override CFLAGS += -DUSE_INT_PROREG=1
-$(ROI_ELFS) $(PROREG_ROI_ELFS): riscv-dasics-reg-roi.S $(COMMON) $(MAKEFILE_LIST)
+$(PROREG_ROI_ELFS) $(filter ../build/roi/proreg-%,$(CLOBBER_ROI_ELFS)): override CFLAGS += -DUSE_INT_PROREG=1
+$(CLOBBER_ROI_ELFS): override CFLAGS += -DROI_CLOBBER_COUNT=$(patsubst clobber%,%,$(word 4,$(roi_fields)))
+$(ROI_ELFS) $(PROREG_ROI_ELFS) $(CLOBBER_ROI_ELFS): riscv-dasics-reg-roi.S $(COMMON) $(MAKEFILE_LIST)
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I../../../../../include \
 		-DGATE_MODE=$(gate_$(word 1,$(roi_fields))) \
@@ -84,7 +90,7 @@ run: all
 		--config "$(GEM5_CONFIG)" --outdir "$(GEM5_OUTDIR)" --cpu "$(CPU)"
 
 clean:
-	rm -f $(ELFS) $(ROI_ELFS) $(PROREG_ROI_ELFS) \
+	rm -f $(ELFS) $(ROI_ELFS) $(PROREG_ROI_ELFS) $(CLOBBER_ROI_ELFS) \
 	    $(foreach dir,../build $(addprefix ../build/vlen-,256 512 1024),\
 	      $(addprefix $(dir)/,$(notdir $(VEC_CHECKS))) \
 	      $(addprefix $(dir)/roi/,$(notdir $(VEC_ELFS))))

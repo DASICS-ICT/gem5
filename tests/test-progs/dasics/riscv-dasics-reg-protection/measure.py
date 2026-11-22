@@ -31,6 +31,7 @@ CONTRASTS = (
 )
 WORKLOADS = ("empty", "compute")
 ITERATIONS = (1024, 4096)
+CLOBBER_COUNTS = (0, 1, 6, 12)
 WARMUP = 128
 MARKER = "[OK] DASICS register protection: roi"
 STAT_KEYS = (
@@ -153,7 +154,10 @@ def validate(directory, job):
 
 
 def job_name(job):
-    return f"{job['mode']}-{job['workload']}-{job['iterations']}"
+    name = f"{job['mode']}-{job['workload']}-{job['iterations']}"
+    if "clobber_count" in job:
+        name += f"-clobber{job['clobber_count']}"
+    return name
 
 
 def run_process(directory, command, timeout):
@@ -194,7 +198,7 @@ def build_dir(vlen=128):
     return build if vlen == 128 else build / f"vlen-{vlen}"
 
 
-def run_job(args, job):
+def run_job(args, job, *, debug_flags=None):
     name = job_name(job)
     root = args.outdir
     if "vlen" in job:
@@ -205,6 +209,12 @@ def run_job(args, job):
         str(REPO / "build/RISCV_DASICS/gem5.opt"),
         "--listener-mode=off",
         f"--outdir={directory}",
+    ]
+    if debug_flags:
+        command.extend(
+            [f"--debug-flags={debug_flags}", "--debug-file=debug.trace.gz"]
+        )
+    command += [
         str(REPO / "configs/dasics/riscv_dasics_reg_protection_o3_v5_full.py"),
         str(build_dir(job.get("vlen", 128)) / "roi" / f"{name}.elf"),
         "--mode",
@@ -216,6 +226,8 @@ def run_job(args, job):
     ]
     if "vlen" in job:
         command.extend(["--vlen", str(job["vlen"])])
+    if "clobber_count" in job:
+        command.extend(["--clobber-count", str(job["clobber_count"])])
     result = dict(job, name=name, warmup=WARMUP, status="FAIL")
     result.update(run_process(directory, command, args.timeout))
 
@@ -338,7 +350,7 @@ def validate_instruction_deltas(results):
     return checks
 
 
-def report_proreg(outdir, results):
+def proreg_pairs(results):
     indexed = {(r["workload"], r["iterations"], r["mode"]): r for r in results}
     # Twelve stores, clears, and loads become one PROREG and one LEAVE.
     counters = (
@@ -399,16 +411,75 @@ def report_proreg(outdir, results):
                 convergence="PASS" if converged else "FAIL",
                 status="PASS" if passed else "FAIL",
             )
-            print(
-                f"{pair['workload']} N={pair['iterations']}: "
-                f"SW={pair['software_cycles_per_call']}, "
-                f"PROREG={pair['proreg_cycles_per_call']}, "
-                f"saved={pair['saved_cycles_per_call']} cycles/call "
-                f"[{pair['status']}]"
-            )
         summary.extend(pairs)
+    return summary
+
+
+def clobber_pairs(results):
+    zero = [r for r in results if r["clobber_count"] == 0]
+    controls = {(r["mode"], r["workload"], r["iterations"]): r for r in zero}
+    zero_pairs = {
+        (p["workload"], p["iterations"]): p for p in proreg_pairs(zero)
+    }
+    summary = []
+    for k in CLOBBER_COUNTS:
+        runs = [r for r in results if r["clobber_count"] == k]
+        indexed = {
+            (r["mode"], r["workload"], r["iterations"]): r for r in runs
+        }
+        for pair in proreg_pairs(runs):
+            key = (pair["workload"], pair["iterations"])
+            reference = zero_pairs[key]
+            pair["clobber_count"] = k
+            pair["change_vs_zero_cycles_per_call"] = None
+            current, baseline = (
+                pair["saved_cycles_per_call"],
+                reference["saved_cycles_per_call"],
+            )
+            if current is not None and baseline is not None:
+                pair["change_vs_zero_cycles_per_call"] = current - baseline
+
+            # Every level executes twelve integer writes at the same PCs.
+            # Changing their destinations must preserve retired work in each gate.
+            equal_work = True
+            for mode in ("software", "proreg"):
+                arm = (mode, pair["workload"], pair["iterations"])
+                trial, control = indexed[arm], controls[arm]
+                if trial["status"] != "PASS" or control["status"] != "PASS":
+                    equal_work = False
+                    break
+                for counter in ("numInsts", "numLoadInsts", "numStoreInsts"):
+                    stat = f"system.cpu.commitStats0.{counter}"
+                    if (
+                        trial["statistics"][stat]
+                        != control["statistics"][stat]
+                    ):
+                        equal_work = False
+            pair["fixed_work_validation"] = "PASS" if equal_work else "FAIL"
+            if not equal_work or reference["status"] != "PASS":
+                pair["status"] = "FAIL"
+            summary.append(pair)
+    return summary
+
+
+def report_proreg(outdir, results, *, clobber=False):
+    summary = clobber_pairs(results) if clobber else proreg_pairs(results)
+    for pair in summary:
+        level = f" k={pair['clobber_count']}" if clobber else ""
+        relative = (
+            f", change vs k=0: {pair['change_vs_zero_cycles_per_call']}"
+            if clobber
+            else ""
+        )
+        print(
+            f"{pair['workload']} N={pair['iterations']}{level}: "
+            f"SW={pair['software_cycles_per_call']}, "
+            f"PROREG={pair['proreg_cycles_per_call']}, "
+            f"saved={pair['saved_cycles_per_call']}{relative} cycles/call "
+            f"[{pair['status']}]"
+        )
     passed = all(r["status"] == "PASS" for r in summary)
-    write_csv(outdir / "summary.csv", summary, fields)
+    write_csv(outdir / "summary.csv", summary, list(summary[0]))
     write_json(
         outdir / "summary.json",
         {
@@ -423,13 +494,13 @@ def report_proreg(outdir, results):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--outdir", required=True, type=Path)
-    parser.add_argument("--jobs", type=int, choices=range(1, 9), default=8)
+    parser.add_argument("--jobs", type=int, choices=range(1, 33), default=8)
     parser.add_argument("--timeout", type=int, default=300)
     parser.add_argument(
         "--comparison",
-        choices=("components", "proreg"),
+        choices=("components", "proreg", "clobber"),
         default="components",
-        help="Measure software components or compare software with PROREG.",
+        help="Measure software components or paired software and PROREG gates.",
     )
     args = parser.parse_args()
     if args.timeout <= 0:
@@ -438,11 +509,17 @@ def main():
     jobs = [
         dict(mode=mode, workload=workload, iterations=count)
         for mode in (
-            ("software", "proreg") if args.comparison == "proreg" else MODES
+            MODES
+            if args.comparison == "components"
+            else ("software", "proreg")
         )
         for workload in WORKLOADS
         for count in ITERATIONS
     ]
+    if args.comparison == "clobber":
+        jobs = [
+            dict(job, clobber_count=k) for job in jobs for k in CLOBBER_COUNTS
+        ]
     gem5 = REPO / "build/RISCV_DASICS/gem5.opt"
     config = REPO / "configs/dasics/riscv_dasics_reg_protection_o3_v5_full.py"
     for path in [gem5, config] + [
@@ -493,13 +570,17 @@ def main():
                 "error",
             )
         }
+        if "clobber_count" in result:
+            row["clobber_count"] = result["clobber_count"]
         row.update(
             {key: result.get("statistics", {}).get(key) for key in STAT_KEYS}
         )
         result_rows.append(row)
     write_csv(args.outdir / "results.csv", result_rows, list(result_rows[0]))
-    if args.comparison == "proreg":
-        return report_proreg(args.outdir, results)
+    if args.comparison in ("proreg", "clobber"):
+        return report_proreg(
+            args.outdir, results, clobber=args.comparison == "clobber"
+        )
     summary = summarize(results)
     checks = validate_instruction_deltas(results)
     for row in summary:

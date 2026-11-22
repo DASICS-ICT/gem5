@@ -85,6 +85,7 @@ def run():
         "--workload", choices=("empty", "compute"), required=True
     )
     parser.add_argument("--iterations", type=int, required=True)
+    parser.add_argument("--clobber-count", type=int, choices=(0, 1, 6, 12))
     parser.add_argument(
         "--max-ticks",
         type=int,
@@ -189,6 +190,8 @@ def run():
         "exit_cause": None,
         "error": None,
     }
+    if args.clobber_count is not None:
+        result["clobber_count"] = args.clobber_count
     deadline = min(m5.MaxTick, m5.curTick() + args.max_ticks)
     try:
         while m5.curTick() < deadline:
