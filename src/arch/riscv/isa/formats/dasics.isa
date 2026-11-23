@@ -120,7 +120,7 @@ def template DasicsTrustedRenameAccess {{
     }
 }};
 
-def template DasicsProregGIDeclare {{
+def template DasicsProregIDeclare {{
     class %(class_name)s : public %(base_class)s
     {
       private:
@@ -128,7 +128,8 @@ def template DasicsProregGIDeclare {{
 
       public:
         %(class_name)s(ExtMachInst machInst);
-        std::optional<uint32_t> intRegProtectionMask() const override;
+        std::optional<RegProtectionRequest> regProtectionRequest()
+            const override;
         Fault regProtectionConflictFault() const override;
         Fault checkRenameAccess(ExecContext *xc) const override;
         Fault execute(ExecContext *xc, trace::InstRecord *traceData)
@@ -138,19 +139,18 @@ def template DasicsProregGIDeclare {{
     };
 }};
 
-def template DasicsProregGIMethods {{
-    std::optional<uint32_t>
-    %(class_name)s::intRegProtectionMask() const
-    {
-        // The ABI places s0-s1 at x8-x9 and s2-s11 at x18-x27.
-        const uint32_t s0_s1 = bits(imm, 1, 0);
-        const uint32_t s2_s11 = bits(imm, 11, 2);
-        return (s0_s1 << int_reg::S0.index()) |
-               (s2_s11 << int_reg::S2.index());
-    }
-}};
-
 def template DasicsProregIMethods {{
+    std::optional<StaticInst::RegProtectionRequest>
+    %(class_name)s::regProtectionRequest() const
+    {
+        // The two saved ranges skip argument registers 10-17 in both classes.
+        const uint32_t low = bits(imm, 1, 0);
+        const uint32_t high = bits(imm, 11, 2);
+        const uint32_t mask = (low << %(saved0)s.index()) |
+                              (high << %(saved2)s.index());
+        return RegProtectionRequest{%(reg_class)s, mask};
+    }
+
     Fault
     %(class_name)s::regProtectionConflictFault() const
     {
@@ -174,60 +174,23 @@ def template DasicsProregIMethods {{
     }
 }};
 
-def format DasicsProregGI(*opt_flags) {{
+def format DasicsProregI(reg_class, *opt_flags) {{
     # The selector occupies the usual rd bits; it is not a register operand.
-    iop = InstObjParams("proreg.g.i", Name, "ImmOp<uint16_t>",
+    mnemonic = name.replace("_", ".")
+    iop = InstObjParams(mnemonic, Name, "ImmOp<uint16_t>",
         {"imm_code": "imm = IMM12;"}, opt_flags)
-    iop.conflict_reason = (
-        "PROREG.G.I requires all integer restore slots to be empty")
-    header_output = DasicsProregGIDeclare.subst(iop)
+    iop.reg_class = reg_class
+    iop.saved0, iop.saved2, slot_kind = {
+        "IntRegClass": ("int_reg::S0", "int_reg::S2", "integer"),
+        "FloatRegClass": ("float_reg::Fs0", "float_reg::Fs2",
+                          "floating-point"),
+    }[reg_class]
+    iop.conflict_reason = (f"{mnemonic.upper()} requires all {slot_kind} "
+                           "restore slots to be empty")
+    header_output = DasicsProregIDeclare.subst(iop)
     decoder_output = ImmConstructor.subst(iop)
     decode_block = BasicDecode.subst(iop)
     exec_output = (DasicsTrustedRenameAccess.subst(iop) +
-                   DasicsProregGIMethods.subst(iop) +
-                   DasicsProregIMethods.subst(iop))
-}};
-
-def template DasicsProregFIDeclare {{
-    class %(class_name)s : public %(base_class)s
-    {
-      private:
-        %(reg_idx_arr_decl)s;
-
-      public:
-        %(class_name)s(ExtMachInst machInst);
-        std::optional<uint32_t> floatRegProtectionMask() const override;
-        Fault regProtectionConflictFault() const override;
-        Fault checkRenameAccess(ExecContext *xc) const override;
-        Fault execute(ExecContext *xc, trace::InstRecord *traceData)
-            const override;
-        std::string generateDisassembly(Addr pc,
-            const loader::SymbolTable *symtab) const override;
-    };
-}};
-
-def template DasicsProregFIMask {{
-    std::optional<uint32_t>
-    %(class_name)s::floatRegProtectionMask() const
-    {
-        // The ABI places fs0-fs1 at f8-f9 and fs2-fs11 at f18-f27.
-        const uint32_t fs0_fs1 = bits(imm, 1, 0);
-        const uint32_t fs2_fs11 = bits(imm, 11, 2);
-        return (fs0_fs1 << float_reg::Fs0.index()) |
-               (fs2_fs11 << float_reg::Fs2.index());
-    }
-}};
-
-def format DasicsProregFI(*opt_flags) {{
-    iop = InstObjParams("proreg.f.i", Name, "ImmOp<uint16_t>",
-        {"imm_code": "imm = IMM12;"}, opt_flags)
-    iop.conflict_reason = (
-        "PROREG.F.I requires all floating-point restore slots to be empty")
-    header_output = DasicsProregFIDeclare.subst(iop)
-    decoder_output = ImmConstructor.subst(iop)
-    decode_block = BasicDecode.subst(iop)
-    exec_output = (DasicsTrustedRenameAccess.subst(iop) +
-                   DasicsProregFIMask.subst(iop) +
                    DasicsProregIMethods.subst(iop))
 }};
 

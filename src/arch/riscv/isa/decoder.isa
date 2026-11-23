@@ -1361,8 +1361,9 @@ decode QUADRANT default Unknown::unknown() {
                         // PROREG.G.I reads no source register, so RS1
                         // (inst[19:15]) must be zero. IMM12 (inst[31:20])
                         // holds the unsigned mask for s0 through s11.
-                        0x0: DasicsProregGI::proreg_g_i(
-                            IsRenamePermissionRequired, No_OpClass);
+                        0x0: DasicsProregI::proreg_g_i(
+                            IntRegClass, IsRenamePermissionRequired,
+                            No_OpClass);
                     }
                 }
                 0x4: decode RD {
@@ -1370,8 +1371,9 @@ decode QUADRANT default Unknown::unknown() {
                     // for a register mask.
                     0x0: decode RS1 {
                         // RS1 must be zero. IMM12 bit i selects fs<i>.
-                        0x0: DasicsProregFI::proreg_f_i(
-                            IsRenamePermissionRequired, No_OpClass);
+                        0x0: DasicsProregI::proreg_f_i(
+                            FloatRegClass, IsRenamePermissionRequired,
+                            No_OpClass);
                     }
                 }
                 0x5: decode ALL {

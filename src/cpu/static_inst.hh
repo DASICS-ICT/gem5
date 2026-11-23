@@ -301,22 +301,19 @@ class StaticInst : public RefCounted, public StaticInstFlags
     virtual ~StaticInst() {};
 
 #if USE_DASICS
-    /**
-     * Bit N selects integer register xN. An empty optional means there
-     * is no integer protection request. A present zero selects no registers.
-     */
-    virtual std::optional<uint32_t>
-    intRegProtectionMask() const
+    struct RegProtectionRequest
     {
-        return std::nullopt;
-    }
+        RegClassType regClass;
+        /** Bit N selects architectural register N within regClass. */
+        uint32_t mask;
+    };
 
     /**
-     * Bit N selects floating-point register fN. An empty optional means
-     * there is no floating-point request. A present zero selects no registers.
+     * No value means no PROREG request. A zero mask still requests the
+     * class and requires its restore slots to be empty.
      */
-    virtual std::optional<uint32_t>
-    floatRegProtectionMask() const
+    virtual std::optional<RegProtectionRequest>
+    regProtectionRequest() const
     {
         return std::nullopt;
     }

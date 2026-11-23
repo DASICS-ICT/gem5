@@ -1101,12 +1101,9 @@ Rename::handleDasicsRename(const DynInstPtr &inst, ThreadID tid)
     auto &fault = inst->getFault();
     fault = static_inst->checkRenameAccess(inst.get());
     if (fault == NoFault) {
-        if (const auto int_mask = static_inst->intRegProtectionMask();
-            int_mask.has_value()) {
-            fault = protectRegs(inst, tid, IntRegClass, *int_mask);
-        } else if (const auto fp_mask = static_inst->floatRegProtectionMask();
-                   fp_mask.has_value()) {
-            fault = protectRegs(inst, tid, FloatRegClass, *fp_mask);
+        const auto request = static_inst->regProtectionRequest();
+        if (request.has_value()) {
+            fault = protectRegs(inst, tid, request->regClass, request->mask);
         } else if (static_inst->restoresProtectedRegs()) {
             restoreProtectedRegs(inst, tid);
         }
