@@ -311,6 +311,8 @@ success_message:
     .asciz "[OK] DASICS register protection: roi\n"
 #elif VECTOR_CHECK
     .asciz "[OK] DASICS register protection: vector ABI check\n"
+#elif USE_INT_PROREG && USE_FP_PROREG && TEST_SCENARIO == 0
+    .asciz "[OK] DASICS register protection: normal-proreg-gf\n"
 #elif USE_INT_PROREG && TEST_SCENARIO == 0
     .asciz "[OK] DASICS register protection: normal-proreg\n"
 #elif TEST_SCENARIO == 0

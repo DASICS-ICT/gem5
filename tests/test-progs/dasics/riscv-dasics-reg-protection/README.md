@@ -25,12 +25,12 @@ make dasics-clean TEST=riscv-dasics-reg-protection
 
 使用现有 `build/RISCV_DASICS/gem5.opt` 和
 `configs/dasics/riscv_dasics_o3_v5_full.py`。输出位于本目录
-`build/m5out-o3/v5_full/`。运行器并行启动六个独立 gem5 进程，每项超时为 60 秒。
+`build/m5out-o3/v5_full/`。运行器并行启动七个独立 gem5 进程，每项超时为 60 秒。
 每项均要求进程退出码为 0，并出现对应的客体成功标记；全部满足才打印绿色 `OK`，
 失败或超时显示红色 `FAIL/TIMEOUT`。
 
 软件门 `normal` 的 `config.ini`、`stats.txt`、`run.log` 和 `case-result.json` 位于上述目录。
-硬件辅助门 `normal-proreg` 和四个负向用例分别写入同名子目录。`result.json` 汇总六项结果。
+两种硬件辅助门 `normal-proreg`、`normal-proreg-gf` 和四个负向用例分别写入同名子目录。`result.json` 汇总七项结果。
 根 Makefile 从 `run-result.txt` 读取软件门 `normal` 的总周期，包含启动和自检。
 本组用例用于功能验收；软件门的每次调用开销见下文的 ROI 测量。
 
@@ -111,16 +111,17 @@ A 栈及保存区不授予 B。输出页包含测试观察区和计算结果，�
 | 用例 | 操作 | 成功判据 |
 | --- | --- | --- |
 | `normal` | 软件门连续执行两次受保护调用 | 参数、入口清零、结果、A 上下文恢复及边界撤销均符合预期 |
-| `normal-proreg` | 硬件辅助门对同一 B 连续执行两次调用 | 同样的调用契约通过，12 个整数保存槽保留哨兵值 |
+| `normal-proreg` | 硬件保护 `s0–s11`，软件保护 `fs0–fs11` | 整数槽保留哨兵，浮点槽包含 A 的原始位模式 |
+| `normal-proreg-gf` | 硬件同时保护 `s0–s11` 和 `fs0–fs11` | 每次返回的一条 `LEAVE` 恢复全部 24 个寄存器，24 个保存槽均保留哨兵 |
 | `context-read` | B 读取 A 保存帧 | 预期的 DASICS 读异常，目的寄存器及目标数据不变 |
 | `context-write` | B 写入 A 保存帧 | 预期的 DASICS 写异常，目标数据不变 |
 | `stack-read` | B 读取 A 栈 | 预期的 DASICS 读异常，目的寄存器及目标数据不变 |
 | `stack-write` | B 写入 A 栈 | 预期的 DASICS 写异常，目标数据不变 |
 
-两种门使用相同的 A、B 和三个 LibBound，每次调用前设置不同的 A 寄存器和 `fcsr` 种子。
-软件门将 A 的 `s0–s11` 写入 12 个整数保存槽。硬件辅助门在可信区执行
-`PROREG.G.I 0xfff`，使 B 初次读取这 12 个寄存器时得到零，返回门执行 `LEAVE` 恢复 A 的映射。
-测试在调用后逐项核对整数保存槽。两种门都通过软件保存和恢复 `fs0–fs11`，浮点保存槽均须包含 A 的原值。
+三个正常用例使用同一段 B 代码和相同的三个 LibBound，连续调用两次，每轮使用不同的寄存器和 `fcsr` 种子。
+在 `normal-proreg-gf` 中，可信入口依次执行 `PROREG.G.I 0xfff` 和 `PROREG.F.I 0xfff`，返回门执行一条 `LEAVE`。
+A 逐项核对 12 个整数原值和 12 个浮点寄存器的原始 64 位值，
+并独立检查保存帧中各槽的内容。三种门均通过软件保存并恢复 `fcsr`。
 B 在使用临时寄存器前，将全部 GPR、FPR 和入口 `fcsr` 记录到授权输出区；
 A 据此检查授权参数、B 栈指针、返回地址及其余寄存器清零。
 

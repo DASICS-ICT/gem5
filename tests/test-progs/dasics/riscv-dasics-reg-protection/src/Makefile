@@ -6,8 +6,9 @@ CFLAGS = -march=rv64imafdc_zicsr -mabi=lp64d -nostdlib -nostartfiles -static
 LDFLAGS = -no-pie -Wl,--build-id=none -Wl,-T,link.ld
 PROGRAM := riscv-dasics-reg-protection
 OUT := ../build/$(PROGRAM)
-ELFS := $(OUT).elf $(OUT)-normal-proreg.elf $(OUT)-context-read.elf \
-	$(OUT)-context-write.elf $(OUT)-stack-read.elf $(OUT)-stack-write.elf
+NORMAL_ELFS := $(OUT).elf $(OUT)-normal-proreg.elf $(OUT)-normal-proreg-gf.elf
+ELFS := $(NORMAL_ELFS) $(OUT)-context-read.elf $(OUT)-context-write.elf \
+	$(OUT)-stack-read.elf $(OUT)-stack-write.elf
 COMMON := context.h runtime.inc gate.inc link.ld
 ROI_COUNTS ?= 1024 4096
 gate_boundary := GATE_BOUNDARY
@@ -64,8 +65,10 @@ $(VEC_ELFS): riscv-dasics-reg-roi.S $(COMMON) $(MAKEFILE_LIST)
 		-DROI_WORKLOAD=$(if $(filter compute,$(word 2,$(roi_fields))),1,0) \
 		-DROI_ITERATIONS=$(word 3,$(roi_fields)) $(LDFLAGS) -o $@ $<
 
-$(OUT).elf $(OUT)-normal-proreg.elf: TEST_SCENARIO = 0
-$(OUT)-normal-proreg.elf: override CFLAGS += -DUSE_INT_PROREG=1
+$(NORMAL_ELFS): TEST_SCENARIO = 0
+$(OUT)-normal-proreg.elf $(OUT)-normal-proreg-gf.elf: override CFLAGS += \
+    -DUSE_INT_PROREG=1
+$(OUT)-normal-proreg-gf.elf: override CFLAGS += -DUSE_FP_PROREG=1
 $(OUT)-context-read.elf: TEST_SCENARIO = 1
 $(OUT)-context-write.elf: TEST_SCENARIO = 2
 $(OUT)-stack-read.elf: TEST_SCENARIO = 3

@@ -2,7 +2,7 @@
 /* clang-format off */
 
 /* The boundary reference retains control state but omits data protection. */
-#if USE_INT_PROREG && GATE_MODE != GATE_SOFTWARE
+#if (USE_INT_PROREG || USE_FP_PROREG) && GATE_MODE != GATE_SOFTWARE
 #error The PROREG gate requires the full register protection policy
 #endif
 #if VECTOR_ABI == 2
@@ -24,12 +24,13 @@ protected_gate:
     .set .Lsave_offset, .Lsave_offset + 8
     .endr
 #endif
+#if !USE_FP_PROREG
     .set .Lsave_offset, CTX_FPR_SAVE
     .irp reg,fs0,fs1,fs2,fs3,fs4,fs5,fs6,fs7,fs8,fs9,fs10,fs11
     fsd     \reg, .Lsave_offset(t0)
     .set .Lsave_offset, .Lsave_offset + 8
     .endr
-
+#endif
 #endif
 
     /* All slots are invalid while their address pairs are updated. */
@@ -89,12 +90,20 @@ protected_gate:
 #endif
     li      \reg, 0
     .endr
+#if USE_FP_PROREG
+    /* The gate clears ft0-ft11 and fa1-fa7; fa0 carries the argument. */
+    .irp num,0,1,2,3,4,5,6,7,11,12,13,14,15,16,17,28,29,30,31
+#else
     .irp num,0,1,2,3,4,5,6,7,8,9,11,12,13,14,15,\
              16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31
+#endif
     fmv.d.x f\num, zero
     .endr
 #if USE_INT_PROREG
     .word   0xfff0300b              /* PROREG.G.I 0xfff: protect s0-s11. */
+#endif
+#if USE_FP_PROREG
+    .word   0xfff0400b              /* PROREG.F.I 0xfff: protect fs0-fs11. */
 #endif
 #endif
     .globl gate_call, return_gate
@@ -121,20 +130,23 @@ return_gate:
     vl1re8.v v1, (t1)
 #endif
 #if GATE_MODE >= GATE_RESTORE
-#if USE_INT_PROREG
-    .word   0x0000500b              /* LEAVE restores A's integer mappings. */
-#else
+#if USE_INT_PROREG || USE_FP_PROREG
+    .word   0x0000500b              /* One LEAVE restores both active banks. */
+#endif
+#if !USE_INT_PROREG
     .set .Lrestore_offset, CTX_GPR_SAVE
     .irp reg,s0,s1,s2,s3,s4,s5,s6,s7,s8,s9,s10,s11
     ld      \reg, .Lrestore_offset(t0)
     .set .Lrestore_offset, .Lrestore_offset + 8
     .endr
 #endif
+#if !USE_FP_PROREG
     .set .Lrestore_offset, CTX_FPR_SAVE
     .irp reg,fs0,fs1,fs2,fs3,fs4,fs5,fs6,fs7,fs8,fs9,fs10,fs11
     fld     \reg, .Lrestore_offset(t0)
     .set .Lrestore_offset, .Lrestore_offset + 8
     .endr
+#endif
 #endif
     ld      t1, CTX_FCSR(t0)
     csrw    fcsr, t1

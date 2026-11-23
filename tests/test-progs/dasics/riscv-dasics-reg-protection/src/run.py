@@ -17,7 +17,7 @@ from pathlib import Path
 from threading import Thread
 
 PROGRAM = "riscv-dasics-reg-protection"
-NORMAL_CASES = ("normal", "normal-proreg")
+NORMAL_CASES = ("normal", "normal-proreg", "normal-proreg-gf")
 CASES = (
     *NORMAL_CASES,
     "context-read",

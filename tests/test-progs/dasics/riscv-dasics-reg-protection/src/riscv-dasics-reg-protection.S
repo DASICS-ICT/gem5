@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 #include "runtime.inc"
 
-    .equ GPR_SLOT_SENTINEL, 0x500
+    .equ FRAME_SLOT_SENTINEL, 0x500
 
     .section .text.trusted,"ax",@progbits
 trusted_entry:
@@ -90,17 +90,17 @@ test_calls:
     ld      t2, 0(t0)
     slli    t2, t2, 8
 #if TEST_SCENARIO == 0
-    /* Give each GPR slot its own value, distinct from either call's sN. */
+    /* Seed the adjacent GPR and FPR slots with distinct per-call values. */
     la      t3, context_frame
     addi    t3, t3, CTX_GPR_SAVE
-    addi    t4, t2, GPR_SLOT_SENTINEL
-    li      t5, 12
-.Lseed_gpr_slots:
+    addi    t4, t2, FRAME_SLOT_SENTINEL
+    li      t5, 24
+.Lseed_frame_slots:
     sd      t4, 0(t3)
     addi    t3, t3, 8
     addi    t4, t4, 1
     addi    t5, t5, -1
-    bnez    t5, .Lseed_gpr_slots
+    bnez    t5, .Lseed_frame_slots
 #endif
     li      t0, GPR_SEED
     add     t0, t0, t2
@@ -165,7 +165,7 @@ after_gate:
     la      t3, context_frame
     addi    t3, t3, CTX_GPR_SAVE
 #if USE_INT_PROREG
-    addi    t0, t2, GPR_SLOT_SENTINEL
+    addi    t0, t2, FRAME_SLOT_SENTINEL
 #else
     li      t0, GPR_SEED
     add     t0, t0, t2
@@ -180,6 +180,9 @@ after_gate:
     bnez    t4, .Lcheck_gpr_slots
 #endif
     li      a0, 13
+#if USE_FP_PROREG
+    .set .Lfpr_slot_sentinel, FRAME_SLOT_SENTINEL + 12
+#endif
     .irp num,8,9,18,19,20,21,22,23,24,25,26,27
     li      t0, FPR_SEED + \num
     add     t0, t0, t2
@@ -187,6 +190,10 @@ after_gate:
     bne     t0, t1, user_finish
 #if TEST_SCENARIO == 0
     /* t3 now walks the adjacent fs0-fs11 save slots in ABI order. */
+#if USE_FP_PROREG
+    addi    t0, t2, .Lfpr_slot_sentinel
+    .set .Lfpr_slot_sentinel, .Lfpr_slot_sentinel + 1
+#endif
     ld      t1, 0(t3)
     bne     t0, t1, user_finish
     addi    t3, t3, 8
