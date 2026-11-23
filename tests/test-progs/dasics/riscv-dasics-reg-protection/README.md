@@ -209,6 +209,23 @@ python3 "$test_dir/check_clobber.py" --jobs 16 --outdir "$batch/checks" &&
 短用例检查 B 实际提交的写指令和返回后 A 的自检结果。计时用例分别测量 1024 和 4096 次调用，
 在 `measurements/summary.csv` 中给出两种门的周期、每次调用的节省量和相对同批 0 档的变化。
 
+### B 在返回前改写受保护的浮点寄存器
+
+比较仅 G 与 G+F 两种门。B 在返回前把 `0x5a5` 放入 `t6`，用 12 条 `fmv.d.x` 写入相同的原始位模式。
+编号从 0 开始，第 `i` 条在 `i < k` 时写 `fs<i>`，其余写 `ft<i>`。四档均保留 `a0/fa0` 的返回值。
+
+```bash
+test_dir=tests/test-progs/dasics/riscv-dasics-reg-protection
+batch="$test_dir/build/runs/fp-clobber-roi-$(date +%Y%m%d-%H%M%S)"
+make -j32 -C "$test_dir/src" fp-clobber-roi ROI_COUNTS="4 1024 4096"
+python3 "$test_dir/check_clobber.py" --fp --jobs 16 --outdir "$batch/checks" &&
+    python3 "$test_dir/measure.py" --comparison fp-clobber --jobs 32 --outdir "$batch/measurements"
+```
+
+短用例核对 ELF 中浮点写的目的寄存器、提交轨迹和返回后的寄存器自检。
+`measurements/summary.csv` 的 `saved_cycles_per_call` 是同档仅 G 减去 G+F 的每调用周期差，
+`change_vs_zero_cycles_per_call` 则以同一负载、同一批长下全部写 `ft0–ft11` 的 0 档为参照。
+
 ### v5_full 热态基线
 
 2026-11-18，单 hart、2 GHz，五项功能回归和八组 ROI 测量通过。单位为周期/次。

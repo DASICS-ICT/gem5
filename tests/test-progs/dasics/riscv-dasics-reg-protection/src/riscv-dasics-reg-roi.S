@@ -317,6 +317,19 @@ callee_entry:
     /* All variants retire twelve independent writes after both results
      * are ready. Only the first k destinations are protected registers.
      */
+#if ROI_FP_CLOBBER
+    .globl roi_fp_clobber
+    .equ roi_fp_clobber, 1
+    addi    t6, zero, 0x5a5
+clobber_writes_begin:
+    .irp slot,0,1,2,3,4,5,6,7,8,9,10,11
+    .if \slot < roi_clobber_count
+    fmv.d.x fs\slot, t6
+    .else
+    fmv.d.x ft\slot, t6
+    .endif
+    .endr
+#else
     .macro CLOBBER slot, saved, scratch
     .if \slot < roi_clobber_count
     addi    \saved, zero, (0x101 + \slot)
@@ -337,6 +350,7 @@ clobber_writes_begin:
     CLOBBER  9, s9,  a3
     CLOBBER 10, s10, a4
     CLOBBER 11, s11, a5
+#endif
 clobber_writes_end:
 #endif
     ret

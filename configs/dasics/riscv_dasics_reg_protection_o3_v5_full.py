@@ -86,7 +86,9 @@ def run():
         "--workload", choices=("empty", "compute"), required=True
     )
     parser.add_argument("--iterations", type=int, required=True)
-    parser.add_argument("--clobber-count", type=int, choices=(0, 1, 6, 12))
+    clobber = parser.add_mutually_exclusive_group()
+    clobber.add_argument("--clobber-count", type=int, choices=(0, 1, 6, 12))
+    clobber.add_argument("--fp-clobber-count", type=int, choices=(0, 1, 6, 12))
     parser.add_argument(
         "--max-ticks",
         type=int,
@@ -193,6 +195,8 @@ def run():
     }
     if args.clobber_count is not None:
         result["clobber_count"] = args.clobber_count
+    if args.fp_clobber_count is not None:
+        result["fp_clobber_count"] = args.fp_clobber_count
     deadline = min(m5.MaxTick, m5.curTick() + args.max_ticks)
     try:
         while m5.curTick() < deadline:

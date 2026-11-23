@@ -29,6 +29,11 @@ PROREG_PAIRS = {
     "proreg": ("software", "proreg", 34),
     "proreg-gf": ("proreg", "proreg_gf", 35),
 }
+# Each sweep uses the zero-write-count control from its own gate pair.
+CLOBBER_SWEEPS = {
+    "clobber": ("proreg", "clobber_count"),
+    "fp-clobber": ("proreg-gf", "fp_clobber_count"),
+}
 # Marginal costs use matched modes; "restore" performs both save and restore.
 CONTRASTS = (
     ("save", "save", "boundary", 24),
@@ -163,6 +168,8 @@ def job_name(job):
     name = f"{job['mode']}-{job['workload']}-{job['iterations']}"
     if "clobber_count" in job:
         name += f"-clobber{job['clobber_count']}"
+    if "fp_clobber_count" in job:
+        name += f"-fpclobber{job['fp_clobber_count']}"
     return name
 
 
@@ -234,6 +241,8 @@ def run_job(args, job, *, debug_flags=None):
         command.extend(["--vlen", str(job["vlen"])])
     if "clobber_count" in job:
         command.extend(["--clobber-count", str(job["clobber_count"])])
+    if "fp_clobber_count" in job:
+        command.extend(["--fp-clobber-count", str(job["fp_clobber_count"])])
     result = dict(job, name=name, warmup=WARMUP, status="FAIL")
     result.update(run_process(directory, command, args.timeout))
 
@@ -424,22 +433,24 @@ def proreg_pairs(results, comparison="proreg"):
     return summary
 
 
-def clobber_pairs(results):
-    zero = [r for r in results if r["clobber_count"] == 0]
+def clobber_pairs(results, comparison="proreg", count_field="clobber_count"):
+    modes = PROREG_PAIRS[comparison][:2]
+    zero = [r for r in results if r[count_field] == 0]
     controls = {(r["mode"], r["workload"], r["iterations"]): r for r in zero}
     zero_pairs = {
-        (p["workload"], p["iterations"]): p for p in proreg_pairs(zero)
+        (p["workload"], p["iterations"]): p
+        for p in proreg_pairs(zero, comparison)
     }
     summary = []
     for k in CLOBBER_COUNTS:
-        runs = [r for r in results if r["clobber_count"] == k]
+        runs = [r for r in results if r[count_field] == k]
         indexed = {
             (r["mode"], r["workload"], r["iterations"]): r for r in runs
         }
-        for pair in proreg_pairs(runs):
+        for pair in proreg_pairs(runs, comparison):
             key = (pair["workload"], pair["iterations"])
             reference = zero_pairs[key]
-            pair["clobber_count"] = k
+            pair[count_field] = k
             pair["change_vs_zero_cycles_per_call"] = None
             current, baseline = (
                 pair["saved_cycles_per_call"],
@@ -448,10 +459,10 @@ def clobber_pairs(results):
             if current is not None and baseline is not None:
                 pair["change_vs_zero_cycles_per_call"] = current - baseline
 
-            # Every level executes twelve integer writes at the same PCs.
+            # Every level executes twelve writes at the same PCs.
             # Changing their destinations must preserve retired work in each gate.
             equal_work = True
-            for mode in ("software", "proreg"):
+            for mode in modes:
                 arm = (mode, pair["workload"], pair["iterations"])
                 trial, control = indexed[arm], controls[arm]
                 if trial["status"] != "PASS" or control["status"] != "PASS":
@@ -471,19 +482,19 @@ def clobber_pairs(results):
     return summary
 
 
-def report_proreg(outdir, results, *, comparison="proreg", clobber=False):
+def report_proreg(outdir, results, *, comparison="proreg", count_field=None):
     summary = (
-        clobber_pairs(results)
-        if clobber
+        clobber_pairs(results, comparison, count_field)
+        if count_field
         else proreg_pairs(results, comparison)
     )
     reference, candidate, _ = PROREG_PAIRS[comparison]
     labels = {"software": "SW", "proreg": "PROREG", "proreg_gf": "PROREG.G+F"}
     for pair in summary:
-        level = f" k={pair['clobber_count']}" if clobber else ""
+        level = f" k={pair[count_field]}" if count_field else ""
         relative = (
             f", change vs k=0: {pair['change_vs_zero_cycles_per_call']}"
-            if clobber
+            if count_field
             else ""
         )
         print(
@@ -513,7 +524,7 @@ def main():
     parser.add_argument("--timeout", type=int, default=300)
     parser.add_argument(
         "--comparison",
-        choices=("components", *PROREG_PAIRS, "clobber"),
+        choices=("components", *PROREG_PAIRS, *CLOBBER_SWEEPS),
         default="components",
         help="Measure software components or compare matched protection gates.",
     )
@@ -521,7 +532,9 @@ def main():
     if args.timeout <= 0:
         parser.error("--timeout must be positive")
     args.outdir = args.outdir.resolve()
-    pair_kind = "proreg" if args.comparison == "clobber" else args.comparison
+    pair_kind, count_field = CLOBBER_SWEEPS.get(
+        args.comparison, (args.comparison, None)
+    )
     modes = PROREG_PAIRS[pair_kind][:2] if pair_kind in PROREG_PAIRS else MODES
     jobs = [
         dict(mode=mode, workload=workload, iterations=count)
@@ -529,9 +542,9 @@ def main():
         for workload in WORKLOADS
         for count in ITERATIONS
     ]
-    if args.comparison == "clobber":
+    if count_field:
         jobs = [
-            dict(job, clobber_count=k) for job in jobs for k in CLOBBER_COUNTS
+            {**job, count_field: k} for job in jobs for k in CLOBBER_COUNTS
         ]
     gem5 = REPO / "build/RISCV_DASICS/gem5.opt"
     config = REPO / "configs/dasics/riscv_dasics_reg_protection_o3_v5_full.py"
@@ -583,8 +596,8 @@ def main():
                 "error",
             )
         }
-        if "clobber_count" in result:
-            row["clobber_count"] = result["clobber_count"]
+        if count_field:
+            row[count_field] = result[count_field]
         row.update(
             {key: result.get("statistics", {}).get(key) for key in STAT_KEYS}
         )
@@ -595,7 +608,7 @@ def main():
             args.outdir,
             results,
             comparison=pair_kind,
-            clobber=args.comparison == "clobber",
+            count_field=count_field,
         )
     summary = summarize(results)
     checks = validate_instruction_deltas(results)

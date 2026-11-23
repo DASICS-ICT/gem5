@@ -15,8 +15,9 @@ from pathlib import Path
 import measure
 
 SHORT_COUNT = 4
-SAVED = (8, 9, *range(18, 28))  # s0-s11
-SCRATCH = (5, 6, 7, 28, 29, 30, 31, 11, 12, 13, 14, 15)  # t0-t6, a1-a5
+SAVED = (8, 9, *range(18, 28))  # s0-s11 and fs0-fs11 use the same indices.
+INT_SCRATCH = (5, 6, 7, 28, 29, 30, 31, 11, 12, 13, 14, 15)  # t0-t6, a1-a5
+FP_SCRATCH = (*range(8), *range(28, 32))  # ft0-ft11
 COMMIT = re.compile(
     r"system\.cpu\.commit: \[tid:0\] \[sn:(\d+)\] "
     r"Committing instruction with PC \((0x[\da-f]+)=>"
@@ -32,14 +33,22 @@ def inspect_elf(job, prefix):
         fields = line.split()
         if len(fields) == 3:
             symbols[fields[2]] = int(fields[0], 16)
-    k = job["clobber_count"]
-    for key, value in {
+    fp = "fp_clobber_count" in job
+    k = job["fp_clobber_count" if fp else "clobber_count"]
+    expected_symbols = {
         "roi_clobber_count": k,
-        "roi_iterations": SHORT_COUNT,
-        "roi_int_proreg": int(job["mode"] == "proreg"),
+        "roi_iterations": job["iterations"],
+        "roi_int_proreg": int(job["mode"] in ("proreg", "proreg_gf")),
         "roi_workload": int(job["workload"] == "compute"),
-    }.items():
-        measure.require(symbols[key] == value, f"{elf.name}: unexpected {key}")
+    }
+    if fp:
+        expected_symbols.update(
+            roi_fp_clobber=1, roi_fp_proreg=int(job["mode"] == "proreg_gf")
+        )
+    for key, value in expected_symbols.items():
+        measure.require(
+            symbols.get(key) == value, f"{elf.name}: unexpected {key}"
+        )
 
     text = subprocess.check_output(
         [prefix + "objdump", "-d", "-j", ".text.untrusted", elf], text=True
@@ -55,9 +64,18 @@ def inspect_elf(job, prefix):
         end == begin + 12 * 4 and words[end] == 0x8067,
         f"{elf.name}: expected twelve writes followed by ret",
     )
-    for slot, dest in enumerate(SAVED[:k] + SCRATCH[k:]):
-        # addi rd,x0,imm has no dependency on previously written registers.
-        expected = ((0x101 + slot) << 20) | (dest << 7) | 0x13
+    if fp:
+        # addi t6,x0,0x5a5 supplies identical nonzero bits to all FP writes.
+        measure.require(
+            words.get(begin - 4) == 0x5A500F93,
+            f"{elf.name}: incorrect FP source setup",
+        )
+    scratch = FP_SCRATCH if fp else INT_SCRATCH
+    for slot, dest in enumerate(SAVED[:k] + scratch[k:]):
+        if fp:
+            expected = 0xF2000053 | (31 << 15) | (dest << 7)  # fmv.d.x fd,t6
+        else:
+            expected = ((0x101 + slot) << 20) | (dest << 7) | 0x13
         pc = begin + 4 * slot
         measure.require(
             words[pc] == expected, f"{elf.name}: incorrect write at {pc:#x}"
@@ -87,10 +105,11 @@ def inspect_elf(job, prefix):
 
 def verify_commits(trace, symbols):
     begin, end = symbols["clobber_writes_begin"], symbols["clobber_writes_end"]
+    start = begin - 4 if symbols.get("roi_fp_clobber") else begin
     call = [
         symbols["gate_call"],
         symbols["callee_entry"],
-        *range(begin, end + 4, 4),
+        *range(start, end + 4, 4),
         symbols["return_gate"],
     ]
     # Include both markers to distinguish warmup calls from measured calls.
@@ -127,21 +146,26 @@ def verify_commits(trace, symbols):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--outdir", type=Path, required=True)
+    parser.add_argument(
+        "--fp", action="store_true", help="Check floating-point callee writes."
+    )
     parser.add_argument("--jobs", type=int, choices=range(1, 17), default=16)
     parser.add_argument("--timeout", type=int, default=180)
     args = parser.parse_args()
     args.outdir = args.outdir.resolve()
     if args.timeout <= 0 or args.outdir.exists():
         parser.error("Use a positive timeout and a new output directory.")
+    modes = ("proreg", "proreg_gf") if args.fp else ("software", "proreg")
+    count_key = "fp_clobber_count" if args.fp else "clobber_count"
     jobs = [
-        dict(
-            mode=mode,
-            workload=workload,
-            iterations=SHORT_COUNT,
-            clobber_count=k,
-        )
+        {
+            "mode": mode,
+            "workload": workload,
+            "iterations": SHORT_COUNT,
+            count_key: k,
+        }
         for mode, workload, k in product(
-            ("software", "proreg"), measure.WORKLOADS, (0, 1, 6, 12)
+            modes, measure.WORKLOADS, measure.CLOBBER_COUNTS
         )
     ]
     layouts = {}
@@ -167,7 +191,7 @@ def main():
                 result.update(
                     warmup_calls=measure.WARMUP,
                     measured_calls=SHORT_COUNT,
-                    saved_writes_per_call=job["clobber_count"],
+                    saved_writes_per_call=job[count_key],
                 )
             except (OSError, EOFError, ValueError) as error:
                 result.update(status="FAIL", error=str(error))
