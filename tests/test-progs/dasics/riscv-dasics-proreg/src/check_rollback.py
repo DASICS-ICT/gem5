@@ -23,6 +23,10 @@ def check_trace(nm, elf, trace):
     allowed = set()
     exit_branches = set()
     leave_returns = {}
+    # At retirement PROREG.F names A's saved FP mapping and the final LEAVE
+    # names B's displaced FP mapping. The integer FIFO has its own numbering.
+    fp_saved = {}
+    fp_displaced = {}
     squash_returns = {}
     rollbacks = {}
     mispredict = boundary = None
@@ -59,32 +63,53 @@ def check_trace(nm, elf, trace):
             elif "Squashing instructions." in line:
                 boundary = int(re.search(r"\[squash sn:(\d+)\]", line)[1])
                 if boundary in exit_branches:
-                    rollbacks[boundary] = []
+                    rollbacks[boundary] = {"integer": [], "floating_point": []}
             elif boundary in rollbacks and "Removing history entry" in line:
-                # Only x19 (s3) changes ownership in this loop.
+                # x19 and f19 have the same index and share the LEAVE's SN.
                 match = re.search(
-                    r"number (\d+) \(archReg: 19, newPhysReg: (\d+), "
-                    r"prevPhysReg: (\d+)\)",
+                    r"number (\d+) \(archReg: 19 \((integer|floating_point)\), "
+                    r"newPhysReg: (\d+), prevPhysReg: (\d+)\)",
                     line,
                 )
                 if match:
-                    rollbacks[boundary].append(tuple(map(int, match.groups())))
+                    sn, cls, new, prev = match.groups()
+                    rollbacks[boundary][cls].append(
+                        (int(sn), int(new), int(prev))
+                    )
             elif boundary in rollbacks and "Freeing phys regs of" in line:
                 returns = squash_returns.setdefault(boundary, set())
             elif "Retiring rename of reg" in line:
-                sn = int(re.search(r"\[sn:(\d+)\]", line)[1])
-                if pcs.get(sn) == symbols["generation_final_leave"]:
+                match = re.search(
+                    r"Retiring rename of reg (\d+) \((integer|floating_point)\), "
+                    r"\[sn:(\d+)\]",
+                    line,
+                )
+                if not match:
+                    continue
+                prev, cls, seq = match.groups()
+                sn = int(seq)
+                pc = pcs.get(sn)
+                if cls == "floating_point":
+                    if pc == symbols["generation_fp_proreg"]:
+                        fp_saved[sn] = int(prev)
+                    elif pc == symbols["generation_final_leave"]:
+                        fp_displaced[sn] = int(prev)
+                elif pc == symbols["generation_final_leave"]:
                     returns = leave_returns.setdefault(sn, set())
 
     expected_pcs = [
         symbols["generation_" + name] for name in ("leave", "write", "proreg")
     ]
-    for branch, rows in rollbacks.items():
+    for branch, history in rollbacks.items():
         speculative = sorted(sn for sn in pcs if sn > branch)[:3]
         if [pcs[sn] for sn in speculative] != expected_pcs:
             continue
         # Match these exact instructions within one youngest-first rollback.
-        changes = [row for row in reversed(rows) if row[0] in speculative]
+        changes = [
+            row
+            for row in reversed(history["integer"])
+            if row[0] in speculative
+        ]
         if [row[0] for row in changes] != speculative:
             continue
         (
@@ -92,20 +117,38 @@ def check_trace(nm, elf, trace):
             (_, fresh, previous),
             (protect, saved, same),
         ) = changes
+        fp_changes = [
+            (new, prev)
+            for sn, new, prev in history["floating_point"]
+            if sn == leave
+        ]
+        if len(fp_changes) != 1:
+            continue
+        fp_caller, fp_local = fp_changes[0]
+        last_fp_save = max(
+            (sn for sn in fp_saved if sn < branch), default=None
+        )
         if (
             {leave, protect} <= allowed
             and previous == caller
             and saved == same == fresh
             and len({caller, local, fresh}) == 3
+            and fp_caller != fp_local
+            and fp_saved.get(last_fp_save) == fp_caller
             and fresh in squash_returns.get(branch, ())
             and any(
-                sn > protect and sn in allowed and local in regs
+                sn > protect
+                and sn in allowed
+                and local in regs
+                and fp_displaced.get(sn) == fp_local
                 for sn, regs in leave_returns.items()
             )
         ):
             print(
-                f"Loop-exit squash sn={branch}: caller P{caller}, "
-                f"squash returned P{fresh}, committed LEAVE returned P{local}"
+                f"Loop-exit squash sn={branch}, mixed LEAVE sn={leave}: "
+                f"x19 caller=P{caller} local=P{local}, f19 caller=P{fp_caller} "
+                f"local=P{fp_local}; squash returned integer P{fresh}, "
+                f"committed LEAVE returned integer P{local}"
             )
             return True
     return False
@@ -139,7 +182,10 @@ def main():
         )
     if check_trace(args.nm, args.elf, trace):
         return 0
-    print("Missing loop-exit rollback or free-list coverage", file=sys.stderr)
+    print(
+        "Missing mixed LEAVE rollback or integer free-list coverage",
+        file=sys.stderr,
+    )
     return 1
 
 

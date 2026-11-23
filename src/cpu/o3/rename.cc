@@ -948,10 +948,13 @@ Rename::doSquash(const InstSeqNum &squashed_seq_num, ThreadID tid)
     for (auto hb_it = history.begin();
          hb_it != history.end() && hb_it->instSeqNum > squashed_seq_num;
          hb_it = history.erase(hb_it)) {
-        DPRINTF(Rename, "[tid:%i] Removing history entry with sequence "
-                "number %i (archReg: %d, newPhysReg: %d, prevPhysReg: %d).\n",
+        DPRINTF(Rename,
+                "[tid:%i] Removing history entry with sequence "
+                "number %llu (archReg: %d (%s), newPhysReg: %d, "
+                "prevPhysReg: %d).\n",
                 tid, hb_it->instSeqNum, hb_it->archReg.index(),
-                hb_it->newPhysReg->index(), hb_it->prevPhysReg->index());
+                hb_it->archReg.className(), hb_it->newPhysReg->index(),
+                hb_it->prevPhysReg->index());
 
         ++stats.undoneMaps;
 #if USE_DASICS
@@ -1120,9 +1123,7 @@ Rename::protectRegs(const DynInstPtr &inst, ThreadID tid,
     assert(reg_class == IntRegClass || reg_class == FloatRegClass);
     auto &state = restoreState[tid];
     // Even a zero mask requires all slots of its own class to be empty.
-    const bool occupied = reg_class == IntRegClass ? state.intValid.any()
-                                                   : state.floatValid.any();
-    if (occupied) {
+    if (state.hasValid(reg_class)) {
         return inst->staticInst->regProtectionConflictFault();
     }
 
@@ -1149,37 +1150,20 @@ void
 Rename::restoreProtectedRegs(const DynInstPtr &inst, ThreadID tid)
 {
     auto &state = restoreState[tid];
-    if (state.intValid.none() && state.floatValid.none()) {
-        return;
-    }
-
     auto &map = *renameMap[tid];
     const auto &classes = inst->tcBase()->getIsaPtr()->regClasses();
-    auto restore_slots = [&](RegClassType cls, const auto &slots,
-                             auto &valid) {
-        const auto &regs = *classes.at(cls);
-        // Integer slot 0 holds x1; floating-point slot 0 holds f0.
-        const RegIndex first_reg = cls == IntRegClass ? 1 : 0;
-        while (valid.any()) {
-            const auto slot = findLsbSet(valid);
-            const RegId arch_reg = regs[first_reg + slot];
-            PhysRegIdPtr saved = slots[slot];
-            assert(saved && saved->is(cls));
+    auto restore = [&](RegClassType cls, RegIndex index, PhysRegIdPtr saved) {
+        const RegId arch_reg = (*classes.at(cls))[index];
+        // Even an unchanged physical mapping can regain read access.
+        historyBuffer[tid].emplace_front(RenameKind::Leave, inst->seqNum,
+                                         arch_reg, saved, map.lookup(arch_reg),
+                                         map.isRegUnreadable(arch_reg));
+        inst->addRestoredMapping(arch_reg, saved);
 
-            // Even an unchanged physical mapping can regain read access.
-            historyBuffer[tid].emplace_front(
-                RenameKind::Leave, inst->seqNum, arch_reg, saved,
-                map.lookup(arch_reg), map.isRegUnreadable(arch_reg));
-            inst->addRestoredMapping(arch_reg, saved);
-
-            map.setEntry(arch_reg, saved);
-            map.setRegUnreadable(arch_reg, false);
-            valid.reset(slot);
-        }
+        map.setEntry(arch_reg, saved);
+        map.setRegUnreadable(arch_reg, false);
     };
-
-    restore_slots(IntRegClass, state.intRegs, state.intValid);
-    restore_slots(FloatRegClass, state.floatRegs, state.floatValid);
+    state.consumeAll(restore);
 }
 #endif
 

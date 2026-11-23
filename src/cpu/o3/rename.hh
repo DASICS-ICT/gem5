@@ -47,6 +47,7 @@
 #include <list>
 #include <utility>
 
+#include "base/bitfield.hh"
 #include "base/statistics.hh"
 #include "config/use_dasics.hh"
 #include "cpu/o3/comm.hh"
@@ -367,57 +368,96 @@ class Rename
     std::list<RenameHistory> historyBuffer[MaxThreads];
 
 #if USE_DASICS
-    struct RestoreState
+    class RestoreState
     {
-        static constexpr unsigned NumIntSlots = 31;
-        static constexpr unsigned NumFloatSlots = 32;
-
-        /** If intValid[N-1] is set, slot N-1 holds the saved xN mapping. */
-        PhysRegIdPtr intRegs[NumIntSlots] = {};
-        std::bitset<NumIntSlots> intValid{};
-
-        /** If floatValid[N] is set, slot N holds the saved fN mapping. */
-        PhysRegIdPtr floatRegs[NumFloatSlots] = {};
-        std::bitset<NumFloatSlots> floatValid{};
-
-        static RegIndex
-        intSlotIndex(RegIndex reg_idx)
+      private:
+        // Integer slots span x1-x31 and floating-point slots span f0-f31.
+        template <RegClassType Class, RegIndex FirstReg> struct Slots
         {
-            assert(reg_idx > 0 && reg_idx <= NumIntSlots);
-            return reg_idx - 1;
+            static constexpr unsigned Count = 32 - FirstReg;
+            PhysRegIdPtr mappings[Count] = {};
+            std::bitset<Count> valid{};
+
+            static RegIndex
+            slotIndex(const RegId &reg)
+            {
+                assert(reg.is(Class));
+                assert(reg.index() >= FirstReg &&
+                       reg.index() < FirstReg + Count);
+                return reg.index() - FirstReg;
+            }
+
+            void
+            save(const RegId &reg, PhysRegIdPtr mapping)
+            {
+                const auto slot = slotIndex(reg);
+                assert(mapping && mapping->is(Class) && !valid.test(slot));
+                mappings[slot] = mapping;
+                valid.set(slot);
+            }
+
+            void
+            undoSave(const RegId &reg, PhysRegIdPtr mapping)
+            {
+                const auto slot = slotIndex(reg);
+                assert(valid.test(slot) && mappings[slot] == mapping);
+                valid.reset(slot);
+            }
+
+            template <class Consumer>
+            void
+            consumeAll(Consumer &consume)
+            {
+                while (valid.any()) {
+                    const auto slot = findLsbSet(valid);
+                    const auto mapping = mappings[slot];
+                    assert(mapping && mapping->is(Class));
+                    consume(Class, FirstReg + slot, mapping);
+                    valid.reset(slot);
+                }
+            }
+        };
+
+        Slots<IntRegClass, 1> intSlots;
+        Slots<FloatRegClass, 0> floatSlots;
+
+      public:
+        bool
+        hasValid(RegClassType cls) const
+        {
+            assert(cls == IntRegClass || cls == FloatRegClass);
+            return cls == IntRegClass ? intSlots.valid.any()
+                                      : floatSlots.valid.any();
         }
 
         void
-        save(const RegId &reg, PhysRegIdPtr phys_reg)
+        save(const RegId &reg, PhysRegIdPtr mapping)
         {
-            assert(phys_reg->is(reg.classValue()));
             if (reg.is(IntRegClass)) {
-                const auto slot = intSlotIndex(reg.index());
-                assert(!intValid.test(slot));
-                intRegs[slot] = phys_reg;
-                intValid.set(slot);
+                intSlots.save(reg, mapping);
             } else {
-                assert(reg.is(FloatRegClass) && reg.index() < NumFloatSlots);
-                assert(!floatValid.test(reg.index()));
-                floatRegs[reg.index()] = phys_reg;
-                floatValid.set(reg.index());
+                floatSlots.save(reg, mapping);
             }
         }
 
         /** Undo a PROREG save without releasing the physical mapping. */
         void
-        undoSave(const RegId &reg, PhysRegIdPtr phys_reg)
+        undoSave(const RegId &reg, PhysRegIdPtr mapping)
         {
             if (reg.is(IntRegClass)) {
-                const auto slot = intSlotIndex(reg.index());
-                assert(intValid.test(slot) && intRegs[slot] == phys_reg);
-                intValid.reset(slot);
+                intSlots.undoSave(reg, mapping);
             } else {
-                assert(reg.is(FloatRegClass) && reg.index() < NumFloatSlots);
-                assert(floatValid.test(reg.index()) &&
-                       floatRegs[reg.index()] == phys_reg);
-                floatValid.reset(reg.index());
+                floatSlots.undoSave(reg, mapping);
             }
+        }
+
+        /** Consume saved mappings in ascending register order, GPRs first. */
+        template <class Consumer>
+        void
+        consumeAll(Consumer &&consume)
+        {
+            intSlots.consumeAll(consume);
+            floatSlots.consumeAll(consume);
         }
     };
 

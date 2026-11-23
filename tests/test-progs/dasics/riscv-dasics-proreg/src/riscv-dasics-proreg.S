@@ -36,6 +36,8 @@
     .equ GENERATION_ROUNDS, 32
     .equ GENERATION_SEED, 0x35
     .equ GENERATION_LOCAL, 0x2b
+    .equ GENERATION_FP_SEED, 0x4008000000000031
+    .equ GENERATION_FP_LOCAL, 0x80000000000000b4
     .equ OCCUPIED_S3, 0x43
     .equ DISJOINT_S11, 0x6b
     .equ UPDATED_S11, 0x78
@@ -181,11 +183,20 @@ reuse_break:
 .Lreuse_fail:
     ebreak                          /* Unexpected mepc identifies a failure. */
 
-    /* Each iteration ends with a live slot and a different visible s3. */
+    /* Each iteration ends with both caller mappings saved and local values
+     * visible in s3 (x19) and fs3 (f19).
+     */
 generation_caller:
+    fmv.x.d a2, fs3                 /* Preserve the value for later probes. */
     li      s3, GENERATION_SEED
+    li      t4, GENERATION_FP_SEED
+    fmv.d.x fs3, t4
+    li      t5, GENERATION_FP_LOCAL
     .word   PROREG_G_I_S3
+    .word   PROREG_F_I_FS3
     li      s3, GENERATION_LOCAL
+    fmv.d.x fs3, t5
+    addi    t4, t4, 1              /* Next caller's 64-bit FP pattern. */
     li      t1, GENERATION_ROUNDS
 generation_leave:
     .word   LEAVE
@@ -193,18 +204,32 @@ generation_write:
     addi    s3, s3, 1
 generation_proreg:
     .word   PROREG_G_I_S3
+generation_fp_write:
+    fmv.d.x fs3, t4
+generation_fp_proreg:
+    .word   PROREG_F_I_FS3
     addi    s3, s3, GENERATION_LOCAL
+    fmv.d.x fs3, t5
+    addi    t4, t4, 1
     addi    t1, t1, -1
 generation_branch:
     bnez    t1, generation_leave
 generation_exit:
     mv      t2, s3
+generation_fp_read_local:
+    fmv.x.d a1, fs3
 generation_final_leave:
     .word   LEAVE
     li      t0, GENERATION_LOCAL
     bne     t2, t0, .Lgeneration_fail
     li      t0, GENERATION_SEED + GENERATION_ROUNDS
     bne     s3, t0, .Lgeneration_fail
+    bne     a1, t5, .Lgeneration_fail
+generation_fp_read_caller:
+    fmv.x.d a1, fs3
+    li      t0, GENERATION_FP_SEED + GENERATION_ROUNDS
+    bne     a1, t0, .Lgeneration_fail
+    fmv.d.x fs3, a2
 generation_break:
     ebreak
 .Lgeneration_fail:
@@ -516,7 +541,8 @@ cases:
 #endif
     .dword reuse_caller, BOOT_PRIV, BREAKPOINT, reuse_break
     .dword reuse_failure, PROREG_G_I_S3
-    .dword generation_caller, BOOT_PRIV, BREAKPOINT, generation_break
+    .dword generation_caller, BOOT_PRIV | (MSTATUS_FS >> 11)
+    .dword BREAKPOINT, generation_break
     .dword generation_failure, PROREG_G_I_S3
     .dword occupied_caller, BOOT_PRIV, ILLEGAL, occupied_zero
     .dword occupied_zero_failure, PROREG_G_I_ZERO
@@ -543,7 +569,7 @@ trusted_leave_failure:   .asciz "LEAVE: trusted restore failed\n"
 untrusted_leave_failure: .asciz "LEAVE: untrusted denial failed\n"
 sparse_call_failure: .asciz "Sparse protection: unexpected trap\n"
 reuse_failure: .asciz "PROREG: repeated s3 mapping reuse failed\n"
-generation_failure: .asciz "PROREG: wrong s3 generation at loop exit\n"
+generation_failure: .asciz "PROREG: wrong G/F mapping at loop exit\n"
 occupied_zero_failure: .asciz "PROREG: occupied zero-mask rejection failed\n"
 disjoint_failure: .asciz "PROREG: occupied disjoint-mask rejection failed\n"
 occupied_restore_failure: .asciz "PROREG: state after conflicts failed\n"
