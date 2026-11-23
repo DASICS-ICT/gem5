@@ -23,6 +23,12 @@ from pathlib import Path
 TEST_DIR = Path(__file__).resolve().parent
 REPO = Path(__file__).resolve().parents[4]
 MODES = ("boundary", "save", "restore", "software")
+# Reference, comparison gate, and committed instructions saved per call.
+# G replaces 36 instructions with PROREG.G.I and LEAVE. G+F reuses LEAVE.
+PROREG_PAIRS = {
+    "proreg": ("software", "proreg", 34),
+    "proreg-gf": ("proreg", "proreg_gf", 35),
+}
 # Marginal costs use matched modes; "restore" performs both save and restore.
 CONTRASTS = (
     ("save", "save", "boundary", 24),
@@ -350,19 +356,21 @@ def validate_instruction_deltas(results):
     return checks
 
 
-def proreg_pairs(results):
+def proreg_pairs(results, comparison="proreg"):
+    reference, candidate, instruction_delta = PROREG_PAIRS[comparison]
+    ref_cycles = f"{reference}_cycles_per_call"
+    candidate_cycles = f"{candidate}_cycles_per_call"
     indexed = {(r["workload"], r["iterations"], r["mode"]): r for r in results}
-    # Twelve stores, clears, and loads become one PROREG and one LEAVE.
     counters = (
-        ("instructions_saved_per_call", "numInsts", 34),
+        ("instructions_saved_per_call", "numInsts", instruction_delta),
         ("loads_saved_per_call", "numLoadInsts", 12),
         ("stores_saved_per_call", "numStoreInsts", 12),
     )
     fields = [
         "workload",
         "iterations",
-        "software_cycles_per_call",
-        "proreg_cycles_per_call",
+        ref_cycles,
+        candidate_cycles,
         "saved_cycles_per_call",
         *(key for key, _, _ in counters),
         "counter_validation",
@@ -375,28 +383,29 @@ def proreg_pairs(results):
         pairs = []
         savings = []
         for count in ITERATIONS:
-            sw = indexed[workload, count, "software"]
-            hw = indexed[workload, count, "proreg"]
+            base = indexed[workload, count, reference]
+            improved = indexed[workload, count, candidate]
             pair = dict.fromkeys(fields)
             pair.update(
                 workload=workload, iterations=count, counter_validation="FAIL"
             )
-            if sw["status"] == hw["status"] == "PASS":
-                sw_stats, hw_stats = sw["statistics"], hw["statistics"]
+            if base["status"] == improved["status"] == "PASS":
+                base_stats = base["statistics"]
+                improved_stats = improved["statistics"]
                 cycle_stat = "system.cpu.numCycles"
                 saved = Fraction(
-                    sw_stats[cycle_stat] - hw_stats[cycle_stat], count
+                    base_stats[cycle_stat] - improved_stats[cycle_stat], count
                 )
                 savings.append(saved)
+                pair[ref_cycles] = base_stats[cycle_stat] / count
+                pair[candidate_cycles] = improved_stats[cycle_stat] / count
                 pair.update(
-                    software_cycles_per_call=sw_stats[cycle_stat] / count,
-                    proreg_cycles_per_call=hw_stats[cycle_stat] / count,
                     saved_cycles_per_call=float(saved),
                     counter_validation="PASS",
                 )
                 for key, counter, expected in counters:
                     stat = f"system.cpu.commitStats0.{counter}"
-                    delta = sw_stats[stat] - hw_stats[stat]
+                    delta = base_stats[stat] - improved_stats[stat]
                     pair[key] = delta / count
                     if delta != expected * count:
                         pair["counter_validation"] = "FAIL"
@@ -462,8 +471,14 @@ def clobber_pairs(results):
     return summary
 
 
-def report_proreg(outdir, results, *, clobber=False):
-    summary = clobber_pairs(results) if clobber else proreg_pairs(results)
+def report_proreg(outdir, results, *, comparison="proreg", clobber=False):
+    summary = (
+        clobber_pairs(results)
+        if clobber
+        else proreg_pairs(results, comparison)
+    )
+    reference, candidate, _ = PROREG_PAIRS[comparison]
+    labels = {"software": "SW", "proreg": "PROREG", "proreg_gf": "PROREG.G+F"}
     for pair in summary:
         level = f" k={pair['clobber_count']}" if clobber else ""
         relative = (
@@ -473,8 +488,8 @@ def report_proreg(outdir, results, *, clobber=False):
         )
         print(
             f"{pair['workload']} N={pair['iterations']}{level}: "
-            f"SW={pair['software_cycles_per_call']}, "
-            f"PROREG={pair['proreg_cycles_per_call']}, "
+            f"{labels[reference]}={pair[f'{reference}_cycles_per_call']}, "
+            f"{labels[candidate]}={pair[f'{candidate}_cycles_per_call']}, "
             f"saved={pair['saved_cycles_per_call']}{relative} cycles/call "
             f"[{pair['status']}]"
         )
@@ -498,21 +513,19 @@ def main():
     parser.add_argument("--timeout", type=int, default=300)
     parser.add_argument(
         "--comparison",
-        choices=("components", "proreg", "clobber"),
+        choices=("components", *PROREG_PAIRS, "clobber"),
         default="components",
-        help="Measure software components or paired software and PROREG gates.",
+        help="Measure software components or compare matched protection gates.",
     )
     args = parser.parse_args()
     if args.timeout <= 0:
         parser.error("--timeout must be positive")
     args.outdir = args.outdir.resolve()
+    pair_kind = "proreg" if args.comparison == "clobber" else args.comparison
+    modes = PROREG_PAIRS[pair_kind][:2] if pair_kind in PROREG_PAIRS else MODES
     jobs = [
         dict(mode=mode, workload=workload, iterations=count)
-        for mode in (
-            MODES
-            if args.comparison == "components"
-            else ("software", "proreg")
-        )
+        for mode in modes
         for workload in WORKLOADS
         for count in ITERATIONS
     ]
@@ -577,9 +590,12 @@ def main():
         )
         result_rows.append(row)
     write_csv(args.outdir / "results.csv", result_rows, list(result_rows[0]))
-    if args.comparison in ("proreg", "clobber"):
+    if pair_kind in PROREG_PAIRS:
         return report_proreg(
-            args.outdir, results, clobber=args.comparison == "clobber"
+            args.outdir,
+            results,
+            comparison=pair_kind,
+            clobber=args.comparison == "clobber",
         )
     summary = summarize(results)
     checks = validate_instruction_deltas(results)

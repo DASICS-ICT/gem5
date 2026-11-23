@@ -74,6 +74,7 @@ def run():
             "restore",
             "software",
             "proreg",
+            "proreg_gf",
             "standard_ref",
             "standard_guard",
             "variant_ref",

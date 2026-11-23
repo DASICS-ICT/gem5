@@ -5,6 +5,9 @@
 #ifndef USE_INT_PROREG
 #define USE_INT_PROREG 0
 #endif
+#ifndef USE_FP_PROREG
+#define USE_FP_PROREG 0
+#endif
 #ifndef ROI_ITERATIONS
 #define ROI_ITERATIONS 1024
 #endif
@@ -21,8 +24,9 @@
     .equ roi_iterations, ROI_ITERATIONS
     .equ roi_workload, ROI_WORKLOAD
     .equ roi_gate_mode, GATE_MODE
-    .globl roi_int_proreg
+    .globl roi_int_proreg, roi_fp_proreg
     .equ roi_int_proreg, USE_INT_PROREG
+    .equ roi_fp_proreg, USE_FP_PROREG
     .equ roi_protection, (GATE_MODE == GATE_SOFTWARE) & 1
 #if VECTOR_ABI
     .globl roi_vector_abi, roi_vector_protected, roi_vector_vlen
@@ -208,8 +212,12 @@ roi_work_end:
     li      t1, 1 - roi_int_proreg
     bne     t2, t1, user_finish
     ld      t2, CTX_FPR_SAVE(t0)
+#if USE_FP_PROREG
+    bnez    t2, user_finish         /* The FP gate leaves this slot untouched. */
+#else
     li      t1, FPR_SEED
     bne     t2, t1, user_finish
+#endif
 #else
     bnez    t2, user_finish
     ld      t2, CTX_FPR_SAVE(t0)

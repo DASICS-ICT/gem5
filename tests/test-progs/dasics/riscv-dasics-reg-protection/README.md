@@ -4,6 +4,7 @@
 
 - [2026-11-18 · 软件寄存器保护开销（标量分量、两种向量 ABI 与 VLEN）](experiments/2026-11-18-register-protection.md)
 - [2026-11-22 · 硬件辅助调用门的周期收益与 B 改写 0、1、6、12 个 s 寄存器的影响](experiments/2026-11-22-proreg-roi.md)
+- [2026-11-23 · 仅 G 与 G+F 调用门的配对测量：浮点保护的额外收益](experiments/2026-11-23-proreg-gf-roi.md)
 
 ## 测试范围
 
@@ -175,6 +176,21 @@ python3 "$test_dir/measure.py" --comparison proreg --jobs 8 \
 在同一批次比较 `software` 和 `proreg` 两种门。空函数和固定计算各预热 128 次，分别测量 1024 和 4096 次调用。
 `summary.csv` 的 `saved_cycles_per_call` 为软件门与硬件辅助门的 ROI 周期差除以调用次数。
 每个配对应少提交 34 条指令，其中包含 12 条加载和 12 条存储；同一负载以 4096 次调用为参照，两个批长的周期节省量相对偏差应在 1% 以内。
+
+### 浮点保护的额外收益
+
+```bash
+test_dir=tests/test-progs/dasics/riscv-dasics-reg-protection
+make -j8 -C "$test_dir/src" proreg-gf-roi
+python3 "$test_dir/measure.py" --comparison proreg-gf --jobs 8 \
+    --outdir "$test_dir/build/runs/proreg-gf-roi-$(date +%Y%m%d-%H%M%S)"
+```
+
+两组都用 `PROREG.G.I` 保护整数寄存器。`proreg` 门用软件保存、清零和恢复 `fs0–fs11`，
+`proreg_gf` 门用 `PROREG.F.I 0xfff` 保护它们，返回时两类映射共用一条 `LEAVE`。
+空函数与固定计算均预热 128 次，分别测量 1024 和 4096 次连续调用。
+`summary.csv` 的 `saved_cycles_per_call` 等于仅 G 门与 G+F 门的 ROI 周期差除以调用次数。
+每对预期少提交 35 条指令，其中包含 12 条加载和 12 条存储。
 
 ### B 在返回前改写受保护的整数寄存器
 
