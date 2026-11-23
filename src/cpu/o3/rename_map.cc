@@ -79,7 +79,9 @@ SimpleRenameMap::rename(const RegId& arch_reg)
     PhysRegIdPtr prev_reg = map[arch_reg.index()];
     RenameInfo result{prev_reg, prev_reg};
 #if USE_DASICS
-    result.prevUnreadable = arch_reg.is(IntRegClass) && isUnreadable(arch_reg);
+    if (arch_reg.is(IntRegClass) || arch_reg.is(FloatRegClass)) {
+        result.prevUnreadable = isUnreadable(arch_reg);
+    }
 #endif
 
     if (arch_reg.is(InvalidRegClass)) {

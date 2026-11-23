@@ -221,10 +221,11 @@ class Rename
 #if USE_DASICS
     /** Check DASICS permissions and apply the authorized rename operation. */
     void handleDasicsRename(const DynInstPtr &inst, ThreadID tid);
-    /** Save the integer mappings selected by a trusted PROREG request. */
-    Fault protectIntRegs(const DynInstPtr &inst, ThreadID tid, uint32_t mask);
-    /** Restore all valid integer mappings for a trusted LEAVE. */
-    void restoreIntRegs(const DynInstPtr &inst, ThreadID tid);
+    /** Save the selected mappings in the requesting thread and class. */
+    Fault protectRegs(const DynInstPtr &inst, ThreadID tid,
+                      RegClassType reg_class, uint32_t mask);
+    /** Restore the thread's saved GPR and FPR mappings for a trusted LEAVE. */
+    void restoreProtectedRegs(const DynInstPtr &inst, ThreadID tid);
 #endif
 
     /** Inserts unused instructions from a given thread into the skid buffer,
@@ -369,24 +370,54 @@ class Rename
     struct RestoreState
     {
         static constexpr unsigned NumIntSlots = 31;
+        static constexpr unsigned NumFloatSlots = 32;
 
-        /** Slot N-1 holds the saved physical mapping of xN (x1-x31). */
+        /** If intValid[N-1] is set, slot N-1 holds the saved xN mapping. */
         PhysRegIdPtr intRegs[NumIntSlots] = {};
-        /** intRegs[i] is usable only while valid[i] is set. */
-        std::bitset<NumIntSlots> valid{};
+        std::bitset<NumIntSlots> intValid{};
+
+        /** If floatValid[N] is set, slot N holds the saved fN mapping. */
+        PhysRegIdPtr floatRegs[NumFloatSlots] = {};
+        std::bitset<NumFloatSlots> floatValid{};
 
         static RegIndex
-        slotIndex(RegIndex reg_idx)
+        intSlotIndex(RegIndex reg_idx)
         {
             assert(reg_idx > 0 && reg_idx <= NumIntSlots);
             return reg_idx - 1;
         }
 
         void
-        save(RegIndex slot_idx, PhysRegIdPtr phys_reg)
+        save(const RegId &reg, PhysRegIdPtr phys_reg)
         {
-            intRegs[slot_idx] = phys_reg;
-            valid.set(slot_idx);
+            assert(phys_reg->is(reg.classValue()));
+            if (reg.is(IntRegClass)) {
+                const auto slot = intSlotIndex(reg.index());
+                assert(!intValid.test(slot));
+                intRegs[slot] = phys_reg;
+                intValid.set(slot);
+            } else {
+                assert(reg.is(FloatRegClass) && reg.index() < NumFloatSlots);
+                assert(!floatValid.test(reg.index()));
+                floatRegs[reg.index()] = phys_reg;
+                floatValid.set(reg.index());
+            }
+        }
+
+        /** Undo a PROREG save without releasing the physical mapping. */
+        void
+        undoSave(const RegId &reg, PhysRegIdPtr phys_reg)
+        {
+            if (reg.is(IntRegClass)) {
+                const auto slot = intSlotIndex(reg.index());
+                assert(intValid.test(slot) && intRegs[slot] == phys_reg);
+                intValid.reset(slot);
+            } else {
+                assert(reg.is(FloatRegClass) && reg.index() < NumFloatSlots);
+                assert(floatValid.test(reg.index()) &&
+                       floatRegs[reg.index()] == phys_reg);
+                floatValid.reset(reg.index());
+            }
         }
     };
 

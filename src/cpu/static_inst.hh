@@ -303,7 +303,7 @@ class StaticInst : public RefCounted, public StaticInstFlags
 #if USE_DASICS
     /**
      * Bit N selects integer register xN. An empty optional means there
-     * is no PROREG request. A present zero mask selects no registers.
+     * is no integer protection request. A present zero selects no registers.
      */
     virtual std::optional<uint32_t>
     intRegProtectionMask() const
@@ -311,16 +311,26 @@ class StaticInst : public RefCounted, public StaticInstFlags
         return std::nullopt;
     }
 
-    /** Whether to restore this thread's saved integer mappings at rename. */
+    /**
+     * Bit N selects floating-point register fN. An empty optional means
+     * there is no floating-point request. A present zero selects no registers.
+     */
+    virtual std::optional<uint32_t>
+    floatRegProtectionMask() const
+    {
+        return std::nullopt;
+    }
+
+    /** Whether to restore this thread's protected mappings at rename. */
     virtual bool
-    restoresIntRegs() const
+    restoresProtectedRegs() const
     {
         return false;
     }
 
-    /** Supply the ISA fault for a protection request with occupied slots. */
+    /** Supply the ISA fault for occupied slots in the requested class. */
     virtual Fault
-    intRegProtectionConflictFault() const
+    regProtectionConflictFault() const
     {
         panic("%s has no register protection conflict fault", mnemonic);
     }

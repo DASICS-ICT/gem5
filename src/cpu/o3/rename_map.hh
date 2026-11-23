@@ -108,7 +108,7 @@ class SimpleRenameMap
         PhysRegIdPtr newPhysReg;
         PhysRegIdPtr prevPhysReg;
 #if USE_DASICS
-        /** Source-read restriction on the previous integer mapping. */
+        /** Source-read restriction on the previous scalar mapping. */
         bool prevUnreadable = false;
 #endif
     };
@@ -266,28 +266,30 @@ class UnifiedRenameMap
     }
 
 #if USE_DASICS
-    /** Bind unreadable integer sources to the zero source used for x0. */
+    /** Bind an unreadable scalar source to the same raw zero used for x0. */
     PhysRegIdPtr
     lookupSource(const RegId &arch_reg) const
     {
-        if (arch_reg.is(IntRegClass) && isIntRegUnreadable(arch_reg)) {
+        if (isRegUnreadable(arch_reg)) {
             return &invalidPhysRegId;
         }
         return lookup(arch_reg);
     }
 
     bool
-    isIntRegUnreadable(const RegId &arch_reg) const
+    isRegUnreadable(const RegId &arch_reg) const
     {
-        assert(arch_reg.is(IntRegClass));
-        return renameMaps[IntRegClass].isUnreadable(arch_reg);
+        const auto reg_class = arch_reg.classValue();
+        return (reg_class == IntRegClass || reg_class == FloatRegClass) &&
+               renameMaps[reg_class].isUnreadable(arch_reg);
     }
 
     void
-    setIntRegUnreadable(const RegId &arch_reg, bool value)
+    setRegUnreadable(const RegId &arch_reg, bool value)
     {
-        assert(arch_reg.is(IntRegClass));
-        renameMaps[IntRegClass].setUnreadable(arch_reg, value);
+        const auto reg_class = arch_reg.classValue();
+        assert(reg_class == IntRegClass || reg_class == FloatRegClass);
+        renameMaps[reg_class].setUnreadable(arch_reg, value);
     }
 #endif
 

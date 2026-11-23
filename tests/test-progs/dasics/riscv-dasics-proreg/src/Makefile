@@ -7,7 +7,8 @@ BOOTS := U S
 ifdef PROREG_BOOT
 override OUT := ../build/$(PROGRAM)-$(PROREG_BOOT).elf
 include ../../riscv-dasics-csr/src/Makefile
-override CFLAGS += -DPROREG_TEST_$(PROREG_BOOT)
+override CFLAGS := $(subst rv64imac_zicsr,rv64imafdc_zicsr,$(CFLAGS)) \
+	-DPROREG_TEST_$(PROREG_BOOT)
 ifeq ($(CPU),v5_full)
 # Require the reference O3 model to exercise the loop-exit rollback.
 GEM5_TEST_RUNNER := python3 "$(abspath check_rollback.py)" "$(CROSS_COMPILE)nm"

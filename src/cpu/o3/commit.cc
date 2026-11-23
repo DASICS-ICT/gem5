@@ -1270,10 +1270,10 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
     }
 
 #if USE_DASICS
-    // Publish the integer mappings captured by this LEAVE at rename.
+    // Publish the protected mappings captured by this LEAVE at rename.
     for (const auto &mapping : head_inst->getRestoredMappings()) {
         renameMap[tid]->setEntry(mapping.archReg, mapping.newPhysReg);
-        renameMap[tid]->setIntRegUnreadable(mapping.archReg, false);
+        renameMap[tid]->setRegUnreadable(mapping.archReg, false);
     }
 #endif
 

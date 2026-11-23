@@ -12,6 +12,7 @@
     .equ ILLEGAL, 2
     .equ BREAKPOINT, 3
     .equ MSTATUS_MPP, 3 << 11
+    .equ MSTATUS_FS, 3 << 13
     .equ CALLER_S3, 0x53
     .equ CALLER_S7, 0x57
     /* PROREG.G.I uses custom-0, funct3=3, rd=rs1=0 and mask bit N for sN. */
@@ -22,6 +23,14 @@
     .equ PROREG_G_I_ZERO, 0x0000300B
     .equ PROREG_G_I_S11, 0x8000300B
     .equ PROREG_G_I_S3_S11, 0x8080300B
+    .equ PROREG_F_I_ZERO, 0x0000400B
+    .equ PROREG_F_I_FS3, 0x0080400B
+    .equ PROREG_F_I_FS11, 0x8000400B
+    .equ PROREG_F_I_FS3_FS11, 0x8080400B
+    .equ CALLER_FS3, -1
+    .equ CALLER_FS11, 0x8000000000000000
+    .equ CONTROL_FS2, 0x6b3
+    .equ LOCAL_FS3, -2
     .equ LEAVE, 0x0000500B
     .equ REUSE_ROUNDS, 192
     .equ GENERATION_ROUNDS, 32
@@ -61,12 +70,21 @@ _start:
     li      t0, DASICS_UENA | DASICS_SENA
     csrw    CSR_DASICS_S_MAIN_CFG, t0
 
+    li      t0, MSTATUS_FS
+    csrs    mstatus, t0
+    li      t0, CALLER_FS3
+    fmv.d.x fs3, t0
+    li      t0, CALLER_FS11
+    fmv.d.x fs11, t0
+    li      t0, CONTROL_FS2
+    fmv.d.x fs2, t0
+
     la      s0, cases
     li      s9, 1
     li      s7, CALLER_S7
 start_case:
     ld      t0, 0(s0)               /* Probe entry PC. */
-    ld      s2, 8(s0)               /* Expected source privilege. */
+    ld      s2, 8(s0)               /* Expected mstatus[14:11] (FS and MPP). */
     ld      s4, 16(s0)              /* Expected mcause. */
     ld      s5, 24(s0)              /* Expected mepc. */
     ld      s6, 32(s0)              /* Failure message. */
@@ -78,7 +96,7 @@ start_case:
     li      a6, -1
     li      a7, -1
     csrw    mepc, t0
-    li      t0, MSTATUS_MPP
+    li      t0, MSTATUS_MPP | MSTATUS_FS
     csrc    mstatus, t0
     slli    t0, s2, 11
     csrs    mstatus, t0
@@ -115,6 +133,7 @@ sparse_caller:
     li      s10, 0x5a
     la      t0, sparse_callee
     .word   PROREG_G_I_S1_S3_S11
+    .word   PROREG_F_I_FS3_FS11
     .insn   i 0x0b, 1, ra, t0, 0     /* DASICSCALL.JR ra, t0, 0 */
 sparse_return:
     .word   LEAVE
@@ -195,6 +214,8 @@ occupied_caller:
     li      s3, OCCUPIED_S3
     li      s11, DISJOINT_S11
     .word   PROREG_G_I_S3
+    /* An empty FP request may follow an integer protection. */
+    .word   PROREG_F_I_ZERO
 occupied_zero:
     .word   PROREG_G_I_ZERO
     addi    a5, a5, 1               /* Executed only upon trap return. */
@@ -209,6 +230,41 @@ occupied_disjoint:
     mv      a6, s3
     mv      a7, s11
 occupied_break:
+    ebreak
+    .endif
+
+    /* The same FP instruction is reached in either trust domain. */
+    .if \trusted_cases
+fp_mixed:
+    .word   PROREG_G_I_S3
+fp_trusted:
+    .else
+fp_untrusted:
+    .endif
+    .word   PROREG_F_I_FS3
+    addi    a5, zero, 1             /* Retires only when access is allowed. */
+    .if \trusted_cases
+fp_trusted_break:
+    .endif
+    ebreak
+    .if \trusted_cases
+fp_occupied_zero:
+    .word   PROREG_F_I_ZERO
+fp_occupied_disjoint:
+    .word   PROREG_F_I_FS11
+    addi    a5, zero, 1
+    ebreak
+
+    /* Recover the active G/F call with FS=Off, then reuse the FP bank. */
+fp_leave_off:
+    li      s3, 0x2b
+    .word   LEAVE
+    mv      a3, s3
+    .word   PROREG_G_I_ZERO
+    .word   PROREG_F_I_FS3
+    .word   LEAVE                   /* Only the FP bank is occupied. */
+    .word   PROREG_F_I_ZERO
+fp_leave_off_break:
     ebreak
     .endif
     .balign 8
@@ -236,16 +292,34 @@ sparse_callee:
     mv      a5, s3
     mv      a6, s11
     mv      a7, s10
+    fmv.x.d t1, fs3
+    fmv.x.d t2, fs11
+    or      t1, t1, t2
+    bnez    t1, .Lsparse_fp_fail
+    li      t0, LOCAL_FS3
+    fmv.d.x fs3, t0                 /* fs11 stays on its hidden mapping. */
+    fmv.x.d t1, fs3
+    bne     t1, t0, .Lsparse_fp_fail
     ret
+.Lsparse_fp_fail:
+    ebreak
+
+    /* Untrusted code samples the raw 64-bit register view. */
+fp_read_write:
+    fmv.x.d a3, fs3
+    fmv.x.d a4, fs2
+    li      t0, LOCAL_FS3
+    fmv.d.x fs3, t0
+    fmv.x.d a6, fs3
+fp_read_write_break:
+    ebreak
 
     .balign 4
 machine_trap:
     csrr    t0, mstatus
     srli    t0, t0, 11
-    andi    t0, t0, 3
-    li      t1, 3
-    beq     t0, t1, fail            /* A trap from the M-mode driver. */
-    bne     t0, s2, fail
+    andi    t0, t0, 15
+    bne     t0, s2, fail            /* Check source privilege and FS. */
     csrr    t0, mcause
     bne     t0, s4, fail
     csrr    t0, mepc
@@ -262,10 +336,16 @@ machine_trap:
     beq     t0, t1, resume_occupied
     la      t1, occupied_break
     beq     t0, t1, check_occupied
+    la      t1, fp_read_write_break
+    beq     t0, t1, check_fp_view
+    la      t1, fp_leave_off_break
+    beq     t0, t1, check_fp_leave_off
     li      t0, BREAKPOINT
     bne     s4, t0, check_illegal
     li      t0, 1
     bne     a5, t0, fail
+    li      t0, PROREG_F_I_FS3
+    beq     s8, t0, case_passed
     li      t0, LEAVE
     beq     s8, t0, check_trusted_leave
     bnez    a3, fail
@@ -279,6 +359,23 @@ machine_trap:
 check_trusted_leave:
     li      t0, CALLER_S7
     bne     a3, t0, fail
+    j       case_passed
+check_fp_view:
+    bnez    a3, fail
+    li      t0, CONTROL_FS2
+    bne     a4, t0, fail
+    li      t0, LOCAL_FS3
+    bne     a6, t0, fail
+    j       case_passed
+check_fp_leave_off:
+    li      t0, CALLER_S3
+    bne     a3, t0, fail
+    /* The handler has checked FS=Off; enable FP only to inspect A's bits. */
+    li      t0, MSTATUS_FS
+    csrs    mstatus, t0
+    fmv.x.d t1, fs3
+    li      t0, CALLER_FS3
+    bne     t1, t0, fail
     j       case_passed
 check_illegal:
     bnez    a5, fail
@@ -358,6 +455,10 @@ check_sparse:
     CHECK_SPARSE t3,  0x33, after_leave, s3
     CHECK_SPARSE t4,  0xbb, after_leave, s11
     CHECK_SPARSE t5,  0x6a, after_leave, s10
+    fmv.x.d t1, fs3
+    CHECK_SPARSE t1, CALLER_FS3, after_leave, fs3
+    fmv.x.d t1, fs11
+    CHECK_SPARSE t1, CALLER_FS11, after_leave, fs11
     j       case_passed
 
 fail:
@@ -396,7 +497,7 @@ cases:
     .dword untrusted_leave_failure, LEAVE
     .dword probe_a_leave, PRV_U, BREAKPOINT, probe_a_leave_break
     .dword trusted_leave_failure, LEAVE
-    .dword sparse_caller, PRV_U, BREAKPOINT, sparse_break
+    .dword sparse_caller, PRV_U | (MSTATUS_FS >> 11), BREAKPOINT, sparse_break
     .dword sparse_call_failure, PROREG_G_I_S1_S3_S11
 #elif defined(PROREG_TEST_S)
     .equ BOOT_PRIV, PRV_S
@@ -408,7 +509,7 @@ cases:
     .dword untrusted_leave_failure, LEAVE
     .dword probe_b_leave, PRV_S, BREAKPOINT, probe_b_leave_break
     .dword trusted_leave_failure, LEAVE
-    .dword sparse_caller, PRV_S, BREAKPOINT, sparse_break
+    .dword sparse_caller, PRV_S | (MSTATUS_FS >> 11), BREAKPOINT, sparse_break
     .dword sparse_call_failure, PROREG_G_I_S1_S3_S11
 #else
 #error "Select a U or S boot for the PROREG test"
@@ -419,6 +520,19 @@ cases:
     .dword generation_failure, PROREG_G_I_S3
     .dword occupied_caller, BOOT_PRIV, ILLEGAL, occupied_zero
     .dword occupied_zero_failure, PROREG_G_I_ZERO
+    .dword fp_untrusted, BOOT_PRIV, ILLEGAL, fp_untrusted
+    .dword fp_untrusted_failure, PROREG_F_I_FS3
+    .dword fp_mixed, BOOT_PRIV, BREAKPOINT, fp_trusted_break
+    .dword fp_trusted_failure, PROREG_F_I_FS3
+    .dword fp_occupied_zero, BOOT_PRIV, ILLEGAL, fp_occupied_zero
+    .dword fp_occupied_failure, PROREG_F_I_ZERO
+    .dword fp_occupied_disjoint, BOOT_PRIV, ILLEGAL, fp_occupied_disjoint
+    .dword fp_occupied_failure, PROREG_F_I_FS11
+    /* The preceding F requests ran with FS=Off; enable it for fmv.d.x/x.d. */
+    .dword fp_read_write, BOOT_PRIV | (MSTATUS_FS >> 11)
+    .dword BREAKPOINT, fp_read_write_break, fp_view_failure, 0
+    .dword fp_leave_off, BOOT_PRIV, BREAKPOINT, fp_leave_off_break
+    .dword fp_leave_failure, LEAVE
 cases_end:
 setup_failure:       .asciz "PROREG.G.I: setup failed\n"
 trusted_u_failure:   .asciz "PROREG.G.I: trusted U failed\n"
@@ -433,6 +547,11 @@ generation_failure: .asciz "PROREG: wrong s3 generation at loop exit\n"
 occupied_zero_failure: .asciz "PROREG: occupied zero-mask rejection failed\n"
 disjoint_failure: .asciz "PROREG: occupied disjoint-mask rejection failed\n"
 occupied_restore_failure: .asciz "PROREG: state after conflicts failed\n"
+fp_untrusted_failure: .asciz "PROREG.F.I: untrusted denial failed\n"
+fp_trusted_failure: .asciz "PROREG.F.I: trusted access failed\n"
+fp_occupied_failure: .asciz "PROREG.F.I: occupied FP slot conflict failed\n"
+fp_view_failure: .asciz "PROREG.F.I: incorrect floating-point register view\n"
+fp_leave_failure: .asciz "LEAVE: mixed restore or FP slot reuse failed\n"
 
     .section .data
     .balign 8
