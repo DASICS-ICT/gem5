@@ -1,0 +1,9 @@
+__fmod dasics_fmod_body
+__ieee754_fmod dasics_private_ieee754_fmod
+fmod dasics_private_fmod
+fmodf32x dasics_private_fmodf32x
+fmodf64 dasics_private_fmodf64
+__clzdi2 dasics_fmod_clz
+__ctzdi2 dasics_fmod_ctz
+__clz_tab dasics_fmod_table
+__math_edom dasics_fmod_error

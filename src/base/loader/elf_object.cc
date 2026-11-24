@@ -125,10 +125,7 @@ ElfObject::ElfObject(ImageFileDataPtr ifd) : ObjectFile(ifd)
 
     // Go through all the segments in the program and record them.
     for (int i = 0; i < ehdr.e_phnum; ++i) {
-        GElf_Phdr phdr;
-        if (gelf_getphdr(elf, i, &phdr) == 0) {
-            panic("gelf_getphdr failed for segment %d.", i);
-        }
+        const auto phdr = programHeader(i);
 
         if (phdr.p_type == PT_LOAD)
             handleLoadableSegment(phdr, i);
@@ -231,6 +228,15 @@ ElfObject::ElfObject(ImageFileDataPtr ifd) : ObjectFile(ifd)
         ++sec_idx;
         section = elf_getscn(elf, sec_idx);
     }
+}
+
+GElf_Phdr
+ElfObject::programHeader(int index) const
+{
+    GElf_Phdr phdr;
+    panic_if(!gelf_getphdr(elf, index, &phdr),
+             "gelf_getphdr failed for segment %d.", index);
+    return phdr;
 }
 
 std::string

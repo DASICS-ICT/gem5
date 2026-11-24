@@ -52,6 +52,7 @@ class RiscvProcess : public Process
 {
   protected:
     RiscvProcess(const ProcessParams &params, loader::ObjectFile *objFile);
+    void initState() override;
     template<class IntType>
     void argsInit(int pageSize);
 

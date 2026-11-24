@@ -23,6 +23,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+from m5.defines import buildEnv
 from m5.objects.Workload import SEWorkload
 from m5.params import *
 
@@ -32,6 +33,11 @@ class RiscvSEWorkload(SEWorkload):
     cxx_header = "arch/riscv/se_workload.hh"
     cxx_class = "gem5::RiscvISA::SEWorkload"
     abstract = True
+
+    if buildEnv.get("USE_DASICS", False):
+        dasics_init = Param.Bool(
+            False, "Initialize the RV64 U-mode DASICS domain from ELF symbols"
+        )
 
 
 class RiscvEmuLinux(RiscvSEWorkload):

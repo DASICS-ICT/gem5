@@ -187,10 +187,12 @@ def execute(command, workdir, invocation, mode):
         ).returncode
 
 
-def check_outputs(case, input_name, plan, workdir, runs, mode):
-    tool = require_executable(SPEC_RUNTIME / "bin/specdiff")
+def check_outputs(
+    case, input_name, plan, workdir, runs, mode, *, runtime=SPEC_RUNTIME
+):
+    tool = require_executable(runtime / "bin/specdiff")
     env = os.environ.copy()
-    env["SPEC"] = str(SPEC_RUNTIME)
+    env["SPEC"] = str(runtime)
     env.pop("SPEC_SPECDIFF", None)
     results = []
     for comparison in plan["comparisons"]:

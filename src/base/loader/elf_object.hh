@@ -111,6 +111,13 @@ class ElfObject : public ObjectFile
 
     MemoryImage buildImage() const override { return image; }
 
+    uint16_t
+    objectType() const
+    {
+        return ehdr.e_type;
+    }
+    GElf_Phdr programHeader(int index) const;
+
     ObjectFile *getInterpreter() const override { return interpreter; }
     std::string getInterpPath(const GElf_Phdr &phdr) const;
 
@@ -130,7 +137,11 @@ class ElfObject : public ObjectFile
 
     Addr programHeaderTable() {return _programHeaderTable;}
     uint16_t programHeaderSize() {return _programHeaderSize;}
-    uint16_t programHeaderCount() {return _programHeaderCount;}
+    uint16_t
+    programHeaderCount() const
+    {
+        return _programHeaderCount;
+    }
 };
 
 /**

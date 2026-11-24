@@ -61,6 +61,7 @@ PcCountTrackerManager::checkCount(Addr pc)
         // increment the counter of the encountered PC address by 1
 
         currentPair = PcCountPair(pc,count);
+        DPRINTF(PcCountTracker, "retired pc=%#x count=%llu\n", pc, count);
         // update the current PC Count pair
         if(targetPair.find(currentPair) != targetPair.end()) {
             // if the current PC Count pair is one of the target pairs

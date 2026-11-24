@@ -27,6 +27,7 @@
 """Run a static RV64 Linux workload on a selected O3 reference model."""
 
 import argparse
+import json
 from pathlib import Path
 
 from dasics_platform import (
@@ -39,6 +40,8 @@ from dasics_platform import (
 import m5
 from m5.objects import (
     AddrRange,
+    PcCountTracker,
+    PcCountTrackerManager,
     Process,
     Root,
     SEWorkload,
@@ -47,15 +50,38 @@ from m5.objects import (
     SystemXBar,
     VoltageDomain,
 )
+from m5.params import PcCountPair
 
 
-def run_model(profile):
+def _retired_pc(value):
+    name, _, address = value.partition("=")
+    try:
+        pc = int(address, 0)
+    except ValueError:
+        raise argparse.ArgumentTypeError("expected NAME=ADDRESS") from None
+    if not name or not 0 <= pc < 2**64 or pc % 2:
+        raise argparse.ArgumentTypeError(
+            "expected NAME and an RV64 instruction address"
+        )
+    return name, pc
+
+
+def run_model(profile, *, dasics_init=False):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workdir", type=Path, required=True)
     parser.add_argument("--stdout", type=Path, required=True)
     parser.add_argument("--stderr", type=Path, required=True)
     parser.add_argument("--stdin", type=Path)
     parser.add_argument("--max-ticks", type=int, default=m5.MaxTick)
+    if dasics_init:
+        parser.add_argument(
+            "--retired-pc",
+            action="append",
+            type=_retired_pc,
+            default=[],
+            metavar="NAME=ADDRESS",
+            help="count retirements at this ELF address",
+        )
     parser.add_argument("binary", type=Path, help="Static RV64 Linux ELF")
     parser.add_argument("program_args", nargs=argparse.REMAINDER)
     args = parser.parse_args()
@@ -69,6 +95,10 @@ def run_model(profile):
         parser.error(f"Input not found: {args.stdin}")
     if args.max_ticks <= 0:
         parser.error("--max-ticks must be positive")
+    requested = args.retired_pc if dasics_init else []
+    pcs = dict(requested)
+    if len(pcs) != len(requested):
+        parser.error("each --retired-pc name must be unique")
 
     system = System(mem_mode="timing", cache_line_size=64)
     system.mem_ranges = [AddrRange(0x80000000, size="8GiB")]
@@ -79,6 +109,8 @@ def run_model(profile):
     system.membus = _xbar(SystemXBar)
     system.system_port = system.membus.cpu_side_ports
     system.workload = SEWorkload.init_compatible(str(binary))
+    if dasics_init:
+        system.workload.dasics_init = True
     configure_cpu_caches(system, profile)
     configure_memory(system)
     process = Process(
@@ -92,6 +124,16 @@ def run_model(profile):
     if args.stdin:
         process.input = str(args.stdin.resolve())
     system.cpu.workload = process
+    if pcs:
+        # The manager raises a simulation exit at a target count. Use the
+        # largest count so the process can run to its ordinary Linux exit.
+        targets = [
+            PcCountPair(pc, 2**64 - 1) for pc in sorted(set(pcs.values()))
+        ]
+        system.pc_counts = PcCountTrackerManager(targets=targets)
+        system.cpu.probeListener = PcCountTracker(
+            core=system.cpu, ptmanager=system.pc_counts, targets=targets
+        )
     root = Root(full_system=False, system=system)
     m5.instantiate()
     _print_config(profile)
@@ -105,4 +147,10 @@ def run_model(profile):
     )
     if cause != "exiting with last active thread context":
         raise SystemExit(1)
+    if pcs and code == 0:
+        counts = {
+            name: system.pc_counts.getPcCount(pc) for name, pc in pcs.items()
+        }
+        report = Path(m5.options.outdir) / "retired-pcs.json"
+        report.write_text(json.dumps(counts, indent=2) + "\n")
     raise SystemExit(0 if code == 0 else 1)

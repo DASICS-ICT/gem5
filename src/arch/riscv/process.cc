@@ -44,6 +44,7 @@
 #include "base/loader/elf_object.hh"
 #include "base/loader/object_file.hh"
 #include "base/logging.hh"
+#include "config/use_dasics.hh"
 #include "cpu/thread_context.hh"
 #include "debug/Stack.hh"
 #include "mem/page_table.hh"
@@ -53,6 +54,12 @@
 #include "sim/process_impl.hh"
 #include "sim/syscall_return.hh"
 #include "sim/system.hh"
+
+#if USE_DASICS
+#include "arch/riscv/Dasics.hh"
+#include "arch/riscv/se_workload.hh"
+
+#endif
 
 namespace gem5
 {
@@ -94,10 +101,114 @@ RiscvProcess32::RiscvProcess32(const ProcessParams &params,
             max_stack_size, next_thread_stack_base, mmap_end);
 }
 
+#if USE_DASICS
+namespace
+{
+
+// SE loads PT_LOAD at p_paddr; the linker symbols describe virtual addresses.
+bool
+inLoadSegment(const loader::ElfObject &elf, Addr start, Addr size,
+              unsigned flags)
+{
+    for (int i = 0; i < elf.programHeaderCount(); ++i) {
+        const auto ph = elf.programHeader(i);
+        if (ph.p_type == PT_LOAD && ph.p_paddr == ph.p_vaddr &&
+            (ph.p_flags & flags) == flags && start >= ph.p_vaddr &&
+            size <= ph.p_memsz && start - ph.p_vaddr <= ph.p_memsz - size) {
+            return true;
+        }
+    }
+    return false;
+}
+
+} // anonymous namespace
+#endif
+
+void
+RiscvProcess::initState()
+{
+    Process::initState();
+
+#if USE_DASICS
+    const auto *workload = dynamic_cast<RiscvISA::SEWorkload *>(seWorkload);
+    if (!workload || !workload->params().dasics_init) {
+        return;
+    }
+
+    const auto *elf = dynamic_cast<const loader::ElfObject *>(objFile);
+    fatal_if(!elf || elf->getArch() != loader::Riscv64 ||
+                 elf->objectType() != ET_EXEC || elf->getInterpreter(),
+             "DASICS SE requires a static RV64 executable: %s", executable);
+
+    const auto symbol = [&](const char *name) {
+        const auto &symbols = elf->symtab();
+        const auto it = symbols.find(name);
+        fatal_if(it == symbols.end(), "Missing DASICS ELF symbol %s in %s",
+                 name, executable);
+        return it->address();
+    };
+    const DasicsAddrRange trusted{symbol("__dasics_trusted_start"),
+                                  symbol("__dasics_trusted_end")};
+    const DasicsAddrRange untrusted{symbol("__dasics_untrusted_start"),
+                                    symbol("__dasics_untrusted_end")};
+    const Addr context = symbol("__dasics_context_base");
+
+    const auto checkCode = [&](const DasicsAddrRange &range) {
+        fatal_if(range.lower >= range.upper ||
+                     ((range.lower | range.upper) & 7) ||
+                     !inLoadSegment(*elf, range.lower,
+                                    range.upper - range.lower, PF_X),
+                 "Invalid DASICS code range [%#x, %#x) in %s", range.lower,
+                 range.upper, executable);
+    };
+    checkCode(trusted);
+    checkCode(untrusted);
+    fatal_if(trusted.lower < untrusted.upper &&
+                 untrusted.lower < trusted.upper,
+             "Overlapping DASICS code ranges in %s", executable);
+    const Addr entry = elf->entryPoint();
+    fatal_if(entry < trusted.lower || entry >= trusted.upper,
+             "ELF entry %#x is outside trusted DASICS code in %s", entry,
+             executable);
+    fatal_if(!context || context % sizeof(RegVal) ||
+                 (context >= trusted.lower && context < trusted.upper) ||
+                 (context >= untrusted.lower && context < untrusted.upper) ||
+                 !inLoadSegment(*elf, context, sizeof(RegVal), PF_R | PF_W),
+             "Invalid DASICS context base %#x in %s", context, executable);
+
+    // Only B's jump window is valid. The gate grants data access per call.
+    DasicsJumpCfg jumps = 0;
+    jumps.valid0 = 1;
+    DasicsMainCfg main = 0;
+    main.uena = 1;
+    for (auto ctx : contextIds) {
+        auto *tc = system->threads[ctx];
+        const auto *isa = dynamic_cast<RiscvISA::ISA *>(tc->getIsaPtr());
+        fatal_if(!isa, "Incompatible ISA for RISC-V");
+        fatal_if(std::max(trusted.upper, untrusted.upper) >
+                     mask(isa->getDasicsVAddrBits()),
+                 "DASICS code ranges exceed the PC comparator width in %s",
+                 executable);
+        tc->setMiscRegNoEffect(MISCREG_DASICS_U_MAIN_BOUND_LO, trusted.lower);
+        tc->setMiscRegNoEffect(MISCREG_DASICS_U_MAIN_BOUND_HI, trusted.upper);
+        tc->setMiscRegNoEffect(MISCREG_DASICS_JUMP_BOUND_LO0, untrusted.lower);
+        tc->setMiscRegNoEffect(MISCREG_DASICS_JUMP_BOUND_HI0, untrusted.upper);
+        tc->setMiscRegNoEffect(MISCREG_DASICS_JUMP_CFG, jumps);
+        tc->setMiscRegNoEffect(MISCREG_DASICS_LIB_CFG, 0);
+        tc->setMiscRegNoEffect(MISCREG_DASICS_MAIN_CALL_ENTRY, 0);
+        tc->setMiscRegNoEffect(MISCREG_DASICS_RETURN_PC, 0);
+        tc->setMiscRegNoEffect(MISCREG_DASICS_ACTIVE_ZONE_RETURN_PC, 0);
+        tc->setMiscRegNoEffect(MISCREG_DASICS_FREASON, 0);
+        tc->setMiscRegNoEffect(MISCREG_DASICS_CONTEXT_BASE, context);
+        tc->setMiscRegNoEffect(MISCREG_DASICS_MAIN_CFG, main);
+    }
+#endif
+}
+
 void
 RiscvProcess64::initState()
 {
-    Process::initState();
+    RiscvProcess::initState();
 
     argsInit<uint64_t>(PageBytes);
     for (ContextID ctx: contextIds) {
@@ -117,7 +228,7 @@ RiscvProcess64::initState()
 void
 RiscvProcess32::initState()
 {
-    Process::initState();
+    RiscvProcess::initState();
 
     argsInit<uint32_t>(PageBytes);
     for (ContextID ctx: contextIds) {
