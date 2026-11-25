@@ -8,6 +8,10 @@
 #if TEST_SCENARIO < 0 || TEST_SCENARIO > 4
 #error Unsupported register-protection scenario
 #endif
+#if SEQUENCE_DENY < 0 || SEQUENCE_DENY > 4 || (SEQUENCE_DENY && !SEQUENCE_CALLS)
+#error Unsupported sequential-call fault probe
+#endif
+#define EXPECT_USER_DONE (TEST_SCENARIO == 0 && !SEQUENCE_DENY)
 
     .equ CSR_DASICS_S_MAIN_CFG, 0xBC0
     .equ CSR_DASICS_U_MAIN_BOUND_LO, 0x9E2
@@ -125,6 +129,10 @@ _start:
     la      t1, trusted_end
     csrw    CSR_DASICS_U_MAIN_BOUND_HI, t1
     csrw    CSR_DASICS_LIB_CFG, zero
+#if SEQUENCE_CALLS
+    /* Trusted U selects the active callee's jump bound at each entry. */
+    csrw    CSR_DASICS_JUMP_CFG, zero
+#else
     /* B's internal branches stay in its code page; ReturnPC is separate. */
     la      t4, untrusted_start
     csrw    CSR_DASICS_JUMP_BOUND_LO0, t4
@@ -132,6 +140,7 @@ _start:
     csrw    CSR_DASICS_JUMP_BOUND_HI0, t4
     li      t4, 1
     csrw    CSR_DASICS_JUMP_CFG, t4
+#endif
     csrw    CSR_DASICS_MAIN_CALL_ENTRY, zero
     csrw    CSR_DASICS_RETURN_PC, zero
     csrw    CSR_DASICS_ACTIVE_ZONE_RETURN_PC, zero
@@ -186,7 +195,7 @@ machine_trap_handler:
     /* Success is accepted only from the unique completed U-mode probe. */
     li      t6, 7
     csrr    t0, mcause
-#if TEST_SCENARIO == 0
+#if EXPECT_USER_DONE
     li      t1, 8
 #else
     li      t1, 24
@@ -199,21 +208,36 @@ machine_trap_handler:
     bnez    t0, machine_fail
     li      t6, 9
     csrr    t0, mepc
-#if TEST_SCENARIO == 0
+#if EXPECT_USER_DONE
     la      t1, user_done
+#elif SEQUENCE_DENY
+    la      t1, seq_fault_probe
 #else
     la      t1, fault_probe
 #endif
     bne     t0, t1, machine_fail
     li      t6, 10
     csrr    t0, mtval
-#if TEST_SCENARIO == 0
+#if EXPECT_USER_DONE
     bnez    t0, machine_fail
     li      t6, 11
     li      t0, COMPLETION_TOKEN
     bne     a3, t0, machine_fail
     mv      t6, a0
     bnez    t6, machine_fail
+#elif SEQUENCE_DENY
+    /* Both peer regions are mapped. Require the exact DASICS fault. */
+    la      t1, seq_peer_target
+    bne     t0, t1, machine_fail
+    li      t6, 28
+    csrr    t0, CSR_DASICS_FREASON
+#if SEQUENCE_DENY <= 2
+    li      t1, 2                       /* Load */
+#else
+    li      t1, 4                       /* Jump */
+#endif
+    bne     t0, t1, machine_fail
+    li      t6, 0
 #else
     /* These pages are valid U mappings; the fault must come from DASICS. */
 #if TEST_SCENARIO <= 2
@@ -300,14 +324,30 @@ user_pages:
     .dword context_frame, PTE_USER_RW
     .dword a_stack_bottom, PTE_USER_RW
     .dword b_stack_bottom, PTE_USER_RW
+#if SEQUENCE_CALLS
+    .dword c_stack_bottom, PTE_USER_RW
+#else
     .dword input_buffer, PTE_USER_RW
     .dword output_buffer, PTE_USER_RW
+#endif
 #if VECTOR_ABI
     .dword vector_save_page, PTE_USER_RW
 #endif
 user_pages_end:
 success_message:
-#if ROI_MEASUREMENT
+#if SEQUENCE_CALLS
+#if SEQUENCE_DENY == 0
+    .asciz "[OK] DASICS register protection: sequence-gf\n"
+#elif SEQUENCE_DENY == 1
+    .asciz "[OK] DASICS register protection: sequence-b-read-c\n"
+#elif SEQUENCE_DENY == 2
+    .asciz "[OK] DASICS register protection: sequence-c-read-b\n"
+#elif SEQUENCE_DENY == 3
+    .asciz "[OK] DASICS register protection: sequence-b-jump-c\n"
+#elif SEQUENCE_DENY == 4
+    .asciz "[OK] DASICS register protection: sequence-c-jump-b\n"
+#endif
+#elif ROI_MEASUREMENT
     .asciz "[OK] DASICS register protection: roi\n"
 #elif VECTOR_CHECK
     .asciz "[OK] DASICS register protection: vector ABI check\n"

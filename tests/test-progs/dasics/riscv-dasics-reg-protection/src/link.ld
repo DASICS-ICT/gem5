@@ -96,6 +96,14 @@ SECTIONS
         output_buffer_end = .;
     } > ram :data
 
+    /* Present only when a second untrusted domain supplies a stack page. */
+    .bss.c_stack ALIGN(4096) (NOLOAD) :
+    {
+        *(.bss.c_stack)
+    } > ram :data
+    ASSERT(SIZEOF(.bss.c_stack) == 0 || SIZEOF(.bss.c_stack) == 4096,
+           "C stack must occupy a single mapped page")
+
     .bss.vector_save ALIGN(4096) (NOLOAD) :
     {
         *(.bss.vector_save)

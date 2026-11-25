@@ -18,13 +18,20 @@ from threading import Thread
 
 PROGRAM = "riscv-dasics-reg-protection"
 NORMAL_CASES = ("normal", "normal-proreg", "normal-proreg-gf")
-CASES = (
-    *NORMAL_CASES,
+FAULT_CASES = (
     "context-read",
     "context-write",
     "stack-read",
     "stack-write",
 )
+SEQUENCE_CASES = (
+    "sequence-gf",
+    "sequence-b-read-c",
+    "sequence-c-read-b",
+    "sequence-b-jump-c",
+    "sequence-c-jump-b",
+)
+CASES = (*NORMAL_CASES, *FAULT_CASES, *SEQUENCE_CASES)
 
 
 def timestamp():
@@ -58,7 +65,7 @@ def run_case(args, case):
     suffix = "" if case == "normal" else f"-{case}"
     elf = Path(__file__).resolve().parent.parent / "build"
     elf = elf / f"{PROGRAM}{suffix}.elf"
-    marker = case if case in NORMAL_CASES else "expected fault"
+    marker = "expected fault" if case in FAULT_CASES else case
     expected = f"[OK] DASICS register protection: {marker}"
     directory.mkdir(parents=True, exist_ok=True)
     for name in ("stats.txt", "config.ini", "config.json", "case-result.json"):
@@ -120,7 +127,9 @@ def run_case(args, case):
     rc = raw_rc if raw_rc >= 0 else 128 - raw_rc
     if rc == 0 and not marker_found:
         rc = 1
-    cycles = read_cycles(directory / "stats.txt") if rc == 0 else "N/A"
+    cycles = "N/A"
+    if rc == 0 and case not in SEQUENCE_CASES:
+        cycles = read_cycles(directory / "stats.txt")
     if case in NORMAL_CASES and cycles == "N/A" and rc == 0:
         rc = 1
     result.update(

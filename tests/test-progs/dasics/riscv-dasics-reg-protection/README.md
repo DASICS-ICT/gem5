@@ -9,7 +9,7 @@
 ## 测试范围
 
 单 hart、RV64 的 DASICS 寄存器保护功能测试，覆盖 Sv39 下的
-`A → B → A` 调用、整数与浮点寄存器保存/清零/恢复，以及 B 对 A 私有数据的非法访问。
+`A → B → A` 调用、`A → B → A → C → A` 顺序调用、整数与浮点寄存器保存/清零/恢复，以及各域的数据与跳转权限。
 标量用例使用整数与浮点指令。向量实验另有普通 ABI 和向量调用变体两套受控 B，B 的内存访问仍走受 DASICS 检查的标量路径。
 
 ## 复现
@@ -26,20 +26,39 @@ make dasics-clean TEST=riscv-dasics-reg-protection
 
 使用现有 `build/RISCV_DASICS/gem5.opt` 和
 `configs/dasics/riscv_dasics_o3_v5_full.py`。输出位于本目录
-`build/m5out-o3/v5_full/`。运行器并行启动七个独立 gem5 进程，每项超时为 60 秒。
+`build/m5out-o3/v5_full/`。运行器并行启动各功能用例，每项超时为 60 秒。
 每项均要求进程退出码为 0，并出现对应的客体成功标记；全部满足才打印绿色 `OK`，
 失败或超时显示红色 `FAIL/TIMEOUT`。
 
 软件门 `normal` 的 `config.ini`、`stats.txt`、`run.log` 和 `case-result.json` 位于上述目录。
-两种硬件辅助门 `normal-proreg`、`normal-proreg-gf` 和四个负向用例分别写入同名子目录。`result.json` 汇总七项结果。
+其他用例分别写入同名子目录。`result.json` 汇总全部用例的退出码和客体成功标记。
 根 Makefile 从 `run-result.txt` 读取软件门 `normal` 的总周期，包含启动和自检。
 本组用例用于功能验收；软件门的每次调用开销见下文的 ROI 测量。
+
+## 两个不可信目标的顺序调用
+
+`sequence-gf` 在一次启动中执行 `A → B → A → C → A`。可信门逐轮设置当前目标的
+代码跳转区间和私有栈读写区间，使用 `PROREG.G.I`、`PROREG.F.I` 保护 `s3` 和
+`fs3`。B 和 C 均检查入口零值、使用自己的栈并改写寄存器。A 在 B 返回后检查
+第一次 `LEAVE` 的恢复值，再更新两个寄存器。C 返回后，A 检查第二次 `LEAVE`
+恢复的是更新后的位模式。[自检汇编](src/sequence.S)
+
+| 独立异常用例 | 预期由 DASICS 拒绝的操作 |
+| --- | --- |
+| `sequence-b-read-c`、`sequence-c-read-b` | B 读取 C 的栈、C 读取 B 的栈 |
+| `sequence-b-jump-c`、`sequence-c-jump-b` | B 跳入 C 的代码、C 跳入 B 的代码 |
+
+两个栈分别占用一个 4 KiB 的 U 态可读写页。B、C 位于同一 U 态可执行页，使用
+互不重叠、按 8 字节对齐的 DASICS 跳转区间。异常用例逐项核对
+U 态来源、`mcause`、故障指令 `mepc`、目标地址 `mtval` 和 `DASICS_FREASON`。
 
 ## 地址与内存布局
 
 ELF 从物理地址 `0x80000000` 开始装载。U 态使用 Sv39，ASID 为 0，
 虚拟地址与物理地址数值相同，实际经过三级页表和 4 KiB 叶页翻译。
 PTE 的 A/D 位在进入 U 态前设置，页表建立不纳入后续调用测量。
+
+下表给出单目标调用用例的布局。
 
 | 区域 | 布局与权限 |
 | --- | --- |
