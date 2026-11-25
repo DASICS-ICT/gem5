@@ -11,6 +11,7 @@
 | `DASICS_ACTIVE_ZONE_RETURN_PC` | `0x8B2` |
 | `DASICS_FREASON` | `0x8B3` |
 | `DASICS_CONTEXT_BASE` | `0x8B4` |
+| `DASICS_PROREG_MASK` | `0x8B5` |
 | `DASICS_U_MAIN_BOUND_LO` | `0x9E2` |
 | `DASICS_U_MAIN_BOUND_HI` | `0x9E3` |
 | `DASICS_S_MAIN_BOUND_LO` | `0xBC2` |
@@ -24,7 +25,7 @@
 | `DASICS_JUMP_BOUND_LOi`（`i=0..3`） | `0x8C0 + 2*i` |
 | `DASICS_JUMP_BOUND_HIi`（`i=0..3`） | `0x8C1 + 2*i` |
 
-共 53 个 CSR 地址、52 份 DASICS 状态。UMainCfg/SMainCfg 共享 MainCfg，
+共 54 个 CSR 地址、53 份 DASICS 状态。UMainCfg/SMainCfg 共享 MainCfg，
 读写掩码分别为 `0x3E`、`0x3FF`；U 视图写入保留 S 专属字段 `0x3C1`。
 
 | 项目 | 值 |
@@ -58,7 +59,7 @@ ROB/IQ/LQ/SQ 容量，以及各级缓存容量和相联度；详细参数见模�
 
 `_start` 初始化 `mtvec` 后，依次调用 `test_csr_initial_values`、
 `test_main_call_entry`、`test_return_pc`、`test_active_zone_return_pc`、`test_freason`、
-`test_context_base`、`test_u_main_bound_lo`、`test_u_main_bound_hi`、`test_s_main_bound_lo`、
+`test_context_base`、`test_proreg_mask`、`test_u_main_bound_lo`、`test_u_main_bound_hi`、`test_s_main_bound_lo`、
 `test_s_main_bound_hi`、`test_u_main_cfg`、`test_s_main_cfg`、`test_lib_cfg`，
 再按 Lo/Hi 交错顺序调用 `test_lib_bound_lo0`、`test_lib_bound_hi0`，
 直到 `test_lib_bound_lo15`、`test_lib_bound_hi15`（共 32 个函数），
@@ -85,7 +86,7 @@ JumpCfg 的 V 位位于 0/16/32/48，其余位同样保存读回；本测试不�
 
 | 用例 | 操作 | 预期结果 |
 | --- | --- | --- |
-| 冷初始化 | `test_csr_initial_values` 在任何 DASICS CSR 写入前读取 53 个地址的初值 | 各自返回 `0` |
+| 冷初始化 | `test_csr_initial_values` 在任何 DASICS CSR 写入前读取 54 个地址的初值 | 各自返回 `0` |
 | 64 位读写 | 前三个 CSR 分别写入 P 后读回 | 各自完整返回 P，包含高 32 位、bit 63 和低 3 位 |
 | 读写交换 | 前三个 CSR 分别使用 `CSRRW` 写入 Q，随后读取 | 各自返回旧值 P，后续读取返回 Q |
 | ContextBase 读写、交换与置清位 | 写 P、交换写 `~P`，再用 P 置位和清位，另写 `0`、`-1` 和 `7` | 全部 64 位原样保存，包含 bit 63 和低 3 位；每次交换、置位和清位均检查旧值与新值 |
@@ -99,7 +100,7 @@ JumpCfg 的 V 位位于 0/16/32/48，其余位同样保存读回；本测试不�
 | LibBound 读写 | 32 个函数各自写 P、交换写 Q、再写 `7` | P 读回 PA；交换返回 PA，随后读 QA；写 `7` 读 `0` |
 | JumpCfg 读写、交换与置清位 | 采用与 LibCfg 相同的 P/`~P`、`CSRRW`、`CSRRS`、`CSRRC`、写 `0`/`-1` 检查 | 全部 64 位保存读回，旧值、新值与 LibCfg 对应检查相同 |
 | JumpBound 读写 | 8 个函数各自写 P、交换写 Q、再写 `7` | P 读回 PA；交换返回 PA，随后读 QA；写 `7` 读 `0` |
-| 存储独立性 | `test_csr_independence` 保留原 Q/P/R/2、四个 MainBound 的 `0x1000/0x2000/0x3000/0x4000` 和 S=`0x155`、U=`0x2A` 的自备数据；LibCfg=`0x13579BDF2468ACE1`，LibBound Lo_i=`0x10000 + 0x100*i`、Hi_i=`0x10080 + 0x100*i`；JumpCfg=`0x2468ACE113579BD5`，JumpBound Lo_i=`0x20000 + 0x100*i`、Hi_i=`0x20080 + 0x100*i`；ContextBase=`0xA5C3967812E04BF9` | 全部 52 份状态写完后读取 53 个视图；各值保持，S=`0x16B`、U=`0x2A`，不依赖其他函数状态 |
+| 存储独立性 | `test_csr_independence` 保留原 Q/P/R/2、四个 MainBound 的 `0x1000/0x2000/0x3000/0x4000` 和 S=`0x155`、U=`0x2A` 的自备数据；LibCfg=`0x13579BDF2468ACE1`，LibBound Lo_i=`0x10000 + 0x100*i`、Hi_i=`0x10080 + 0x100*i`；JumpCfg=`0x2468ACE113579BD5`，JumpBound Lo_i=`0x20000 + 0x100*i`、Hi_i=`0x20080 + 0x100*i`；ContextBase=`0xA5C3967812E04BF9`，PROREG 掩码只置位 `s3/fs3` | 全部 53 份状态写完后读取 54 个视图；各值保持，S=`0x16B`、U=`0x2A`，不依赖其他函数状态 |
 
 ## 测试退出码
 
@@ -241,6 +242,19 @@ ContextBase 的失败码如下，均显示红色 `[FAIL]`。原退出码 1–233
 | 写 `-1` 后读回 | `243` | `-1` |
 | 仅低位写入后读回 | `244` | `7` |
 | 存储独立性 | `245` | `0xA5C3967812E04BF9` |
+
+PROREG 掩码的失败码如下。低半区 bit `i` 对应 `xi`，高半区 bit `32+i` 对应 `fi`。
+
+| 检查 | 失败码 | 预期值 |
+| --- | --- | --- |
+| 冷初始化 | `246` | `0` |
+| 写全 1 后读回 | `247` | `0xFFFFFFFFFFFFFFFE` |
+| 仅写通用寄存器 `s3` 的位 | `248` | `1 << 19` |
+| 仅写浮点寄存器 `fs3` 的位 | `249` | `1 << 51` |
+| 保留 `fs3`，通过 `CSRRS` 置位 `s3` | `250` | `0x0008000000080000` |
+| 通过 `CSRRC` 清除 `fs3`，保留 `s3` | `251` | `1 << 19` |
+| 同时写 `x0/f0/f31` 的位 | `252` | `0x8000000100000000` |
+| 存储独立性 | `253` | `0x0008000000080000` |
 
 ## 源码
 

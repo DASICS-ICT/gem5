@@ -8,6 +8,7 @@
     .equ CSR_DASICS_LIB_CFG, 0x880
     .equ CSR_DASICS_FREASON, 0x8B3
     .equ CSR_DASICS_CONTEXT_BASE, 0x8B4
+    .equ CSR_DASICS_PROREG_MASK, 0x8B5
     .equ DASICS_UENA, (1 << 1)
     .equ DASICS_SENA, (1 << 0)
     .equ DASICS_CUET, (1 << 2)
@@ -15,6 +16,7 @@
     /* Mixed low bits make immediate set and clear operations observable. */
     .equ LIB_CFG_INITIAL, 0x13579BDF2468ACEF
     .equ LIB_CFG_SOURCE, 0xFEDCBA9876543210
+    .equ PROREG_MASK_INITIAL, 0x0008000000080000
     .equ CSR_IMMEDIATE, 0x15
     .equ LIB_CFG_SET, LIB_CFG_INITIAL | LIB_CFG_SOURCE
     .equ LIB_CFG_CLEAR, LIB_CFG_INITIAL & ~LIB_CFG_SOURCE
@@ -86,7 +88,7 @@ _start:
     /* s4 preserves a target CSR snapshot; s5 selects its access scenario. */
     li      s4, 0
     li      s5, 0
-    /* s6 selects the instruction-form target: LibCfg or ContextBase. */
+    /* s6 selects LibCfg (0), ContextBase (1), or ProregMask (2). */
     li      s6, 0
     /* s1 selects entry 0/1, forms 2-5, boundaries 6-8, addresses 9-11,
      * cycle control 12, or sscratch rejection/return 13/14. */
@@ -189,6 +191,12 @@ context_csr_cases:
                     LIB_CFG_INITIAL, LIB_CFG_INITIAL, CSR_DASICS_CONTEXT_BASE
 
     .pushsection .rodata
+proreg_csr_cases:
+    .popsection
+    DEFINE_CSR_CASE proreg_csrrw, csrrw, a0, a1, LIB_CFG_SOURCE, \
+                    PROREG_MASK_INITIAL, LIB_CFG_SOURCE, CSR_DASICS_PROREG_MASK
+
+    .pushsection .rodata
 csr_cases_end:
     .popsection
 
@@ -286,6 +294,7 @@ access_cases:
     DEFINE_ACCESS_PROBE active_zone_return_pc, 0x8B2
     DEFINE_ACCESS_PROBE freason              , 0x8B3
     DEFINE_ACCESS_PROBE context_base         , 0x8B4
+    DEFINE_ACCESS_PROBE proreg_mask          , CSR_DASICS_PROREG_MASK
     DEFINE_ACCESS_PROBE jump_cfg             , 0x8C8
     DEFINE_ACCESS_PROBE jump_bound_lo0       , 0x8C0
     DEFINE_ACCESS_PROBE jump_bound_hi0       , 0x8C1
@@ -484,8 +493,11 @@ trap_handler:
     la      t0, csr_cases_end
     beq     s0, t0, .Lstart_boundary_suite
     la      t0, context_csr_cases
+    beq     s0, t0, .Lnext_target
+    la      t0, proreg_csr_cases
     bne     s0, t0, .Lnext_form
-    li      s6, 1
+.Lnext_target:
+    addi    s6, s6, 1
 .Lnext_form:
     addi    s2, s2, 1
     j       .Lstart_case
@@ -754,6 +766,8 @@ check_allowed_state:
     bne     a0, t0, exit_test
     li      a2, 11
     beqz    s6, .Lread_allowed_lib_cfg
+    li      t0, 2
+    beq     s6, t0, .Lread_allowed_mask
     csrr    t0, CSR_DASICS_CONTEXT_BASE
     j       .Lcheck_allowed_csr
 .Lread_allowed_lib_cfg:
@@ -771,10 +785,21 @@ check_allowed_state:
     bne     t0, t1, exit_test
     ret
 
+.Lread_allowed_mask:
+    csrr    t0, CSR_DASICS_PROREG_MASK
+    bne     t0, t1, exit_test
+    j       check_protection_state
+
 check_rejected_state:
     li      a2, 15
     li      t0, RD_SENTINEL
     bne     a0, t0, exit_test
+    li      t0, 2
+    bne     s6, t0, check_protection_state
+    li      a2, 30
+    csrr    t0, CSR_DASICS_PROREG_MASK
+    li      t1, PROREG_MASK_INITIAL
+    bne     t0, t1, exit_test
 check_protection_state:
     /* Read-only and ordinary controls preserve these DASICS sentinels. */
     li      a2, 16
@@ -797,6 +822,11 @@ prepare_lib_cfg:
     li      t0, LIB_CFG_INITIAL
     csrw    CSR_DASICS_LIB_CFG, t0
     csrw    CSR_DASICS_CONTEXT_BASE, t0
+    li      t0, 2
+    bne     s6, t0, .Lprepare_reason
+    li      t0, PROREG_MASK_INITIAL
+    csrw    CSR_DASICS_PROREG_MASK, t0
+.Lprepare_reason:
     li      t0, FREASON_SENTINEL
     csrw    CSR_DASICS_FREASON, t0
     li      a0, RD_SENTINEL

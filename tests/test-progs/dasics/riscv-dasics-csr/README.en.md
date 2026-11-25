@@ -11,6 +11,7 @@
 | `DASICS_ACTIVE_ZONE_RETURN_PC` | `0x8B2` |
 | `DASICS_FREASON` | `0x8B3` |
 | `DASICS_CONTEXT_BASE` | `0x8B4` |
+| `DASICS_PROREG_MASK` | `0x8B5` |
 | `DASICS_U_MAIN_BOUND_LO` | `0x9E2` |
 | `DASICS_U_MAIN_BOUND_HI` | `0x9E3` |
 | `DASICS_S_MAIN_BOUND_LO` | `0xBC2` |
@@ -24,7 +25,7 @@
 | `DASICS_JUMP_BOUND_LOi` (`i=0..3`) | `0x8C0 + 2*i` |
 | `DASICS_JUMP_BOUND_HIi` (`i=0..3`) | `0x8C1 + 2*i` |
 
-There are 53 CSR addresses and 52 DASICS states. UMainCfg and SMainCfg share
+There are 54 CSR addresses and 53 DASICS states. UMainCfg and SMainCfg share
 MainCfg state, with read/write masks `0x3E` and `0x3FF`. Writes through the U
 view preserve the S-only fields `0x3C1`.
 
@@ -61,7 +62,7 @@ makes Make return nonzero.
 
 After initializing `mtvec`, `_start` calls `test_csr_initial_values`,
 `test_main_call_entry`, `test_return_pc`, `test_active_zone_return_pc`,
-`test_freason`, `test_context_base`, `test_u_main_bound_lo`,
+`test_freason`, `test_context_base`, `test_proreg_mask`, `test_u_main_bound_lo`,
 `test_u_main_bound_hi`,
 `test_s_main_bound_lo`, `test_s_main_bound_hi`, `test_u_main_cfg`,
 `test_s_main_cfg`, and `test_lib_cfg` in order, then 32 functions from
@@ -101,7 +102,7 @@ call is a software contract; the CSR has no active-call locking mechanism.
 
 | Check | Expected result |
 | --- | --- |
-| Cold initialization | `test_csr_initial_values` reads all 53 addresses before any DASICS CSR write; each returns `0`. |
+| Cold initialization | `test_csr_initial_values` reads all 54 addresses before any DASICS CSR write; each returns `0`. |
 | Full 64-bit readback | Writing P to each of the first three CSRs reads back P unchanged, including the high 32 bits, bit 63, and low three bits. |
 | CSRRW | Writing Q to each of the first three CSRs returns the old value P; a subsequent read returns Q. |
 | ContextBase read/write, exchange, and bit operations | Write P, exchange it for `~P`, set and clear bits with P, then write `0`, `-1`, and `7`. All 64 bits are preserved, including bit 63 and the low three bits; exchange, set, and clear checks verify both old and new values. |
@@ -115,7 +116,7 @@ call is a software contract; the CSR has no active-call locking mechanism.
 | LibBound read/write | Each of the 32 functions prepares its data: writing P reads PA; exchanging it for Q returns PA, followed by readback QA; writing `7` reads `0`. |
 | JumpCfg read/write, exchange, and bit operations | Use the same P/`~P`, CSRRW, CSRRS, CSRRC, and writes of `0`/`-1` as LibCfg. All 64 bits are preserved, and old/new values match the corresponding LibCfg checks. |
 | JumpBound read/write | Each of the eight functions prepares its data: writing P reads PA; exchanging it for Q returns PA, followed by readback QA; writing `7` reads `0`. |
-| Independent storage | `test_csr_independence` prepares the original Q/P/R/2, four MainBound values `0x1000/0x2000/0x3000/0x4000`, and S=`0x155` plus U=`0x2A`. LibCfg=`0x13579BDF2468ACE1`, LibBound Lo_i=`0x10000 + 0x100*i`, and Hi_i=`0x10080 + 0x100*i`; JumpCfg=`0x2468ACE113579BD5`, JumpBound Lo_i=`0x20000 + 0x100*i`, and Hi_i=`0x20080 + 0x100*i`; ContextBase=`0xA5C3967812E04BF9`. Only after all 52 states have been written does it read all 53 views. Values remain intact, S reads `0x16B`, U reads `0x2A`, and setup does not rely on other functions' state. |
+| Independent storage | `test_csr_independence` prepares the original Q/P/R/2, four MainBound values `0x1000/0x2000/0x3000/0x4000`, and S=`0x155` plus U=`0x2A`. LibCfg=`0x13579BDF2468ACE1`, LibBound Lo_i=`0x10000 + 0x100*i`, and Hi_i=`0x10080 + 0x100*i`; JumpCfg=`0x2468ACE113579BD5`, JumpBound Lo_i=`0x20000 + 0x100*i`, and Hi_i=`0x20080 + 0x100*i`; ContextBase=`0xA5C3967812E04BF9`. The PROREG mask selects `s3/fs3`. It reads all 54 views after writing all 53 states. Values remain intact, S reads `0x16B`, U reads `0x2A`, and setup does not rely on other functions' state. |
 
 ## Test exit codes
 
@@ -265,6 +266,19 @@ ContextBase failure codes follow; all display red `[FAIL]`. Original codes
 | Readback after writing `-1` | `243` | `-1` |
 | Readback after writing only the low bits | `244` | `7` |
 | Independent storage | `245` | `0xA5C3967812E04BF9` |
+
+PROREG mask failure codes follow. Bit `i` selects `xi` in the low half and bit `32+i` selects `fi` in the high half.
+
+| Check | Failure code | Expected value |
+| --- | --- | --- |
+| Cold initialization | `246` | `0` |
+| Read back an all-ones write | `247` | `0xFFFFFFFFFFFFFFFE` |
+| Write only the bit for integer `s3` | `248` | `1 << 19` |
+| Write only the bit for FP `fs3` | `249` | `1 << 51` |
+| Use `CSRRS` to set `s3` while preserving `fs3` | `250` | `0x0008000000080000` |
+| Use `CSRRC` to clear `fs3` while preserving `s3` | `251` | `1 << 19` |
+| Write the bits for `x0/f0/f31` together | `252` | `0x8000000100000000` |
+| Independent storage | `253` | `0x0008000000080000` |
 
 ## Source links
 

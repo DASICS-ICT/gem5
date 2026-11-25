@@ -357,7 +357,8 @@ const std::array<const char *, NUM_MISCREGS> MiscRegNames = {{
     [MISCREG_DASICS_JUMP_BOUND_HI2] = "DASICS_JUMP_BOUND_HI2" ,
     [MISCREG_DASICS_JUMP_BOUND_LO3] = "DASICS_JUMP_BOUND_LO3" ,
     [MISCREG_DASICS_JUMP_BOUND_HI3] = "DASICS_JUMP_BOUND_HI3" ,
-// clang-format on
+    // clang-format on
+    [MISCREG_DASICS_PROREG_MASK] = "DASICS_PROREG_MASK",
 #endif // USE_DASICS
 
     [MISCREG_FFLAGS_EXE] = "FFLAGS_EXE",
@@ -1217,6 +1218,12 @@ ISA::unserialize(CheckpointIn &cp)
 {
     DPRINTF(Checkpoint, "Unserializing Riscv Misc Registers\n");
     UNSERIALIZE_CONTAINER(miscRegFile);
+#if USE_DASICS
+    // Checkpoints with no protection-mask slot get its reset value.
+    if (miscRegFile.size() == MISCREG_DASICS_PROREG_MASK) {
+        miscRegFile.push_back(0);
+    }
+#endif
 }
 
 void

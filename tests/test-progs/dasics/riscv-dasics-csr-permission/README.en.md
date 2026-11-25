@@ -10,14 +10,15 @@ access checks, and ordinary CSR controls.
 | Coverage | Total across both domains |
 | --- | --- |
 | Six CSR instructions for LibCfg and ContextBase and `rd=x0`, `rs1=x0`, and `zimm=0` forms | 48 instruction tests, 144 permission scenarios |
+| ProregMask CSRRW | 2 instruction tests, 6 permission scenarios |
 | LibCfg PC boundaries | 24 scenarios |
-| Read-only probes of the 53 custom DASICS CSR addresses in this table | 318 scenarios: 291 DASICS access scenarios and 27 ordinary privilege rejections |
+| Read-only probes of the 54 custom DASICS CSR addresses in this table | 324 scenarios (297 DASICS access scenarios and 27 ordinary privilege rejections) |
 | Ordinary CSR controls | U/S may read `cycle`; S checks rejection of untrusted `sscratch` CSRRW |
 
 The test uses one RV64 hart, bare-metal full-system execution, an O3 model,
 and Semihosting termination. Outputs are under `build/m5out-o3/<CPU>/`.
-The address table covers 53 custom CSRs, including
-`DASICS_CONTEXT_BASE (0x8B4)`. It does not cover the seven CSRs for
+The address table covers 54 custom CSRs, including
+`DASICS_CONTEXT_BASE` (`0x8B4`) and `DASICS_PROREG_MASK` (`0x8B5`). It does not cover the seven CSRs for
 U-mode exception support, including
 `SEDELEG`, which requires S privilege.
 
@@ -51,17 +52,23 @@ not test ECALL protection; see the dedicated
 | U | `0` | `UENA` (bit 1) | UMainBoundLo/Hi | `8` | U |
 | S | `1` | `SENA` (bit 0) | SMainBoundLo/Hi | `9` | S |
 
-## LibCfg and ContextBase permission cases
+## LibCfg, ContextBase, and ProregMask permission cases
 
 Each instruction entry runs through the stages below. Before stages 2–4,
 M mode resets LibCfg and ContextBase to `P=0x13579BDF2468ACEF`, the
 destination sentinel
 to `a0=D=0xA5A5A5A5A5A5A5A5`, and FReason to `5`.
 Instructions using `a1` take the source value `Q=0xFEDCBA9876543210`;
-the nonzero immediate is `I=0x15`. Both domains reuse the same 24-entry
+the nonzero immediate is `I=0x15`. Both domains reuse the same 25-entry
 instruction table and the stages below. Entries 1–12 target LibCfg
 (`csr=0x880`); entries 13–24 target ContextBase (`csr=0x8B4`) using the
 same forms and expectations listed below.
+
+Entry 25 executes `csrrw a0, 0x8B5, a1` on ProregMask. M mode seeds the mask
+with `0x0008000000080000` (s3 and fs3) before each scenario. Allowed writes
+return the seed in `a0` and set the mask to `Q`. A rejected write must raise a
+precise illegal-instruction trap and preserve both the mask and `a0` on the
+trap and after the handler skips the instruction.
 
 ContextBase stores all 64 bits without checking address validity or
 alignment during CSR access. The mixed-bit values test raw storage and
@@ -142,7 +149,7 @@ at the first boundary entry after completing its instruction table.
 
 ## DASICS CSR address table
 
-The address table covers the 53 custom DASICS CSR addresses below.
+The address table covers the 54 custom DASICS CSR addresses below.
 SMainCfg and UMainCfg share internal state but are probed separately.
 Each entry contains four 64-bit fields, totaling 32 bytes: `trustedPC`,
 `untrustedPC`, `readerPC`, and `minpriv`.
@@ -153,10 +160,11 @@ Each entry contains four 64-bit fields, totaling 32 bytes: `trustedPC`,
 | 2–33 | LibBoundLo/Hi 0–15 | `0x890–0x8AF` | U |
 | 34–37 | MainCallEntry, ReturnPC, ActiveZoneReturnPC, FReason | `0x8B0–0x8B3` | U |
 | 38 | ContextBase | `0x8B4` | U |
-| 39 | JumpCfg | `0x8C8` | U |
-| 40–47 | JumpBoundLo/Hi 0–3 | `0x8C0–0x8C7` | U |
-| 48–50 | UMainCfg, UMainBoundLo/Hi | `0x9E1–0x9E3` | S |
-| 51–53 | SMainCfg, SMainBoundLo/Hi | `0xBC0`, `0xBC2`, `0xBC3` | M |
+| 39 | ProregMask | `0x8B5` | U |
+| 40 | JumpCfg | `0x8C8` | U |
+| 41–48 | JumpBoundLo/Hi 0–3 | `0x8C0–0x8C7` | U |
+| 49–51 | UMainCfg, UMainBoundLo/Hi | `0x9E1–0x9E3` | S |
+| 52–54 | SMainCfg, SMainBoundLo/Hi | `0xBC0`, `0xBC2`, `0xBC3` | M |
 
 Each address has statically generated `csrrs a0, csr, zero` probes that do
 not write the target CSR. The trusted and untrusted blocks each contain a
@@ -170,8 +178,8 @@ Each address runs three scenarios:
 | `1` | Enabled | Trusted | Allow | Cause 2 |
 | `2` | Enabled | Outside | Cause 2 | Cause 2 |
 
-U mode satisfies ordinary privilege for 47 addresses and S mode for 50,
-giving `(47+50)×3=291` DASICS access scenarios. The other 6 U-mode and
+U mode satisfies ordinary privilege for 48 addresses and S mode for 51,
+giving `(48+51)×3=297` DASICS access scenarios. The other 6 U-mode and
 3 S-mode addresses are rejected by ordinary privilege in all three scenarios,
 giving 27 rejections. Those rejections do not validate DASICS access checks.
 
@@ -217,7 +225,7 @@ S-mode CSRs. This test exercises only `SSCRATCH` among these six.
 
 ## CSR write flush policy
 
-Writes to the 53 custom CSR addresses in this table retain `IsNonSpeculative` and
+Writes to the 54 custom CSR addresses in this table retain `IsNonSpeculative` and
 `IsSerializeAfter`, and add `IsSquashAfter` according to write intent.
 At successful O3 commit, the CSR update takes effect before younger
 instructions are squashed and fetch restarts at the next PC.
@@ -244,12 +252,12 @@ allowed ECALL, rejected CSR, and return ECALL. Stage `12` identifies the
 allowed `cycle` control's ECALL, `13` the SSCRATCH illegal-instruction trap,
 and `14` its return ECALL.
 Register `s2=0` identifies the initial harness; the instruction table is
-numbered `1–24` (LibCfg `1–12`, ContextBase `13–24`), the boundary table
-`1–12`, the address table `1–53`, and the ordinary controls `1/2`.
+numbered `1–25` (LibCfg `1–12`, ContextBase `13–24`, ProregMask `25`), the boundary table
+`1–12`, the address table `1–54`, and the ordinary controls `1/2`.
 Use `s3` (`0=U`, `1=S`) and `s1` to locate the domain, table, and entry.
 The address table also uses `s4` for the target snapshot and
 `s5` for scenario `0/1/2`. The instruction table uses `s6` to select its
-target: `0=LibCfg`, `1=ContextBase`.
+target with values `0/1/2` for LibCfg, ContextBase, and ProregMask respectively.
 
 Compressed instructions are disabled, so ECALL return advances by 4 bytes.
 The test uses no stack. Registers `ra`, `t0/t1`, `a2/a3`, and `s0–s6` are
@@ -290,4 +298,5 @@ the handler does not implement general context preservation.
 | `27` | Rejected `sscratch` access or its return changed the `a0` sentinel |
 | `28` | The initial `sscratch` value changed |
 | `29` | The initial ContextBase value changed when preservation was required |
+| `30` | A rejected write or its trap return changed ProregMask |
 | `124` | Host timeout |

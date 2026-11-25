@@ -9,13 +9,14 @@
 | 覆盖范围 | 两域合计 |
 | --- | --- |
 | LibCfg、ContextBase 的六种 CSR 指令及 `rd=x0`、`rs1=x0`、`zimm=0` 形式 | 48 项指令测试、144 个权限场景 |
+| ProregMask 的 CSRRW | 2 项指令测试、6 个权限场景 |
 | LibCfg 的 PC 边界检查 | 24 个场景 |
-| 本文 53 个自定义 DASICS CSR 地址的只读探测 | 318 个场景：291 个门禁场景、27 个普通特权拒绝场景 |
+| 本文 54 个自定义 DASICS CSR 地址的只读探测 | 324 个场景（297 个门禁场景、27 个普通特权拒绝场景） |
 | 普通 CSR 对照 | U/S 各允许读取 `cycle`，S 态检查非可信 `sscratch` CSRRW 被拒绝 |
 
 测试采用单 hart、RV64、裸机全系统与 O3 模型，使用 Semihosting 退出。
 输出位于本目录的 `build/m5out-o3/<CPU>/`。
-地址表覆盖 53 个自定义 CSR，包含 `DASICS_CONTEXT_BASE（0x8B4）`。
+地址表覆盖 54 个自定义 CSR，包含 `DASICS_CONTEXT_BASE`（`0x8B4`）和 `DASICS_PROREG_MASK`（`0x8B5`）。
 7 个 U 态异常支持 CSR（包含 S 级 `SEDELEG`）不在该表覆盖范围。
 
 `enable_domain` 在 U 域设置 `UENA/CUET`，在 S 域设置 `SENA/CSET`，
@@ -41,15 +42,19 @@
 | U | `0` | `UENA`（bit 1） | UMainBoundLo/Hi | `8` | U |
 | S | `1` | `SENA`（bit 0） | SMainBoundLo/Hi | `9` | S |
 
-## LibCfg 与 ContextBase 权限用例
+## LibCfg、ContextBase 和 ProregMask 权限用例
 
 每项指令依次经过下表的阶段。阶段 2～4 均由 M 态重新设置
 LibCfg 和 ContextBase 初值 `P=0x13579BDF2468ACEF`、目标寄存器哨兵
 `a0=D=0xA5A5A5A5A5A5A5A5` 和 `FReason=5`。
 使用 `a1` 的指令取源值 `Q=0xFEDCBA9876543210`，非零立即数为 `I=0x15`。
-两域复用同一张 24 项指令表及下面的阶段流程：前 12 项目标为
-LibCfg（`csr=0x880`），后 12 项为 ContextBase（`csr=0x8B4`），
+两域复用同一张 25 项指令表。前 12 项目标为 LibCfg（`csr=0x880`），
+第 13～24 项目标为 ContextBase（`csr=0x8B4`），
 两者使用下表相同的指令形式和预期结果。
+
+第 25 项对 ProregMask 执行 `csrrw a0, 0x8B5, a1`。每个场景由 M 态写入初值
+`0x0008000000080000`（选择 s3 和 fs3）。允许写入时，`a0` 返回初值，掩码变为 `Q`。
+非可信写入应产生精确非法指令异常，掩码和 `a0` 在异常及跳过该指令后均保持原值。
 
 ContextBase 保存 64 位原始值，不在 CSR 读写时检查地址合法性或对齐。
 这里的混合位模式用于检查全部位的读写，不作为实际指针解引用。
@@ -120,7 +125,7 @@ M 态跳过故障指令后，必须在 `B+4` 再次收到 ECALL，并重新检�
 
 ## DASICS CSR 地址表门禁
 
-地址表按以下顺序覆盖本文 53 个自定义 DASICS CSR 地址。SMainCfg 与 UMainCfg
+地址表按以下顺序覆盖本文 54 个自定义 DASICS CSR 地址。SMainCfg 与 UMainCfg
 共用内部状态，仍作为两个地址分别探测。每项包含 `trustedPC`、
 `untrustedPC`、`readerPC`、`minpriv` 四个 64 位字段，共 32 字节。
 
@@ -130,10 +135,11 @@ M 态跳过故障指令后，必须在 `B+4` 再次收到 ECALL，并重新检�
 | 2～33 | LibBoundLo/Hi 0～15 | `0x890～0x8AF` | U |
 | 34～37 | MainCallEntry、ReturnPC、ActiveZoneReturnPC、FReason | `0x8B0～0x8B3` | U |
 | 38 | ContextBase | `0x8B4` | U |
-| 39 | JumpCfg | `0x8C8` | U |
-| 40～47 | JumpBoundLo/Hi 0～3 | `0x8C0～0x8C7` | U |
-| 48～50 | UMainCfg、UMainBoundLo/Hi | `0x9E1～0x9E3` | S |
-| 51～53 | SMainCfg、SMainBoundLo/Hi | `0xBC0`、`0xBC2`、`0xBC3` | M |
+| 39 | ProregMask | `0x8B5` | U |
+| 40 | JumpCfg | `0x8C8` | U |
+| 41～48 | JumpBoundLo/Hi 0～3 | `0x8C0～0x8C7` | U |
+| 49～51 | UMainCfg、UMainBoundLo/Hi | `0x9E1～0x9E3` | S |
+| 52～54 | SMainCfg、SMainBoundLo/Hi | `0xBC0`、`0xBC2`、`0xBC3` | M |
 
 各地址使用静态生成的 `csrrs a0, csr, zero` 探针，不写入目标 CSR。
 可信块与非可信块各占 8 字节，均由探针和后续 ECALL 组成；
@@ -146,8 +152,8 @@ M 态跳过故障指令后，必须在 `B+4` 再次收到 ECALL，并重新检�
 | `1` | 开启 | 可信 | 允许 | cause 2 |
 | `2` | 开启 | 区外 | cause 2 | cause 2 |
 
-U 态有 47 个地址、S 态有 50 个地址满足普通特权要求，构成
-`(47+50)×3=291` 个门禁场景。其余 U 态 6 个、S 态 3 个地址在三种场景下
+U 态有 48 个地址、S 态有 51 个地址满足普通特权要求，构成
+`(48+51)×3=297` 个门禁场景。其余 U 态 6 个、S 态 3 个地址在三种场景下
 均因普通特权不足而拒绝，共 27 个场景；这些拒绝不能计为 DASICS 门禁验证。
 
 每个场景在 M 态配置保护开关和边界、重置 LibCfg=ContextBase=`P`、FReason=`5`、
@@ -185,7 +191,7 @@ M 态跳过 4 字节并返回 S 后，必须在 `ordinary_sscratch_ecall` 收到
 
 ## CSR 写后刷新策略
 
-本文地址表中 53 个自定义 CSR 的写指令保留 `IsNonSpeculative` 和 `IsSerializeAfter`，
+本文地址表中 54 个自定义 CSR 的写指令保留 `IsNonSpeculative` 和 `IsSerializeAfter`，
 并按写意图增加 `IsSquashAfter`。O3 成功提交时先使 CSR 更新生效，再刷新年轻指令，
 从下一条 PC 重新取指。指令具有写意图时，S/U 域保护关闭、实际源值为零或写入值不变
 均不取消刷新；`rd=x0` 也不取消写意图。
@@ -205,11 +211,11 @@ M 态跳过 4 字节并返回 S 后，必须在 `ordinary_sscratch_ecall` 收到
 `9/10/11` 分别为地址表允许 ECALL、拒绝 CSR、拒绝返回后的 ECALL，
 `12` 为普通 `cycle` 允许对照的 ECALL，`13` 为 SSCRATCH 非法指令异常，
 `14` 为 SSCRATCH 恢复后的 ECALL。
-`s2=0` 表示初始框架；指令表编号 `1～24`（LibCfg `1～12`，ContextBase `13～24`），
-边界表编号 `1～12`，地址表编号 `1～53`，
+`s2=0` 表示初始框架；指令表编号 `1～25`（LibCfg `1～12`，ContextBase `13～24`，ProregMask `25`），
+边界表编号 `1～12`，地址表编号 `1～54`，
 普通对照编号 `1/2`。结合 `s3`（`0=U`、`1=S`）和 `s1` 定位域、表及用例。
 地址表额外使用 `s4` 保存目标快照、`s5` 记录场景 `0/1/2`。
-指令表使用 `s6` 选择目标：`0=LibCfg`、`1=ContextBase`。
+指令表以 `s6` 的 `0/1/2` 分别选择 LibCfg、ContextBase 和 ProregMask。
 
 所有指令禁用压缩编码，ECALL 返回地址固定增加 4。测试不使用栈，
 `ra`、`t0/t1`、`a2/a3` 和 `s0～s6` 为异常框架保留寄存器；
@@ -249,4 +255,5 @@ M 态跳过 4 字节并返回 S 后，必须在 `ordinary_sscratch_ecall` 收到
 | `27` | `sscratch` 拒绝或恢复后的 `a0` 哨兵被修改 |
 | `28` | `sscratch` 初值被修改 |
 | `29` | 应保持的 ContextBase 初值被修改 |
+| `30` | 被拒绝的写操作或异常返回改变了 ProregMask |
 | `124` | 宿主运行超时 |

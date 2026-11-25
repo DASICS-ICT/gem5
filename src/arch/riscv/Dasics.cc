@@ -73,6 +73,7 @@ isDasicsCsr(uint64_t csr)
         case CSR_DASICS_ACTIVE_ZONE_RETURN_PC:
         case CSR_DASICS_FREASON:
         case CSR_DASICS_CONTEXT_BASE:
+        case CSR_DASICS_PROREG_MASK:
         case CSR_DASICS_U_MAIN_BOUND_LO:
         case CSR_DASICS_U_MAIN_BOUND_HI:
         case CSR_DASICS_S_MAIN_BOUND_LO:

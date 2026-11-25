@@ -33,6 +33,9 @@
     .equ CSR_DASICS_ACTIVE_ZONE_RETURN_PC, 0x8B2
     .equ CSR_DASICS_FREASON, 0x8B3
     .equ CSR_DASICS_CONTEXT_BASE, 0x8B4
+    .equ CSR_DASICS_PROREG_MASK, 0x8B5
+    .equ PROREG_S3,  1 << 19
+    .equ PROREG_FS3, 1 << (32 + 19)
     .equ CSR_DASICS_U_MAIN_CFG, 0x9E1
     .equ CSR_DASICS_U_MAIN_BOUND_LO, 0x9E2
     .equ CSR_DASICS_U_MAIN_BOUND_HI, 0x9E3
@@ -105,6 +108,8 @@ _start:
     call    test_freason
     bnez    a0, .Lfinish_tests
     call    test_context_base
+    bnez    a0, .Lfinish_tests
+    call    test_proreg_mask
     bnez    a0, .Lfinish_tests
     call    test_u_main_bound_lo
     bnez    a0, .Lfinish_tests
@@ -224,6 +229,9 @@ test_csr_initial_values:
     bnez    t0, .Linitial_values_done
     li      a0, 234
     csrr    t0, CSR_DASICS_CONTEXT_BASE
+    bnez    t0, .Linitial_values_done
+    li      a0, 246
+    csrr    t0, CSR_DASICS_PROREG_MASK
     bnez    t0, .Linitial_values_done
     li      a0, 28
     csrr    t0, CSR_DASICS_U_MAIN_BOUND_LO
@@ -537,6 +545,47 @@ test_context_base:
     bne     t1, t0, .Lcontext_base_done
     li      a0, 0
 .Lcontext_base_done:
+    ret
+
+test_proreg_mask:
+    li      a0, 247
+    li      t0, -1
+    csrw    CSR_DASICS_PROREG_MASK, t0
+    csrr    t1, CSR_DASICS_PROREG_MASK
+    li      t2, -2
+    bne     t1, t2, .Lproreg_mask_done
+
+    li      a0, 248
+    li      t0, PROREG_S3
+    csrw    CSR_DASICS_PROREG_MASK, t0
+    csrr    t1, CSR_DASICS_PROREG_MASK
+    bne     t1, t0, .Lproreg_mask_done
+    li      a0, 249
+    li      t2, PROREG_FS3
+    csrw    CSR_DASICS_PROREG_MASK, t2
+    csrr    t1, CSR_DASICS_PROREG_MASK
+    bne     t1, t2, .Lproreg_mask_done
+
+    /* Updating one bank must preserve the other bank's selected registers. */
+    li      a0, 250
+    csrs    CSR_DASICS_PROREG_MASK, t0
+    csrr    t1, CSR_DASICS_PROREG_MASK
+    or      t3, t0, t2
+    bne     t1, t3, .Lproreg_mask_done
+    li      a0, 251
+    csrc    CSR_DASICS_PROREG_MASK, t2
+    csrr    t1, CSR_DASICS_PROREG_MASK
+    bne     t1, t0, .Lproreg_mask_done
+
+    /* f0 and f31 are writable while x0 always reads zero. */
+    li      a0, 252
+    li      t2, 0x8000000100000000
+    ori     t0, t2, 1
+    csrw    CSR_DASICS_PROREG_MASK, t0
+    csrr    t1, CSR_DASICS_PROREG_MASK
+    bne     t1, t2, .Lproreg_mask_done
+    li      a0, 0
+.Lproreg_mask_done:
     ret
 
     /* MainBound tests preserve high bits and discard low alignment bits. */
@@ -1020,6 +1069,8 @@ test_csr_independence:
     csrw    CSR_DASICS_FREASON, t3
     li      t5, 0xA5C3967812E04BF9
     csrw    CSR_DASICS_CONTEXT_BASE, t5
+    li      t5, PROREG_S3 | PROREG_FS3
+    csrw    CSR_DASICS_PROREG_MASK, t5
     li      t5, 0x1000
     csrw    CSR_DASICS_U_MAIN_BOUND_LO, t5
     li      t5, 0x2000
@@ -1331,6 +1382,10 @@ test_csr_independence:
     li      a0, 245
     li      t5, 0xA5C3967812E04BF9
     csrr    t4, CSR_DASICS_CONTEXT_BASE
+    bne     t4, t5, .Lindependence_done
+    li      a0, 253
+    li      t5, PROREG_S3 | PROREG_FS3
+    csrr    t4, CSR_DASICS_PROREG_MASK
     bne     t4, t5, .Lindependence_done
     li      a0, 0
 .Lindependence_done:

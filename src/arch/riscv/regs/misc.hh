@@ -421,7 +421,10 @@ enum MiscRegIndex
     MISCREG_DASICS_JUMP_BOUND_LO3,
     // Per-hart exclusive upper bound of jump region 3.
     MISCREG_DASICS_JUMP_BOUND_HI3,
-// clang-format on
+    // clang-format on
+
+    // Per-hart integer and floating-point register protection mask.
+    MISCREG_DASICS_PROREG_MASK,
 #endif // USE_DASICS
 
     NUM_PHYS_MISCREGS,
@@ -712,6 +715,8 @@ enum CSRIndex
     CSR_DASICS_FREASON = 0x8B3,
     // Experimental software-context base; minimum privilege is U.
     CSR_DASICS_CONTEXT_BASE = 0x8B4,
+    // Register protection policy shared by S and U modes.
+    CSR_DASICS_PROREG_MASK = 0x8B5,
 
     // clang-format off
     // Configuration for 16 data-bound regions; minimum privilege is U.
@@ -1525,6 +1530,9 @@ const std::unordered_map<int, CSRMetadata> CSRData = {
     {CSR_DASICS_CONTEXT_BASE,
      {"dasics_context_base", MISCREG_DASICS_CONTEXT_BASE, rvTypeFlags(RV64),
       isaExtsFlags()}},
+    {CSR_DASICS_PROREG_MASK,
+     {"dasics_proreg_mask", MISCREG_DASICS_PROREG_MASK, rvTypeFlags(RV64),
+      isaExtsFlags()}},
 
     // clang-format off
     {CSR_DASICS_LIB_CFG       ,
@@ -2246,6 +2254,9 @@ const RegVal DASICS_BOUND_MASK = mask(63, 3);
 
 // FReason bits [2:0] are readable and writable; bits [63:3] read as zero.
 const RegVal DASICS_FREASON_MASK = 0x7;
+
+// Bit i selects xi and bit 32+i selects fi. x0 has no protectable state.
+const RegVal DASICS_PROREG_MASK_RW = mask(63, 1);
 #endif // USE_DASICS
 
 const RegVal CAUSE_INTERRUPT_MASKS[enums::Num_RiscvType] = {
@@ -2326,6 +2337,7 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
             {CSR_DASICS_S_MAIN_BOUND_LO, DASICS_BOUND_MASK     },
             {CSR_DASICS_S_MAIN_BOUND_HI, DASICS_BOUND_MASK     },
             {CSR_DASICS_FREASON        , DASICS_FREASON_MASK   },
+            {CSR_DASICS_PROREG_MASK    , DASICS_PROREG_MASK_RW },
 
             {CSR_DASICS_LIB_BOUND_LO0  , DASICS_BOUND_MASK     },
             {CSR_DASICS_LIB_BOUND_HI0  , DASICS_BOUND_MASK     },
@@ -2392,6 +2404,7 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
             {CSR_DASICS_S_MAIN_BOUND_LO, DASICS_BOUND_MASK     },
             {CSR_DASICS_S_MAIN_BOUND_HI, DASICS_BOUND_MASK     },
             {CSR_DASICS_FREASON        , DASICS_FREASON_MASK   },
+            {CSR_DASICS_PROREG_MASK    , DASICS_PROREG_MASK_RW },
 
             {CSR_DASICS_LIB_BOUND_LO0  , DASICS_BOUND_MASK     },
             {CSR_DASICS_LIB_BOUND_HI0  , DASICS_BOUND_MASK     },
@@ -2464,6 +2477,7 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
             {CSR_DASICS_S_MAIN_BOUND_LO, DASICS_BOUND_MASK     },
             {CSR_DASICS_S_MAIN_BOUND_HI, DASICS_BOUND_MASK     },
             {CSR_DASICS_FREASON        , DASICS_FREASON_MASK   },
+            {CSR_DASICS_PROREG_MASK    , DASICS_PROREG_MASK_RW },
 
             {CSR_DASICS_LIB_BOUND_LO0  , DASICS_BOUND_MASK     },
             {CSR_DASICS_LIB_BOUND_HI0  , DASICS_BOUND_MASK     },
@@ -2543,6 +2557,7 @@ CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
             {CSR_DASICS_S_MAIN_BOUND_LO, DASICS_BOUND_MASK     },
             {CSR_DASICS_S_MAIN_BOUND_HI, DASICS_BOUND_MASK     },
             {CSR_DASICS_FREASON        , DASICS_FREASON_MASK   },
+            {CSR_DASICS_PROREG_MASK    , DASICS_PROREG_MASK_RW },
 
             {CSR_DASICS_LIB_BOUND_LO0  , DASICS_BOUND_MASK     },
             {CSR_DASICS_LIB_BOUND_HI0  , DASICS_BOUND_MASK     },
