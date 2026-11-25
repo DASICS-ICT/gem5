@@ -335,8 +335,16 @@ user_pages:
 #endif
 user_pages_end:
 success_message:
-#if SEQUENCE_CALLS
-#if SEQUENCE_DENY == 0
+#if SEQUENCE_ROI || ROI_MEASUREMENT
+    .asciz "[OK] DASICS register protection: roi\n"
+#elif SEQUENCE_CALLS
+#if SEQUENCE_FULL && SEQUENCE_SOFTWARE && SEQUENCE_DENY == 0
+    .asciz "[OK] DASICS register protection: sequence-full-sw\n"
+#elif SEQUENCE_FULL && SEQUENCE_DENY == 0
+    .asciz "[OK] DASICS register protection: sequence-full-gf\n"
+#elif SEQUENCE_SOFTWARE && SEQUENCE_DENY == 0
+    .asciz "[OK] DASICS register protection: sequence-sw\n"
+#elif SEQUENCE_DENY == 0
     .asciz "[OK] DASICS register protection: sequence-gf\n"
 #elif SEQUENCE_DENY == 1
     .asciz "[OK] DASICS register protection: sequence-b-read-c\n"
@@ -347,8 +355,6 @@ success_message:
 #elif SEQUENCE_DENY == 4
     .asciz "[OK] DASICS register protection: sequence-c-jump-b\n"
 #endif
-#elif ROI_MEASUREMENT
-    .asciz "[OK] DASICS register protection: roi\n"
 #elif VECTOR_CHECK
     .asciz "[OK] DASICS register protection: vector ABI check\n"
 #elif USE_INT_PROREG && USE_FP_PROREG && TEST_SCENARIO == 0

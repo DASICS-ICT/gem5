@@ -25,7 +25,10 @@ FAULT_CASES = (
     "stack-write",
 )
 SEQUENCE_CASES = (
+    "sequence-sw",
     "sequence-gf",
+    "sequence-full-sw",
+    "sequence-full-gf",
     "sequence-b-read-c",
     "sequence-c-read-b",
     "sequence-b-jump-c",

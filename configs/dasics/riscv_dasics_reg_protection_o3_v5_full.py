@@ -83,9 +83,15 @@ def run():
         required=True,
     )
     parser.add_argument(
-        "--workload", choices=("empty", "compute"), required=True
+        "--workload", choices=("empty", "compute", "sequence"), required=True
     )
     parser.add_argument("--iterations", type=int, required=True)
+    parser.add_argument(
+        "--sequence-mask",
+        type=lambda value: int(value, 0),
+        choices=(0x008, 0xFFF),
+        help="integer and floating-point protection mask in the sequence ELF",
+    )
     clobber = parser.add_mutually_exclusive_group()
     clobber.add_argument("--clobber-count", type=int, choices=(0, 1, 6, 12))
     clobber.add_argument("--fp-clobber-count", type=int, choices=(0, 1, 6, 12))
@@ -110,6 +116,8 @@ def run():
         parser.error(f"Binary not found: {binary}")
     if args.iterations <= 0:
         parser.error("--iterations must be positive")
+    if args.sequence_mask is not None and args.workload != "sequence":
+        parser.error("--sequence-mask requires the sequence workload")
     if not 0 < args.max_ticks <= m5.MaxTick:
         parser.error(
             "--max-ticks must be positive and no greater than MaxTick"
@@ -193,6 +201,10 @@ def run():
         "exit_cause": None,
         "error": None,
     }
+    if args.workload == "sequence":
+        result["sequence_mask"] = (
+            0x008 if args.sequence_mask is None else args.sequence_mask
+        )
     if args.clobber_count is not None:
         result["clobber_count"] = args.clobber_count
     if args.fp_clobber_count is not None:

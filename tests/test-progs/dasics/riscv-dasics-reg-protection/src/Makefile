@@ -9,10 +9,14 @@ OUT := ../build/$(PROGRAM)
 NORMAL_ELFS := $(OUT).elf $(OUT)-normal-proreg.elf $(OUT)-normal-proreg-gf.elf
 ELFS := $(NORMAL_ELFS) $(OUT)-context-read.elf $(OUT)-context-write.elf \
 	$(OUT)-stack-read.elf $(OUT)-stack-write.elf
-SEQUENCE_ELFS := $(addprefix $(OUT)-sequence-,gf.elf b-read-c.elf c-read-b.elf \
+SEQUENCE_ELFS := $(addprefix $(OUT)-sequence-,sw.elf gf.elf b-read-c.elf c-read-b.elf \
 	b-jump-c.elf c-jump-b.elf)
+SEQUENCE_FULL_ELFS := $(addprefix $(OUT)-sequence-full-,sw.elf gf.elf)
 COMMON := context.h runtime.inc gate.inc link.ld
 ROI_COUNTS ?= 1024 4096
+SEQUENCE_ROI_ELFS := $(foreach mode,software proreg_gf,\
+    $(foreach n,$(sort 4 $(ROI_COUNTS)),../build/roi/sequence/$(mode)-$(n).elf))
+SEQUENCE_FULL_ROI_ELFS := $(subst /sequence/,/sequence-full/,$(SEQUENCE_ROI_ELFS))
 gate_boundary := GATE_BOUNDARY
 gate_save := GATE_SAVE
 gate_restore := GATE_RESTORE
@@ -44,12 +48,17 @@ VEC_ELFS := $(foreach mode,$(VEC_MODES),$(foreach body,empty compute,\
     $(foreach n,$(ROI_COUNTS),$(VEC_BUILD)/roi/$(mode)-$(body)-$(n).elf)))
 VEC_CHECKS := $(addprefix $(VEC_BUILD)/vector-check-,standard.elf variant.elf)
 
-.PHONY: all roi proreg-roi proreg-gf-roi clobber-roi fp-clobber-roi \
+.PHONY: all roi sequence-roi sequence-full-roi proreg-roi proreg-gf-roi clobber-roi fp-clobber-roi \
     vector-roi vector-roi-all $(VEC_WIDTH_TARGETS) run clean
 
-all: $(ELFS) $(SEQUENCE_ELFS)
+all: $(ELFS) $(SEQUENCE_ELFS) $(SEQUENCE_FULL_ELFS)
 
 roi: $(ROI_ELFS)
+
+sequence-roi: $(OUT)-sequence-sw.elf $(OUT)-sequence-gf.elf $(SEQUENCE_ROI_ELFS)
+
+# The narrow ROI images are the layout reference for the full-mask pair.
+sequence-full-roi: $(SEQUENCE_FULL_ELFS) $(SEQUENCE_FULL_ROI_ELFS) $(SEQUENCE_ROI_ELFS)
 
 proreg-roi: $(filter ../build/roi/software-%,$(ROI_ELFS)) $(PROREG_ROI_ELFS)
 
@@ -92,14 +101,22 @@ $(ELFS): $(PROGRAM).S $(COMMON) $(MAKEFILE_LIST)
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -DTEST_SCENARIO=$(TEST_SCENARIO) $(LDFLAGS) -o $@ $<
 
-$(OUT)-sequence-gf.elf: SEQUENCE_DENY := 0
+$(OUT)-sequence-sw.elf $(OUT)-sequence-gf.elf $(SEQUENCE_FULL_ELFS): SEQUENCE_DENY := 0
+$(OUT)-sequence-sw.elf $(OUT)-sequence-full-sw.elf: override CFLAGS += -DSEQUENCE_SOFTWARE=1
+$(SEQUENCE_FULL_ELFS) $(SEQUENCE_FULL_ROI_ELFS): override CFLAGS += -DSEQUENCE_FULL=1
 $(OUT)-sequence-b-read-c.elf: SEQUENCE_DENY := 1
 $(OUT)-sequence-c-read-b.elf: SEQUENCE_DENY := 2
 $(OUT)-sequence-b-jump-c.elf: SEQUENCE_DENY := 3
 $(OUT)-sequence-c-jump-b.elf: SEQUENCE_DENY := 4
-$(SEQUENCE_ELFS): sequence.S runtime.inc context.h link.ld $(MAKEFILE_LIST)
+$(SEQUENCE_ELFS) $(SEQUENCE_FULL_ELFS): sequence.S runtime.inc context.h link.ld $(MAKEFILE_LIST)
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -DSEQUENCE_DENY=$(SEQUENCE_DENY) $(LDFLAGS) -o $@ $<
+
+$(SEQUENCE_ROI_ELFS) $(SEQUENCE_FULL_ROI_ELFS): sequence.S runtime.inc context.h link.ld $(MAKEFILE_LIST)
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -I../../../../../include -DSEQUENCE_ROI=1 \
+		-DSEQUENCE_SOFTWARE=$(if $(filter software,$(word 1,$(roi_fields))),1,0) \
+		-DROI_ITERATIONS=$(word 2,$(roi_fields)) $(LDFLAGS) -o $@ $<
 
 $(filter ../build/roi/proreg-%,$(SCALAR_ROI_ELFS)): override CFLAGS += -DUSE_INT_PROREG=1
 $(filter ../build/roi/proreg_gf-%,$(SCALAR_ROI_ELFS)): override CFLAGS += -DUSE_INT_PROREG=1 -DUSE_FP_PROREG=1
@@ -119,7 +136,8 @@ run: all
 		--config "$(GEM5_CONFIG)" --outdir "$(GEM5_OUTDIR)" --cpu "$(CPU)"
 
 clean:
-	rm -f $(ELFS) $(SEQUENCE_ELFS) $(SCALAR_ROI_ELFS) \
+	rm -f $(ELFS) $(SEQUENCE_ELFS) $(SEQUENCE_FULL_ELFS) $(SEQUENCE_ROI_ELFS) \
+	    $(SEQUENCE_FULL_ROI_ELFS) $(SCALAR_ROI_ELFS) \
 	    $(foreach dir,../build $(addprefix ../build/vlen-,256 512 1024),\
 	      $(addprefix $(dir)/,$(notdir $(VEC_CHECKS))) \
 	      $(addprefix $(dir)/roi/,$(notdir $(VEC_ELFS))))

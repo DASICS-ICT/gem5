@@ -37,11 +37,11 @@ make dasics-clean TEST=riscv-dasics-reg-protection
 
 ## 两个不可信目标的顺序调用
 
-`sequence-gf` 在一次启动中执行 `A → B → A → C → A`。可信门逐轮设置当前目标的
-代码跳转区间和私有栈读写区间，使用 `PROREG.G.I`、`PROREG.F.I` 保护 `s3` 和
-`fs3`。B 和 C 均检查入口零值、使用自己的栈并改写寄存器。A 在 B 返回后检查
-第一次 `LEAVE` 的恢复值，再更新两个寄存器。C 返回后，A 检查第二次 `LEAVE`
-恢复的是更新后的位模式。[自检汇编](src/sequence.S)
+`sequence-sw` 与 `sequence-gf` 在一次启动中执行 `A → B → A → C → A`。
+可信门逐轮设置当前目标的代码跳转区间和私有栈读写区间。软件门对 `s3/fs3`
+执行保存、清零和恢复，硬件门使用掩码 `0x008` 的两条 `PROREG` 和一条 `LEAVE`。
+B 和 C 均检查入口零值、使用自己的栈并改写寄存器。A 在 B 返回后检查第一次恢复值，
+再更新两个寄存器。C 返回后，A 检查第二次恢复的是更新后的位模式。[自检汇编](src/sequence.S)
 
 | 独立异常用例 | 预期由 DASICS 拒绝的操作 |
 | --- | --- |
@@ -51,6 +51,36 @@ make dasics-clean TEST=riscv-dasics-reg-protection
 两个栈分别占用一个 4 KiB 的 U 态可读写页。B、C 位于同一 U 态可执行页，使用
 互不重叠、按 8 字节对齐的 DASICS 跳转区间。异常用例逐项核对
 U 态来源、`mcause`、故障指令 `mepc`、目标地址 `mtval` 和 `DASICS_FREASON`。
+
+### 整条链的周期对照
+
+在仓库根目录执行以下命令，使用已构建的 DASICS 版 gem5。
+
+```bash
+case_dir=tests/test-progs/dasics/riscv-dasics-reg-protection
+batch="$case_dir/build/runs/sequence-roi-$(date +%Y%m%d-%H%M%S)"
+make -j8 -C "$case_dir/src" sequence-roi &&
+    python3 -B "$case_dir/check_sequence.py" --outdir "$batch/checks" &&
+    python3 -B "$case_dir/measure_sequence.py" --outdir "$batch/measurements"
+```
+
+两种门各预热 128 条完整链。短用例检查两次恢复值，并用 4 条计时链验证 B、C 的
+提交次序和边界指令数。正式用例分别在同一对 `m5_work_begin/end` 之间执行 1,024
+和 4,096 条链。每链周期取整个 ROI 周期除以链数，包含 B、C 的栈操作、两轮授权与
+撤销、A 在两次调用之间更新寄存器，以及两版共用的循环指令。每链节省比例以软件门
+的每链周期为分母。
+
+全组对照保护 `s0–s11` 与 `fs0–fs11`，两组掩码均为 `0xfff`。先用独立功能
+用例检查每个寄存器的入口值和恢复值。计时用例沿用上一组的 B/C 函数体，
+每个函数只改写 `s3/fs3`，调用顺序、边界、栈和批长相同。
+
+```bash
+case_dir=tests/test-progs/dasics/riscv-dasics-reg-protection
+batch="$case_dir/build/runs/sequence-full-roi-$(date +%Y%m%d-%H%M%S)"
+make -j8 -C "$case_dir/src" sequence-full-roi &&
+    python3 -B "$case_dir/check_sequence.py" --full --outdir "$batch/checks" &&
+    python3 -B "$case_dir/measure_sequence.py" --full --outdir "$batch/measurements"
+```
 
 ## 地址与内存布局
 
