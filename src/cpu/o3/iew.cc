@@ -632,9 +632,9 @@ IEW::retryMemInst(const DynInstPtr& inst)
 }
 
 void
-IEW::cacheUnblocked()
+IEW::cacheUnblocked(const char *reason)
 {
-    instQueue.cacheUnblocked();
+    instQueue.cacheUnblocked(reason);
 }
 
 void
@@ -860,9 +860,9 @@ IEW::emptyRenameInsts(ThreadID tid)
 }
 
 void
-IEW::wakeCPU()
+IEW::wakeCPU(const char *reason)
 {
-    cpu->wakeCPU();
+    cpu->wakeCPU(reason);
 }
 
 void

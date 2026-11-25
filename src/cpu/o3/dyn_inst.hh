@@ -1037,6 +1037,8 @@ class DynInst : public ExecContext, public RefCounted
     // hasn't happened (yet).
     /** Tick records used for the pipeline activity viewer. */
     Tick fetchTick = -1;      // instruction fetch is completed.
+    /** Traced I-cache response from which this instruction was decoded. */
+    Tick fetchResponseTick = MaxTick;
     int32_t decodeTick = -1;  // instruction enters decode phase
     int32_t renameTick = -1;  // instruction enters rename phase
     int32_t renameEndTick = -1; // instruction exits rename phase

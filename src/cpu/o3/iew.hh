@@ -190,7 +190,7 @@ class IEW
     void retryMemInst(const DynInstPtr &inst);
 
     /** Notifies that the cache has become unblocked */
-    void cacheUnblocked();
+    void cacheUnblocked(const char *reason);
 
     /** Sends an instruction to commit through the time buffer. */
     void instToCommit(const DynInstPtr &inst);
@@ -213,7 +213,7 @@ class IEW
     /** Tells the CPU to wakeup if it has descheduled itself due to no
      * activity. Used mainly by the LdWritebackEvent.
      */
-    void wakeCPU();
+    void wakeCPU(const char *reason);
 
     /** Reports to the CPU that there is activity this cycle. */
     void activityThisCycle();

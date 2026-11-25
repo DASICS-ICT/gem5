@@ -9,6 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from cache_targets import selected_pairs
 from check_layout import call_sites
 
 CASE = Path(__file__).resolve().parents[1]
@@ -18,6 +19,9 @@ sys.path.insert(0, str(SPEC))
 import run as spec
 
 CALLS = 585
+# In the aligned beampic ELF the final fmod call resumes at this PC.
+TAIL_PC = 0x108948
+TAIL_OCCURRENCE = 291
 CONTROL = ("call", "body", "return", "ret", "error")
 PROTECTION = {"proreg_g": 0xFFF0300B, "proreg_f": 0xFFF0400B, "leave": 0x500B}
 
@@ -98,12 +102,18 @@ def check(args):
     gate = gate_targets(elf, args.variant)
     targets = gate.copy()
     sites = []
-    if args.time_calls:
+    fetch_trace = args.fetch_requests or args.cache_pairs is not None
+    idle_wakes = args.idle_wakes or fetch_trace
+    tail_stats = args.tail_stats or idle_wakes
+    trace_calls = args.time_calls or tail_stats
+    if trace_calls:
         for caller in ("Drand_setSeed", "Drand_value"):
             sites.extend(call_sites(elf, caller))
         for call, resume in sites:
             targets[f"call_{call:x}"] = call
             targets[f"resume_{call:x}"] = resume
+    if tail_stats and TAIL_PC not in {resume for _, resume in sites}:
+        raise ValueError(f"{TAIL_PC:#x} is not an fmod continuation in {elf}")
 
     # A fresh directory keeps the two gates' inputs, outputs and counts apart,
     # and prevents an interrupted run from passing on an earlier result.
@@ -121,10 +131,9 @@ def check(args):
         "--listener-mode=off",
         f"--outdir={m5out}",
     ]
-    if args.time_calls:
-        command.extend(
-            ["--debug-flags=PcCountTracker", "--debug-file=retire.log"]
-        )
+    if trace_calls:
+        flags = "PcCountTracker,O3Idle" if idle_wakes else "PcCountTracker"
+        command.extend([f"--debug-flags={flags}", "--debug-file=retire.log"])
     command.extend(
         [
             str(REPO / "configs/spec/riscv_se_dasics_v5_full.py"),
@@ -138,6 +147,16 @@ def check(args):
     )
     for name, pc in targets.items():
         command.extend(["--retired-pc", f"{name}={pc:#x}"])
+    if tail_stats:
+        command.extend(
+            ["--stats-at-retire", hex(TAIL_PC), str(TAIL_OCCURRENCE)]
+        )
+    if fetch_trace:
+        command.append("--trace-tail-fetch")
+    if args.cache_pairs is not None:
+        pairs = selected_pairs(args.cache_pairs)
+        ticks = sorted(int(r[f"{args.variant}_send_tick"]) for r in pairs)
+        command.extend(["--cache-hit-ticks", ",".join(map(str, ticks))])
     command.extend([str(elf), *invocation["argv"]])
     result = {"variant": args.variant, "elf": str(elf), "input": "test"}
     try:
@@ -183,7 +202,7 @@ def check(args):
             raise ValueError(
                 f"Retirements differ: expected {expected}; got {counts}"
             )
-        if args.time_calls:
+        if trace_calls:
             spec.require_file(m5out / "retire.log")
             if sum(counts[f"call_{call:x}"] for call, _ in sites) != CALLS:
                 raise ValueError(f"Expected {CALLS} caller-side calls")
@@ -228,6 +247,27 @@ def main():
         "--time-calls",
         action="store_true",
         help="trace the retirement ticks of fmod calls and caller continuations",
+    )
+    parser.add_argument(
+        "--tail-stats",
+        action="store_true",
+        help="trace calls and dump cumulative stats at the final fmod return",
+    )
+    parser.add_argument(
+        "--idle-wakes",
+        action="store_true",
+        help="record O3 idle intervals and the callback that scheduled the next tick",
+    )
+    parser.add_argument(
+        "--fetch-requests",
+        action="store_true",
+        help="trace fetch responses and retiring instructions from each buffer in the tail",
+    )
+    parser.add_argument(
+        "--cache-pairs",
+        type=Path,
+        metavar="FETCH_BATCH",
+        help="trace cache paths for the early-reply witnesses from a fetch batch",
     )
     args = parser.parse_args()
     if args.timeout <= 0:

@@ -52,6 +52,7 @@
 #include "debug/CachePort.hh"
 #include "debug/CacheRepl.hh"
 #include "debug/CacheVerbose.hh"
+#include "debug/ClassicCachePath.hh"
 #include "debug/HWPrefetch.hh"
 #include "mem/cache/compressors/base.hh"
 #include "mem/cache/mshr.hh"
@@ -81,7 +82,7 @@ BaseCache::CacheResponsePort::CacheResponsePort(const std::string &_name,
 
 BaseCache::BaseCache(const BaseCacheParams &p, unsigned blk_size)
     : ClockedObject(p),
-      cpuSidePort (p.name + ".cpu_side_port", *this, "CpuSidePort"),
+      cpuSidePort(p.name + ".cpu_side_port", *this, "CpuSidePort"),
       memSidePort(p.name + ".mem_side_port", this, "MemSidePort"),
       accessor(*this),
       mshrQueue("MSHRs", p.mshrs, 0, p.demand_mshr_reserve, p.name),
@@ -93,7 +94,7 @@ BaseCache::BaseCache(const BaseCacheParams &p, unsigned blk_size)
       writeAllocator(p.write_allocator),
       writebackClean(p.writeback_clean),
       tempBlockWriteback(nullptr),
-      writebackTempBlockAtomicEvent([this]{ writebackTempBlockAtomic(); },
+      writebackTempBlockAtomicEvent([this] { writebackTempBlockAtomic(); },
                                     name(), false,
                                     EventBase::Delayed_Writeback_Pri),
       blkSize(blk_size),
@@ -111,6 +112,7 @@ BaseCache::BaseCache(const BaseCacheParams &p, unsigned blk_size)
       moveContractions(p.move_contractions),
       blocked(0),
       order(0),
+      traceHitTicks(p.trace_hit_ticks.begin(), p.trace_hit_ticks.end()),
       noTargetMSHR(nullptr),
       missCount(p.max_miss_count),
       addrRanges(p.addr_ranges.begin(), p.addr_ranges.end()),
@@ -141,6 +143,37 @@ BaseCache::BaseCache(const BaseCacheParams &p, unsigned blk_size)
         "Compressed cache %s does not have a compression algorithm", name());
     if (compressor)
         compressor->setCache(this);
+}
+
+std::string
+BaseCache::traceRequest(PacketPtr pkt) const
+{
+    const RequestPtr &req = pkt->req;
+    return csprintf("rid=%u born=%llu pa=%#x line=%#x va=%#x pc=%#x "
+                    "cmd=%s pf=%u",
+                    req->requestorId(), req->time(), req->getPaddr(),
+                    pkt->getBlockAddr(blkSize),
+                    req->hasVaddr() ? req->getVaddr() : 0,
+                    req->hasPC() ? req->getPC() : 0, pkt->cmdString(),
+                    req->taskId() == context_switch_task_id::Prefetcher);
+}
+
+void
+BaseCache::traceMSHR(const char *event, PacketPtr pkt, MSHR *mshr) const
+{
+    if (GEM5_UNLIKELY(TRACING_ON && debug::ClassicCachePath)) {
+        // A merged demand follows the first target downstream, even when
+        // its command has changed from a prefetch into a line-sized read.
+        const auto *target = mshr->getTarget();
+        const auto &leader = target->pkt->req;
+        DPRINTF(ClassicCachePath,
+                "cpath op=%s %s order=%llu leader_rid=%u leader_born=%llu "
+                "leader_pa=%#x leader_pf=%u recv=%llu ready=%llu service=%u\n",
+                event, traceRequest(pkt), mshr->order, leader->requestorId(),
+                leader->time(), leader->getPaddr(),
+                leader->taskId() == context_switch_task_id::Prefetcher,
+                target->recvTime, target->readyTime, mshr->inService);
+    }
 }
 
 BaseCache::~BaseCache()
@@ -397,6 +430,7 @@ BaseCache::handleTimingReqMiss(PacketPtr pkt, MSHR *mshr, CacheBlk *blk,
                 // buffer and to schedule an event to the queued
                 // port and also takes into account the additional
                 // delay of the xbar.
+                traceMSHR("join", pkt, mshr);
                 mshr->allocateTarget(pkt, forward_time, order++,
                                      allocOnFill(pkt->cmd));
                 if (mshr->getNumTargets() >= numTarget) {
@@ -496,6 +530,17 @@ BaseCache::recvTimingReq(PacketPtr pkt)
     pkt->headerDelay = pkt->payloadDelay = 0;
 
     if (satisfied) {
+        if (GEM5_UNLIKELY(TRACING_ON && debug::ClassicCachePath) &&
+            pkt->isRead() && blk && blk->isValid() &&
+            (traceHitTicks.empty() || traceHitTicks.count(curTick()))) {
+            DPRINTF(ClassicCachePath,
+                    "cpath op=hit %s marked=%u fill_pf=%u fill_rid=%u "
+                    "inserted=%llu block_ready=%llu due=%llu\n",
+                    traceRequest(pkt), blk->wasPrefetched(),
+                    blk->getTaskId() == context_switch_task_id::Prefetcher,
+                    blk->getSrcRequestorId(), curTick() - blk->getAge(),
+                    blk->getWhenReady(), request_time);
+        }
         // notify before anything else as later handleTimingReqHit might turn
         // the packet in a response
         ppHit->notify(CacheAccessProbeArg(pkt,accessor));
@@ -576,6 +621,7 @@ BaseCache::recvTimingResp(PacketPtr pkt)
 
     // Initial target is used just for stats
     const QueueEntry::Target *initial_tgt = mshr->getTarget();
+    traceMSHR("fill", pkt, mshr);
     const Tick miss_latency = curTick() - initial_tgt->recvTime;
     if (pkt->req->isUncacheable()) {
         assert(pkt->req->requestorId() < system->maxRequestors());
@@ -1988,6 +2034,7 @@ BaseCache::sendMSHRQueuePacket(MSHR* mshr)
     }
 
     if (!memSidePort.sendTimingReq(pkt)) {
+        traceMSHR("retry", tgt_pkt, mshr);
         // we are awaiting a retry, but we
         // delete the packet and will be creating a new packet
         // when we get the opportunity
@@ -2000,6 +2047,7 @@ BaseCache::sendMSHRQueuePacket(MSHR* mshr)
         // it gets retried
         return true;
     } else {
+        traceMSHR("send", tgt_pkt, mshr);
         // As part of the call to sendTimingReq the packet is
         // forwarded to all neighbouring caches (and any caches
         // above them) as a snoop. Thus at this point we know if

@@ -60,6 +60,7 @@
 #include "debug/Drain.hh"
 #include "debug/Fetch.hh"
 #include "debug/O3CPU.hh"
+#include "debug/O3FetchTiming.hh"
 #include "mem/packet.hh"
 #include "params/BaseO3CPU.hh"
 #include "sim/byteswap.hh"
@@ -168,7 +169,9 @@ Fetch::Fetch(CPU *_cpu, const BaseO3CPUParams &params)
         fetchBuffer[i] = NULL;
         fetchBufferPC[i] = 0;
         fetchBufferValid[i] = false;
-        lastIcacheStall[i] = 0;
+        fetchSentTick[i] = 0;
+        retiredAtFetchSend[i] = 0;
+        fetchBufferResponse[i] = MaxTick;
         issuePipelinedIfetch[i] = false;
     }
 
@@ -371,10 +374,18 @@ Fetch::processCacheCompletion(PacketPtr pkt)
 
     memcpy(fetchBuffer[tid], pkt->getConstPtr<uint8_t>(), fetchBufferSize);
     fetchBufferValid[tid] = true;
+    fetchBufferResponse[tid] = MaxTick;
+    if (GEM5_UNLIKELY(TRACING_ON && debug::O3FetchTiming)) {
+        fetchBufferResponse[tid] = curTick();
+        DPRINTF(O3FetchTiming,
+                "fetch-r sent=%llu block=%#x pc=%#x before=%llu after=%llu\n",
+                fetchSentTick[tid], pkt->req->getVaddr(), pkt->req->getPC(),
+                retiredAtFetchSend[tid], cpu->thread[tid]->numInst);
+    }
 
     // Wake up the CPU (if it went to sleep and was waiting on
     // this completion event).
-    cpu->wakeCPU();
+    cpu->wakeCPU("icache_response");
 
     DPRINTF(Activity, "[tid:%i] Activating fetch due to cache completion\n",
             tid);
@@ -583,7 +594,7 @@ Fetch::finishTranslation(const Fault &fault, const RequestPtr &mem_req)
     assert(!cpu->switchedOut());
 
     // Wake up CPU if it was idle
-    cpu->wakeCPU();
+    cpu->wakeCPU("itlb_completion");
 
     if (fetchStatus[tid] != ItlbWait || mem_req != memReq[tid] ||
         mem_req->getVaddr() != memReq[tid]->getVaddr()) {
@@ -629,13 +640,12 @@ Fetch::finishTranslation(const Fault &fault, const RequestPtr &mem_req)
             cacheBlocked = true;
         } else {
             DPRINTF(Fetch, "[tid:%i] Doing Icache access.\n", tid);
-            DPRINTF(Activity, "[tid:%i] Activity: Waiting on I-cache "
-                    "response.\n", tid);
-            lastIcacheStall[tid] = curTick();
+            DPRINTF(Activity,
+                    "[tid:%i] Activity: Waiting on I-cache "
+                    "response.\n",
+                    tid);
             fetchStatus[tid] = IcacheWaitResponse;
-            // Notify Fetch Request probe when a packet containing a fetch
-            // request is successfully sent
-            ppFetchRequestSent->notify(mem_req);
+            requestAccepted(tid, mem_req);
         }
     } else {
         // Don't send an instruction to decode if we can't handle it.
@@ -1214,6 +1224,7 @@ Fetch::fetch(bool &status_change)
         fetchAddr = (this_pc.instAddr() + pcOffset) & pc_mask;
         Addr fetchBufferBlockPC = fetchBufferAlignPC(fetchAddr);
 
+        Tick response = MaxTick;
         if (needMem) {
             // If buffer is no longer valid or fetchAddr has moved to point
             // to the next cache block then start fetch from icache.
@@ -1230,6 +1241,17 @@ Fetch::fetch(bool &status_change)
             memcpy(dec_ptr->moreBytesPtr(),
                     fetchBuffer[tid] + blkOffset * instSize, instSize);
             decoder[tid]->moreBytes(this_pc, fetchAddr);
+
+            // A completed decode whose first byte lies in the newly supplied
+            // chunk has an unambiguous fill, even on a variable-length ISA.
+            // Skip buffered, split-chunk and microcoded decode witnesses.
+            if (GEM5_UNLIKELY(TRACING_ON && debug::O3FetchTiming)) {
+                const Addr chunk = fetchBufferPC[tid] + blkOffset * instSize;
+                if (dec_ptr->instReady() && this_pc.instAddr() >= chunk &&
+                    this_pc.instAddr() - chunk < static_cast<Addr>(instSize)) {
+                    response = fetchBufferResponse[tid];
+                }
+            }
 
             if (dec_ptr->needMoreBytes()) {
                 blkOffset++;
@@ -1276,6 +1298,11 @@ Fetch::fetch(bool &status_change)
             DynInstPtr instruction = buildInst(
                     tid, staticInst, curMacroop, this_pc, *next_pc, true);
 
+            if (GEM5_UNLIKELY(response != MaxTick) && !curMacroop && !inRom &&
+                !instruction->isMicroop()) {
+                instruction->fetchResponseTick = response;
+            }
+            response = MaxTick;
             ppFetch->notify(instruction);
             numInst++;
 
@@ -1400,6 +1427,16 @@ Fetch::fetch(bool &status_change)
 }
 
 void
+Fetch::requestAccepted(ThreadID tid, const RequestPtr &req)
+{
+    // Capture at port acceptance, including retries and sends whose response
+    // arrives after tracing is enabled.
+    fetchSentTick[tid] = curTick();
+    retiredAtFetchSend[tid] = cpu->thread[tid]->numInst;
+    ppFetchRequestSent->notify(req);
+}
+
+void
 Fetch::recvReqRetry()
 {
     // If a trap is pending to execute, discard the retry
@@ -1418,7 +1455,7 @@ Fetch::recvReqRetry()
             fetchStatus[retryTid] = IcacheWaitResponse;
             // Notify Fetch Request probe when a retryPkt is successfully sent.
             // Note that notify must be called before retryPkt is set to NULL.
-            ppFetchRequestSent->notify(retryPkt->req);
+            requestAccepted(retryTid, retryPkt->req);
             retryPkt = NULL;
             retryTid = InvalidThreadID;
             cacheBlocked = false;

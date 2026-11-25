@@ -907,8 +907,8 @@ InstructionQueue::processFUCompletion(const DynInstPtr &inst, FUPool *fu_pool,
     assert(!cpu->switchedOut());
     // The CPU could have been sleeping until this op completed (*extremely*
     // long latency op).  Wake it if it was.  This may be overkill.
-   --wbOutstanding;
-    iewStage->wakeCPU();
+    --wbOutstanding;
+    iewStage->wakeCPU("fu_completion");
 
     if (fu_pool) {
         assert(fu_idx > -1);
@@ -1340,13 +1340,13 @@ InstructionQueue::retryMemInst(const DynInstPtr &retry_inst)
 }
 
 void
-InstructionQueue::cacheUnblocked()
+InstructionQueue::cacheUnblocked(const char *reason)
 {
     DPRINTF(IQ, "Cache is unblocked, rescheduling blocked memory "
             "instructions\n");
     retryMemInsts.splice(retryMemInsts.end(), blockedMemInsts);
     // Get the CPU ticking again
-    cpu->wakeCPU();
+    cpu->wakeCPU(reason);
 }
 
 DynInstPtr

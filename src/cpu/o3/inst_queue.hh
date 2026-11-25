@@ -363,7 +363,7 @@ class InstructionQueue
     void retryMemInst(const DynInstPtr &retry_inst);
 
     /**  Notify instruction queue that a previous blockage has resolved */
-    void cacheUnblocked();
+    void cacheUnblocked(const char *reason);
 
     /** Indicates an ordering violation between a store and a load. */
     void violation(const DynInstPtr &store, const DynInstPtr &faulting_load);

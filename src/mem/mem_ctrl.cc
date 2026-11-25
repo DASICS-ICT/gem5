@@ -41,6 +41,7 @@
 #include "mem/mem_ctrl.hh"
 
 #include "base/trace.hh"
+#include "debug/ClassicCachePath.hh"
 #include "debug/DRAM.hh"
 #include "debug/Drain.hh"
 #include "debug/MemCtrl.hh"
@@ -282,6 +283,10 @@ MemCtrl::addToReadQueue(PacketPtr pkt,
             stats.avgRdQLen = totalReadQueueSize + respQueue.size();
         }
 
+        DPRINTF(ClassicCachePath,
+                "cachepath mem-%s rid=%u born=%llu pa=%#x addr=%#x size=%u\n",
+                foundInWrQ ? "bypass" : "queue", pkt->requestorId(),
+                pkt->req->time(), pkt->req->getPaddr(), addr, size);
         // Starting address of next memory pkt (aligned to burst boundary)
         addr = (addr | (burst_size - 1)) + 1;
     }
@@ -463,6 +468,10 @@ MemCtrl::recvTimingReq(PacketPtr pkt)
         assert(size != 0);
         if (readQueueFull(pkt_count)) {
             DPRINTF(MemCtrl, "Read queue full, not accepting\n");
+            DPRINTF(ClassicCachePath,
+                    "cachepath mem-reject rid=%u born=%llu pa=%#x addr=%#x\n",
+                    pkt->requestorId(), pkt->req->time(), pkt->req->getPaddr(),
+                    pkt->getAddr());
             // remember that we have to retry this port
             retryRdReq = true;
             stats.numRdRetry++;
@@ -641,6 +650,13 @@ MemCtrl::accessAndRespond(PacketPtr pkt, Tick static_latency,
         // number of data beats.
         Tick response_time = curTick() + static_latency + pkt->headerDelay +
                              pkt->payloadDelay;
+        if (pkt->isRead()) {
+            DPRINTF(ClassicCachePath,
+                    "cachepath mem-response rid=%u born=%llu pa=%#x "
+                    "addr=%#x due=%llu\n",
+                    pkt->requestorId(), pkt->req->time(), pkt->req->getPaddr(),
+                    pkt->getAddr(), response_time);
+        }
         // Here we reset the timing of the packet before sending it out.
         pkt->headerDelay = pkt->payloadDelay = 0;
 
@@ -819,6 +835,13 @@ MemCtrl::doBurstAccess(MemPacket* mem_pkt, MemInterface* mem_intr)
 
     // Update the common bus stats
     if (mem_pkt->isRead()) {
+        // The scheduler may select a burst before its RD command can issue.
+        DPRINTF(ClassicCachePath,
+                "cachepath mem-issue rid=%u born=%llu pa=%#x addr=%#x "
+                "entry=%llu cmd=%llu ready=%llu\n",
+                mem_pkt->requestorId(), mem_pkt->pkt->req->time(),
+                mem_pkt->pkt->req->getPaddr(), mem_pkt->addr,
+                mem_pkt->entryTime, cmd_at, mem_pkt->readyTime);
         ++(mem_intr->readsThisTime);
         // Update latency stats
         stats.requestorReadTotalLat[mem_pkt->requestorId()] +=

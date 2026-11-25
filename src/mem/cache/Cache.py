@@ -84,6 +84,9 @@ class BaseCache(ClockedObject):
     cxx_class = "gem5::BaseCache"
 
     size = Param.MemorySize("Capacity")
+    trace_hit_ticks = VectorParam.Tick(
+        [], "Ticks at which to trace resident read hits (empty selects all)"
+    )
     assoc = Param.Unsigned("Associativity")
 
     tag_latency = Param.Cycles("Tag lookup latency")

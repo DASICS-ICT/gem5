@@ -74,9 +74,13 @@ namespace o3
 {
 
 LSQUnit::WritebackEvent::WritebackEvent(const DynInstPtr &_inst,
-        PacketPtr _pkt, LSQUnit *lsq_ptr)
+                                        PacketPtr _pkt, LSQUnit *lsq_ptr,
+                                        const char *reason)
     : Event(Default_Pri, AutoDelete),
-      inst(_inst), pkt(_pkt), lsqPtr(lsq_ptr)
+      inst(_inst),
+      pkt(_pkt),
+      lsqPtr(lsq_ptr),
+      wakeReason(reason)
 {
     assert(_inst->savedRequest);
     _inst->savedRequest->writebackScheduled();
@@ -87,7 +91,7 @@ LSQUnit::WritebackEvent::process()
 {
     assert(!lsqPtr->cpu->switchedOut());
 
-    lsqPtr->writeback(inst, pkt);
+    lsqPtr->writeback(inst, pkt, wakeReason);
 
     assert(inst->savedRequest);
     inst->savedRequest->writebackDone();
@@ -188,22 +192,27 @@ LSQUnit::completeDataAccess(PacketPtr pkt)
                     pkt->getHtmTransactionFailedInCacheRC() );
             }
 
-            writeback(inst, request->mainPacket());
+            const char *reason =
+                (inst->isAtomic() || inst->isStoreConditional())
+                    ? "dcache_atomic_response"
+                    : "dcache_load_response";
+            writeback(inst, request->mainPacket(), reason);
             if (inst->isStore() || inst->isAtomic()) {
                 request->writebackDone();
-                completeStore(request->instruction()->sqIt);
+                completeStore(request->instruction()->sqIt, reason);
             }
         } else if (inst->isStore()) {
             // This is a regular store (i.e., not store conditionals and
             // atomics), so it can complete without writing back
-            completeStore(request->instruction()->sqIt);
+            completeStore(request->instruction()->sqIt,
+                          "dcache_store_response");
         } else if ((inst->isDataPrefetch() || inst->isInstPrefetch()) &&
                    !inst->isExecuted()) {
             // executeLoad() retires a prefetch early only when it sends
             // the request without a fault. A split prefetch with a
             // partial fault waits for this response instead. A prefetch
             // has no writeback, so send it to commit here.
-            iewStage->wakeCPU();
+            iewStage->wakeCPU("dcache_prefetch_response");
             inst->setExecuted();
             iewStage->instToCommit(inst);
             iewStage->activityThisCycle();
@@ -891,7 +900,7 @@ LSQUnit::writebackStores()
             /* It is important that the preincrement happens at (or before)
              * the call, as the the code of completeStore checks
              * storeWBIt. */
-            completeStore(storeWBIt++);
+            completeStore(storeWBIt++, "internal_empty_store");
             continue;
         }
 
@@ -956,10 +965,10 @@ LSQUnit::writebackStores()
                         "Instantly completing it.\n",
                         inst->seqNum);
                 PacketPtr new_pkt = new Packet(*request->packet());
-                WritebackEvent *wb = new WritebackEvent(inst,
-                        new_pkt, this);
+                WritebackEvent *wb = new WritebackEvent(inst, new_pkt, this,
+                                                        "internal_failed_sc");
                 cpu->schedule(wb, curTick() + 1);
-                completeStore(storeWBIt);
+                completeStore(storeWBIt, "internal_failed_sc");
                 if (!storeQueue.empty())
                     storeWBIt++;
                 else
@@ -977,7 +986,7 @@ LSQUnit::writebackStores()
             main_pkt->dataStatic(inst->memData);
             request->mainReq()->localAccessor(thread, main_pkt);
             delete main_pkt;
-            completeStore(storeWBIt);
+            completeStore(storeWBIt, "local_store");
             storeWBIt++;
             continue;
         }
@@ -1153,9 +1162,9 @@ LSQUnit::storePostSend()
 }
 
 void
-LSQUnit::writeback(const DynInstPtr &inst, PacketPtr pkt)
+LSQUnit::writeback(const DynInstPtr &inst, PacketPtr pkt, const char *reason)
 {
-    iewStage->wakeCPU();
+    iewStage->wakeCPU(reason);
 
     // Squashed instructions do not need to complete their access.
     if (inst->isSquashed()) {
@@ -1215,7 +1224,8 @@ LSQUnit::writeback(const DynInstPtr &inst, PacketPtr pkt)
 }
 
 void
-LSQUnit::completeStore(typename StoreQueue::iterator store_idx)
+LSQUnit::completeStore(typename StoreQueue::iterator store_idx,
+                       const char *reason)
 {
     assert(store_idx->valid());
     store_idx->completed() = true;
@@ -1223,7 +1233,7 @@ LSQUnit::completeStore(typename StoreQueue::iterator store_idx)
     // A bit conservative because a store completion may not free up entries,
     // but hopefully avoids two store completions in one cycle from making
     // the CPU tick twice.
-    cpu->wakeCPU();
+    cpu->wakeCPU(reason);
     cpu->activityThisCycle();
 
     /* We 'need' a copy here because we may clear the entry from the
@@ -1456,7 +1466,7 @@ LSQUnit::read(LSQRequest *request, ssize_t load_idx)
 
         Cycles delay = request->mainReq()->localAccessor(thread, main_pkt);
 
-        WritebackEvent *wb = new WritebackEvent(load_inst, main_pkt, this);
+        auto *wb = new WritebackEvent(load_inst, main_pkt, this, "local_load");
         cpu->schedule(wb, cpu->clockEdge(delay));
         return NoFault;
     }
@@ -1594,7 +1604,7 @@ LSQUnit::read(LSQRequest *request, ssize_t load_idx)
                 }
 
                 WritebackEvent *wb = new WritebackEvent(load_inst, data_pkt,
-                        this);
+                                                        this, "store_forward");
 
                 // We'll say this has a 1 cycle load-store forwarding latency
                 // for now.

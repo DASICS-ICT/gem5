@@ -49,6 +49,7 @@
 #include <cassert>
 #include <cstdint>
 #include <string>
+#include <unordered_set>
 
 #include "base/addr_range.hh"
 #include "base/compiler.hh"
@@ -969,6 +970,11 @@ class BaseCache : public ClockedObject
     /** Increasing order number assigned to each incoming request. */
     uint64_t order;
 
+    /** Only filter resident hits; a later demand can join an earlier miss. */
+    const std::unordered_set<Tick> traceHitTicks;
+    std::string traceRequest(PacketPtr pkt) const;
+    void traceMSHR(const char *event, PacketPtr pkt, MSHR *mshr) const;
+
     /** Stores time the cache blocked for statistics. */
     Cycles blockedCycle;
 
@@ -1177,6 +1183,7 @@ class BaseCache : public ClockedObject
         MSHR *mshr = mshrQueue.allocate(pkt->getBlockAddr(blkSize), blkSize,
                                         pkt, time, order++,
                                         allocOnFill(pkt->cmd));
+        traceMSHR("new", pkt, mshr);
 
         if (mshrQueue.isFull()) {
             setBlocked((BlockedCause)MSHRQueue_MSHRs);

@@ -243,7 +243,7 @@ LSQ::tick()
 {
     // Re-issue loads which got blocked on the per-cycle load ports limit.
     if (usedLoadPorts == cacheLoadPorts && !_cacheBlocked)
-        iewStage->cacheUnblocked();
+        iewStage->cacheUnblocked("lsq_port_available");
 
     usedLoadPorts = 0;
     usedStorePorts = 0;
@@ -435,7 +435,7 @@ LSQ::setLastRetiredHtmUid(ThreadID tid, uint64_t htmUid)
 void
 LSQ::recvReqRetry()
 {
-    iewStage->cacheUnblocked();
+    iewStage->cacheUnblocked("dcache_retry");
     cacheBlocked(false);
 
     for (ThreadID tid : *activeThreads) {

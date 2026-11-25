@@ -55,6 +55,7 @@
 #include "debug/Cache.hh"
 #include "debug/CacheTags.hh"
 #include "debug/CacheVerbose.hh"
+#include "debug/ClassicCachePath.hh"
 #include "enums/Clusivity.hh"
 #include "mem/cache/cache_blk.hh"
 #include "mem/cache/compressors/base.hh"
@@ -904,6 +905,11 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
             }
             // Reset the bus additional time as it is now accounted for
             tgt_pkt->headerDelay = tgt_pkt->payloadDelay = 0;
+            if (tgt_pkt->isRead()) {
+                DPRINTF(ClassicCachePath,
+                        "cpath op=respond %s order=%llu due=%llu\n",
+                        traceRequest(tgt_pkt), mshr->order, completion_time);
+            }
             cpuSidePort.schedTimingResp(tgt_pkt, completion_time);
             break;
 
@@ -1465,6 +1471,7 @@ Cache::sendMSHRQueuePacket(MSHR* mshr)
         // prefetchSquash first may result in the MSHR being
         // prematurely deallocated.
         if (snoop_pkt.cacheResponding()) {
+            traceMSHR("snoop", tgt_pkt, mshr);
             [[maybe_unused]] auto r = outstandingSnoop.insert(snoop_pkt.req);
             assert(r.second);
 
@@ -1480,6 +1487,7 @@ Cache::sendMSHRQueuePacket(MSHR* mshr)
         }
 
         if (snoop_pkt.isBlockCached()) {
+            traceMSHR("cancel", tgt_pkt, mshr);
             DPRINTF(Cache, "Block present, prefetch squashed by cache.  "
                     "Deallocating mshr target %#x.\n",
                     mshr->blkAddr);

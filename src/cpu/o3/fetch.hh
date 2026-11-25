@@ -298,7 +298,7 @@ class Fetch
      */
     bool fetchCacheLine(Addr vaddr, ThreadID tid, Addr pc);
     void finishTranslation(const Fault &fault, const RequestPtr &mem_req);
-
+    void requestAccepted(ThreadID tid, const RequestPtr &req);
 
     /** Check if an interrupt is pending and that we need to handle
      */
@@ -513,8 +513,11 @@ class Fetch
     /** Size of instructions. */
     int instSize;
 
-    /** Icache stall statistics. */
-    Counter lastIcacheStall[MaxThreads];
+    /** One accepted I-cache request can fill each thread's fetch buffer. */
+    Tick fetchSentTick[MaxThreads];
+    Counter retiredAtFetchSend[MaxThreads];
+    /** Tick of the traced response that supplied the current buffer. */
+    Tick fetchBufferResponse[MaxThreads];
 
     /** List of Active Threads */
     std::list<ThreadID> *activeThreads;

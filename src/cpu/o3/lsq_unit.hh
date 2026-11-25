@@ -381,13 +381,14 @@ class LSQUnit
     void resetState();
 
     /** Writes back the instruction, sending it to IEW. */
-    void writeback(const DynInstPtr &inst, PacketPtr pkt);
+    void writeback(const DynInstPtr &inst, PacketPtr pkt, const char *reason);
 
     /** Try to finish a previously blocked write back attempt */
     void writebackBlockedStore();
 
     /** Completes the store at the specified index. */
-    void completeStore(typename StoreQueue::iterator store_idx);
+    void completeStore(typename StoreQueue::iterator store_idx,
+                       const char *reason);
 
     /** Handles completing the send of a store to memory. */
     void storePostSend();
@@ -421,13 +422,13 @@ class LSQUnit
     /** Pointer to the dcache port.  Used only for sending. */
     RequestPort *dcachePort;
 
-    /** Writeback event, specifically for when stores forward data to loads. */
+    /** Deferred writeback of a result produced without a cache response. */
     class WritebackEvent : public Event
     {
       public:
         /** Constructs a writeback event. */
         WritebackEvent(const DynInstPtr &_inst, PacketPtr pkt,
-                LSQUnit *lsq_ptr);
+                       LSQUnit *lsq_ptr, const char *reason);
 
         /** Processes the writeback event. */
         void process();
@@ -444,6 +445,9 @@ class LSQUnit
 
         /** The pointer to the LSQ unit that issued the store. */
         LSQUnit *lsqPtr;
+
+        /** Static trace label for the event that scheduled this writeback. */
+        const char *const wakeReason;
     };
 
   public:

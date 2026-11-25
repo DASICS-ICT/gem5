@@ -83,6 +83,8 @@ if env['CONF']['BUILD_ISA']:
     DebugFlag('LSQUnit')
     DebugFlag('MemDepUnit')
     DebugFlag('O3CPU')
+    DebugFlag('O3FetchTiming')
+    DebugFlag('O3Idle')
     DebugFlag('ROB')
     DebugFlag('Rename')
     DebugFlag('Scoreboard')

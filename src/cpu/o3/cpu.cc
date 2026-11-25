@@ -54,6 +54,8 @@
 #include "debug/Activity.hh"
 #include "debug/Drain.hh"
 #include "debug/O3CPU.hh"
+#include "debug/O3FetchTiming.hh"
+#include "debug/O3Idle.hh"
 #include "debug/Quiesce.hh"
 #include "enums/MemoryMode.hh"
 #include "sim/cur_tick.hh"
@@ -240,6 +242,7 @@ CPU::CPU(const BaseO3CPUParams &params)
     // Setup the rename map for whichever stages need it.
     for (ThreadID tid = 0; tid < numThreads; tid++) {
         isa[tid] = params.isa[tid];
+        lastRetiredFetchResponse[tid] = MaxTick;
         commitRenameMap[tid].init(regClasses, &regFile, &freeList);
         renameMap[tid].init(regClasses, &regFile, &freeList);
     }
@@ -412,6 +415,7 @@ CPU::tick()
             DPRINTF(O3CPU, "Idle!\n");
             lastRunningCycle = curCycle();
             cpuStats.timesIdled++;
+            DPRINTF(O3Idle, "idle-pause cycle=%llu\n", lastRunningCycle);
         } else {
             schedule(tickEvent, clockEdge(Cycles(1)));
             DPRINTF(O3CPU, "Scheduling next tick!\n");
@@ -759,7 +763,7 @@ CPU::drain()
             }
         }
 
-        wakeCPU();
+        wakeCPU("drain");
         activityRec.activity();
 
         DPRINTF(Drain, "CPU not drained\n");
@@ -1158,6 +1162,15 @@ CPU::instDone(ThreadID tid, const DynInstPtr &inst)
     // Keep an instruction count.
     if (!inst->isMicroop() || inst->isLastMicroop()) {
         thread[tid]->numInst++;
+        if (GEM5_UNLIKELY(TRACING_ON && debug::O3FetchTiming) &&
+            inst->fetchResponseTick != MaxTick &&
+            inst->fetchResponseTick != lastRetiredFetchResponse[tid]) {
+            DPRINTF(O3FetchTiming,
+                    "fetch-a response=%llu ordinal=%llu pc=%#x\n",
+                    inst->fetchResponseTick, thread[tid]->numInst,
+                    inst->pcState().instAddr());
+            lastRetiredFetchResponse[tid] = inst->fetchResponseTick;
+        }
         thread[tid]->threadStats.numInsts++;
         commitStats[tid]->numInstsNotNOP++;
 
@@ -1333,7 +1346,7 @@ CPU::wakeDependents(const DynInstPtr &inst)
 }
 */
 void
-CPU::wakeCPU()
+CPU::wakeCPU(const char *reason)
 {
     if (activityRec.active() || tickEvent.scheduled()) {
         DPRINTF(Activity, "CPU already running.\n");
@@ -1348,8 +1361,14 @@ CPU::wakeCPU()
         --cycles;
         cpuStats.idleCycles += cycles;
         baseStats.numCycles += cycles;
+    } else {
+        cycles = Cycles(0);
     }
 
+    DPRINTF(O3Idle,
+            "idle-wake reason=%s cycle=%llu last=%llu "
+            "credited=%llu edge=%llu\n",
+            reason, curCycle(), lastRunningCycle, cycles, clockEdge());
     schedule(tickEvent, clockEdge());
 }
 
@@ -1359,7 +1378,7 @@ CPU::wakeup(ThreadID tid)
     if (thread[tid]->status() != gem5::ThreadContext::Suspended)
         return;
 
-    wakeCPU();
+    wakeCPU("thread_wakeup");
 
     DPRINTF(Quiesce, "Suspended Processor woken\n");
     threadContexts[tid]->activate();

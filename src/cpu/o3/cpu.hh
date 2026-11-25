@@ -515,8 +515,9 @@ class CPU : public BaseCPU
         activityRec.deactivateStage(idx);
     }
 
-    /** Wakes the CPU, rescheduling the CPU if it's not already active. */
-    void wakeCPU();
+    /** Reschedule an inactive CPU. The reason identifies the triggering
+     * callback for the O3Idle trace. */
+    void wakeCPU(const char *reason);
 
     virtual void wakeup(ThreadID tid) override;
 
@@ -562,6 +563,9 @@ class CPU : public BaseCPU
 
     /** The cycle that the CPU was last running, used for statistics. */
     Cycles lastRunningCycle;
+
+    /** Identify each fetch fill by its first eligible retiring instruction. */
+    Tick lastRetiredFetchResponse[MaxThreads];
 
     /** The cycle that the CPU was last activated by a new thread*/
     Tick lastActivatedCycle;
