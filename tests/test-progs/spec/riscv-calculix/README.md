@@ -55,6 +55,45 @@ make spec06-clean TEST=riscv-calculix
 依赖、资产准备、产物目录及结果状态见[公共说明](../README.md)。
 多配置与 `all` 用法见[公共说明](../README.md#多配置运行)。
 
+### 统计 `beampic` 的 `_gfortran_string_len_trim` 调用次数
+
+从 gem5 仓库根目录运行。将 `ORDINARY_CASE` 指向含普通版 `build/calculix.elf`、SPEC 输入和参考输出的用例目录；与其同级的 `tools/specdiff-runtime` 提供比较工具。
+
+```bash
+case_dir=tests/test-progs/spec/riscv-calculix
+mkdir -p "$case_dir/build/runs"
+batch=$(mktemp -d "$case_dir/build/runs/len-trim-XXXXXX")
+python3 -B "$case_dir/count_len_trim.py" \
+    --ordinary-case "${ORDINARY_CASE:-$case_dir}" --outdir "$batch/count"
+```
+
+脚本从随批次保存的 ELF 提取目标入口、返回指令和可静态解析的直接转移点，在普通 `v5_full` Linux SE 配置中从程序启动到退出统计其退休次数。`main` 用作正对照。验收要求客体正常退出、两份 `specdiff` 通过，并且目标入口计数、返回指令计数之和、直接调用点计数之和三者相等。`_gfortran_string_len_trim_char4` 是单独的函数。
+
+`result.json` 给出总数和校验状态，`callsites.csv` 与 `callers.csv` 分别按调用点和调用者统计并保留零命中项。原始退休 PC 计数在 `m5out/retired-pcs.json`。[地址提取](len_trim_sites.py) · [运行与校验](count_len_trim.py)
+
+### 保护 `getnewline_` 的 1 字节热点
+
+在 `v5_full` 的 `beampic` 输入上，93,148 次热点调用平均节省 47.0011 周期/次，硬件门相对同策略软件门使整程序周期减少 3.2170%。[实验记录](experiments/2026-11-26-len-trim.md) · [计数与周期汇总](experiments/2026-11-26-len-trim-summary.json)
+
+软件门与硬件门都只接管普通 ELF 中 `0xb4108` 对应的调用。构建脚本在 `getnewline.o` 的副本中替换一条重定位，并从交叉工具链的 `libgfortran.a` 提取 B 的真实 `_gfortran_string_len_trim`。链接后重新定位各标记，验证 B 函数体与原实现、逐个检查直接调用点及两版布局。[构建规则](protected/len-trim/Makefile) · [布局校验](protected/len-trim/layout_check.py)
+
+A 将当前字符复制到独立的 8 字节授权区，B 取得该区的只读权限及私有栈的读写权限。两种门均保存并恢复 `s0–s11/fs0–fs11`，只清零 `t0–t6/ft0–ft6`。窗口从 A 的调用指令退休开始，到 A 的续执行指令退休结束，包含复制字符、设置与撤销权限、B 的函数体以及门内的寄存器操作。[调用门](protected/len-trim/gate.S)
+
+从仓库根目录运行。将 `BASELINE` 指向上一节生成的 `count/` 目录，`ORDINARY_CASE` 须包含该基线使用的普通 ELF 和对象文件。
+
+```bash
+case_dir="$PWD/tests/test-progs/spec/riscv-calculix"
+gate="$case_dir/protected/len-trim"
+mkdir -p "$case_dir/build/runs"
+batch=$(mktemp -d "$case_dir/build/runs/len-trim-gate-XXXXXX")
+make -j8 -C "$gate" ORDINARY_CASE="${ORDINARY_CASE:-$case_dir}" OUT="$batch/elfs" &&
+    python3 -B "$gate/run_pair.py" --ordinary-case "${ORDINARY_CASE:-$case_dir}" \
+        --baseline "$BASELINE" --batch "$batch" &&
+    python3 -B "$gate/compare.py" --batch "$batch"
+```
+
+`layout.json` 给出实际计数的地址。每个版本的 `result.json` 保存退出状态、两份 `specdiff` 结果及退休计数。`paired-calls.csv.gz` 按调用序号记录两版起止 tick 和周期；`summary.json` 汇总窗口内、窗口外及整程序周期差额。[配对分析](protected/len-trim/compare.py)
+
 ### DASICS SE 启动回归
 
 在仓库根目录运行以下回归。

@@ -27,7 +27,17 @@ EVENT = re.compile(
 )
 
 
-def windows(trace, sites, inner, period, targets, final_counts):
+def windows(
+    trace,
+    sites,
+    inner,
+    period,
+    targets,
+    final_counts,
+    *,
+    expected_calls=CALLS,
+    outside_pcs=(),
+):
     """Match events in retirement order, including instructions on the same tick."""
     seen = Counter()
     expected = []
@@ -49,6 +59,12 @@ def windows(trace, sites, inner, period, targets, final_counts):
                     f"{trace}:{line_no}: unordered event at {pc:#x}"
                 )
             previous = tick
+            if pc in outside_pcs:
+                if expected:
+                    raise ValueError(
+                        f"{trace}:{line_no}: unexpected PC inside a call window"
+                    )
+                continue
             if not expected:
                 if pc not in sites:
                     raise ValueError(
@@ -70,9 +86,9 @@ def windows(trace, sites, inner, period, targets, final_counts):
                 rows.append((start_pc, seen[start_pc], ticks[0], tick, cycles))
                 ticks = []
                 expected = []
-    if expected or len(rows) != CALLS:
+    if expected or len(rows) != expected_calls:
         raise ValueError(
-            f"{trace}: expected {CALLS} complete windows, got {len(rows)}"
+            f"{trace}: expected {expected_calls} complete windows, got {len(rows)}"
         )
     for name, pc in targets.items():
         if seen[pc] != final_counts[name]:

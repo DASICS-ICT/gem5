@@ -87,15 +87,15 @@ def run_model(profile, *, dasics_init=False):
     parser.add_argument("--stderr", type=Path, required=True)
     parser.add_argument("--stdin", type=Path)
     parser.add_argument("--max-ticks", type=int, default=m5.MaxTick)
+    parser.add_argument(
+        "--retired-pc",
+        action="append",
+        type=_retired_pc,
+        default=[],
+        metavar="NAME=ADDRESS",
+        help="count retirements at this ELF address",
+    )
     if dasics_init:
-        parser.add_argument(
-            "--retired-pc",
-            action="append",
-            type=_retired_pc,
-            default=[],
-            metavar="NAME=ADDRESS",
-            help="count retirements at this ELF address",
-        )
         measurement = parser.add_mutually_exclusive_group()
         measurement.add_argument(
             "--stats-at-retire",
@@ -131,7 +131,7 @@ def run_model(profile, *, dasics_init=False):
         parser.error(f"Input not found: {args.stdin}")
     if args.max_ticks <= 0:
         parser.error("--max-ticks must be positive")
-    requested = args.retired_pc if dasics_init else []
+    requested = args.retired_pc
     pcs = dict(requested)
     if len(pcs) != len(requested):
         parser.error("each --retired-pc name must be unique")

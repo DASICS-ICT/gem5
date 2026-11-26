@@ -1,0 +1,62 @@
+{
+    "status": "PASS",
+    "cpu_ticks_per_cycle": 500,
+    "caller": "getnewline_",
+    "call_pc": "0xb4124",
+    "resume_pc": "0xb4128",
+    "paired_calls": 93148,
+    "unwrapped_calls": 7469,
+    "window": {
+        "sw_cycles": 25097278,
+        "hw_cycles": 20719224,
+        "mean_sw_cycles": 269.4344269334822,
+        "mean_hw_cycles": 222.43337484433374,
+        "saved_cycles": 4378054,
+        "mean_saved_cycles": 47.00105208914845,
+        "saved_percent": 17.444337987569806,
+        "median_saved_cycles": 47,
+        "min_saved_cycles": -43,
+        "max_saved_cycles": 61,
+        "hw_faster": 93147,
+        "equal": 0,
+        "hw_slower": 1,
+        "savings_histogram": {
+            "34": 165,
+            "36": 4,
+            "47": 92807,
+            "50": 1,
+            "55": 1,
+            "61": 169,
+            "-43": 1
+        }
+    },
+    "whole_program": {
+        "sw": {
+            "system.cpu.numCycles": 136641126,
+            "system.cpu.commitStats0.numInsts": 191259978,
+            "system.cpu.commitStats0.numLoadInsts": 44082038,
+            "system.cpu.commitStats0.numStoreInsts": 21998608
+        },
+        "hw": {
+            "system.cpu.numCycles": 132245374,
+            "system.cpu.commitStats0.numInsts": 183714990,
+            "system.cpu.commitStats0.numLoadInsts": 41846486,
+            "system.cpu.commitStats0.numStoreInsts": 19763056
+        },
+        "saved_cycles": 4395752,
+        "saved_percent": 3.2170051057688154,
+        "outside_windows_sw_cycles": 111543848,
+        "outside_windows_hw_cycles": 111526150,
+        "outside_windows_saved_cycles": 17698,
+        "observed_retired_deltas": {
+            "system.cpu.commitStats0.numInsts": 7544988,
+            "system.cpu.commitStats0.numLoadInsts": 2235552,
+            "system.cpu.commitStats0.numStoreInsts": 2235552
+        },
+        "policy_expected_retired_deltas": {
+            "system.cpu.commitStats0.numInsts": 7544988,
+            "system.cpu.commitStats0.numLoadInsts": 2235552,
+            "system.cpu.commitStats0.numStoreInsts": 2235552
+        }
+    }
+}
