@@ -100,14 +100,22 @@ def reg_protection_word(word):
     )
 
 
-def read_layout(path, mode, *, full=False, sentinels=False):
+def read_layout(
+    path,
+    mode,
+    *,
+    full=False,
+    sentinels=False,
+    common_symbols=COMMON,
+    gate_name="run_printf",
+):
     with path.open("rb") as stream:
         elf = ELFFile(stream)
         symbols = {
             sym.name: sym
             for sym in elf.get_section_by_name(".symtab").iter_symbols()
         }
-        pcs = {name: symbols[name]["st_value"] for name in COMMON}
+        pcs = {name: symbols[name]["st_value"] for name in common_symbols}
         if full:
             pcs["gate_clr_f"] = symbols["gate_clr_f"]["st_value"]
         if sentinels:
@@ -122,8 +130,8 @@ def read_layout(path, mode, *, full=False, sentinels=False):
             )
             for label in BLOCKS
         ]
-        gate = pcs["run_printf"]
-        gate_end = gate + symbols["run_printf"]["st_size"]
+        gate = pcs[gate_name]
+        gate_end = gate + symbols[gate_name]["st_size"]
         check.require(
             gate
             <= blocks[0][0]
