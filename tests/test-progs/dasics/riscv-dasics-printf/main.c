@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdio_ext.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/random.h>
 #include <unistd.h>
@@ -12,7 +13,22 @@
 FILE *b_stdout __attribute__((aligned(8), section(".dasics.printf.ptr")));
 uintptr_t b_stack_guard
     __attribute__((aligned(8), section(".dasics.printf.ptr")));
-char b_buffer[256] __attribute__((aligned(8), section(".dasics.printf.data")));
+#if PRINTF_ROI
+enum
+{
+    BufferSize = 32768,
+    WarmupCalls = 128,
+    MaxMeasuredCalls = 4096
+};
+extern int run_printf_batch(unsigned warmup, unsigned measured);
+#else
+enum
+{
+    BufferSize = 256
+};
+#endif
+char b_buffer[BufferSize]
+    __attribute__((aligned(8), section(".dasics.printf.data")));
 const char b_format[8]
     __attribute__((aligned(8), section(".dasics.printf.ro"))) = "n=%d\n";
 uintptr_t b_file_hi;
@@ -27,8 +43,27 @@ emit_buffer(size_t produced)
 }
 
 int
+#if PRINTF_ROI
+main(int argc, char **argv)
+#else
 main(void)
+#endif
 {
+    size_t output_calls = 1;
+    int measured = 0;
+#if PRINTF_ROI
+    if (argc == 2) {
+        char *end;
+        long count = strtol(argv[1], &end, 10);
+        if (end == argv[1] || *end || count < 1 || count > MaxMeasuredCalls) {
+            _exit(15);
+        }
+        measured = (int)count;
+        output_calls = WarmupCalls + measured;
+    } else if (argc != 1) {
+        _exit(15);
+    }
+#endif
     if (getrandom(&b_stack_guard, sizeof(b_stack_guard), 0) !=
         (ssize_t)sizeof(b_stack_guard)) {
         _exit(10);
@@ -56,11 +91,19 @@ main(void)
     b_file_hi = ((uintptr_t)stream + sizeof(FILE) + sizeof(void *) + 7) &
                 ~(uintptr_t)7;
 
-    int result = run_printf(b_format, 7);
+    int result;
+#if PRINTF_ROI
+    if (measured) {
+        result = run_printf_batch(WarmupCalls, measured);
+    } else
+#endif
+    {
+        result = run_printf(b_format, 7);
+    }
     if (result < 0) {
         _exit(result >= -31 ? 32 - result : 64);
     }
-    if (result != 4) {
+    if (result != 4 * (measured ? measured : 1)) {
         _exit(12);
     }
 
@@ -72,9 +115,16 @@ main(void)
         _exit(13);
     }
     size_t produced = cursor - begin;
-    if (produced != (size_t)result) {
+    if (produced != 4 * output_calls) {
         _exit(13);
     }
+#if PRINTF_ROI
+    for (size_t i = 0; i < produced; i += 4) {
+        if (memcmp(b_buffer + i, "n=7\n", 4) != 0) {
+            _exit(16);
+        }
+    }
+#endif
     /* Skip exit-time flushing of the private stream. */
     _exit(emit_buffer(produced) ? 0 : 14);
 }

@@ -27,3 +27,22 @@ python3 -B check.py plain --elf build/plain.elf --outdir "$batch/plain" &&
 A 在调用前初始化 B 的流，返回后检查缓冲区边界和游标，使用 `write` 输出一次，再用 `_exit` 退出。B 的数据权限覆盖专用栈、缓冲区、流对象和这条路径所需的常量、指针及私有运行时状态。验证范围为上述固定调用。[调用门和 B 入口](gate.S) · [客体断言与输出](main.c) · [宿主校验](check.py)
 
 每种模式的 `result.json` 记录输出字节、B 区间、ECALL 数和各标记的退休顺序；`guest.out` 保存原始输出，`m5out/commit.trace.gz` 保存完整退休轨迹。
+
+## 同一 DASICS 调用门的周期对照
+
+在保护 `s3/fs3`、只清零 `t6` 的条件下，两种计时批长的配对结果均为硬件门平均节省 1 周期/次。[2026-11-26 实验记录](experiments/2026-11-26-printf-roi.md)
+
+`roi-sw.elf` 和 `roi-hw.elf` 均启用 RV64 DASICS，在 `v5_full` 配置下使用相同的数据授权、私有栈、`DASICSCALL.JR` 和 B 中的 glibc 代码。软件门保存、清零并恢复 `s3/fs3`，只清零 `t6`；硬件门使用两条 `PROREG`、一条 `CLR` 和一条 `LEAVE`。两版在相同地址跳过各自的填充。短回归检查两段保护代码以外的装载布局、B 的入口零值与返回后的恢复值。
+
+在本用例目录运行：
+
+```bash
+make -j4 roi
+mkdir -p build/runs
+batch=$(mktemp -d build/runs/printf-roi-XXXXXX)
+python3 -B roi_check.py --outdir "$batch/functional" &&
+    python3 -B measure_roi.py --short --outdir "$batch/short" &&
+    python3 -B measure_roi.py --outdir "$batch/measurements"
+```
+
+每个作业先预热 128 次。短计时圈定 4 次调用，正式计时并行运行两种门各 1,024 和 4,096 次。ROI 包含调用循环、寄存器探针、授权与撤权、格式化和返回；A 在 ROI 之后校验并输出 32 KiB 缓冲区中全部实际记录。`measurements/pairs.csv` 给出每种批长的 ROI 总周期、平均周期和相对软件门的节省比例。每个作业的 `m5out/roi-stats.txt` 保存 ROI 统计，脚本将 `numCycles` 与起止 tick 核对，并检查硬件门每次少退休 3 条指令、2 次 load 和 2 次 store。[计时循环](roi_loop.S) · [配对计算](measure_roi.py)

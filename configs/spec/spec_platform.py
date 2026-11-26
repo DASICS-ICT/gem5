@@ -36,6 +36,10 @@ from dasics_platform import (
     configure_cpu_caches,
     configure_memory,
 )
+from riscv_reg_protection_o3_v5_full import (
+    snapshot_roi_statistics,
+    text_statistics_paths,
+)
 
 import m5
 from m5 import debug
@@ -67,6 +71,15 @@ def _retired_pc(value):
     return name, pc
 
 
+def _work_tick(event, expected):
+    if event.getCause() != expected or event.getCode() != 0:
+        raise RuntimeError(
+            f"Expected {expected} with work ID 0 at tick {m5.curTick()}, "
+            f"got {event.getCause()} ({event.getCode()})"
+        )
+    return m5.curTick()
+
+
 def run_model(profile, *, dasics_init=False):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workdir", type=Path, required=True)
@@ -83,12 +96,18 @@ def run_model(profile, *, dasics_init=False):
             metavar="NAME=ADDRESS",
             help="count retirements at this ELF address",
         )
-        parser.add_argument(
+        measurement = parser.add_mutually_exclusive_group()
+        measurement.add_argument(
             "--stats-at-retire",
             nargs=2,
             type=lambda value: int(value, 0),
             metavar=("PC", "COUNT"),
             help="dump cumulative statistics on the specified retirement",
+        )
+        measurement.add_argument(
+            "--work-roi",
+            action="store_true",
+            help="measure one guest workbegin/workend interval",
         )
         parser.add_argument(
             "--trace-tail-fetch",
@@ -117,6 +136,18 @@ def run_model(profile, *, dasics_init=False):
     if len(pcs) != len(requested):
         parser.error("each --retired-pc name must be unique")
     snapshot = args.stats_at_retire if dasics_init else None
+    work_roi = dasics_init and args.work_roi
+    if work_roi:
+        outdir = Path(m5.options.outdir).resolve()
+        roi_stats = outdir / "roi-stats.txt"
+        roi_report = outdir / "roi.json"
+        stats_paths = list(text_statistics_paths(outdir))
+        if not stats_paths:
+            parser.error("--work-roi requires a text statistics output")
+        if any(p.resolve() in (roi_stats, roi_report) for p in stats_paths):
+            parser.error("global statistics must use a separate output path")
+        roi_stats.unlink(missing_ok=True)
+        roi_report.unlink(missing_ok=True)
     cache_ticks = []
     if dasics_init and args.cache_hit_ticks is not None:
         if not snapshot or "ClassicCachePath" not in debug.flags:
@@ -152,6 +183,8 @@ def run_model(profile, *, dasics_init=False):
     system.workload = SEWorkload.init_compatible(str(binary))
     if dasics_init:
         system.workload.dasics_init = True
+    if work_roi:
+        system.exit_on_work_items = True
     configure_cpu_caches(system, profile)
     if cache_ticks:
         system.cpu.icache.trace_hit_ticks = cache_ticks
@@ -185,7 +218,18 @@ def run_model(profile, *, dasics_init=False):
     _print_config(profile)
     deadline = min(m5.MaxTick, m5.curTick() + args.max_ticks)
     event = m5.simulate(deadline - m5.curTick())
-    if snapshot:
+    if work_roi:
+        start = _work_tick(event, "workbegin")
+        m5.stats.reset()
+        end = _work_tick(m5.simulate(deadline - start), "workend")
+        period = system.cpu.clk_domain.clock[0].getValue()
+        cycles, remainder = divmod(end - start, period)
+        if cycles <= 0 or remainder:
+            raise RuntimeError("Work interval must span whole CPU cycles")
+        # Freeze this block before guest output and exit can alter counters.
+        snapshot_roi_statistics(stats_paths[0], roi_stats)
+        event = m5.simulate(deadline - end)
+    elif snapshot:
         pc, count = snapshot
         if (
             event.getCause() != "simpoint starting point found"
@@ -219,6 +263,21 @@ def run_model(profile, *, dasics_init=False):
     )
     if cause != "exiting with last active thread context":
         raise SystemExit(1)
+    if work_roi and code == 0:
+        roi_report.write_text(
+            json.dumps(
+                dict(
+                    status="PASS",
+                    start_tick=start,
+                    end_tick=end,
+                    clock_period_ticks=period,
+                    elapsed_cycles=cycles,
+                    guest_exit_code=code,
+                ),
+                indent=2,
+            )
+            + "\n"
+        )
     if pcs and code == 0:
         counts = {
             name: system.pc_counts.getPcCount(pc) for name, pc in pcs.items()

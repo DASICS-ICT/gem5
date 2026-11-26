@@ -63,25 +63,45 @@ run_printf:
     lla     tp, __dasics_b_tp        /* The fixed formatting path reads B's errno. */
     li      t1, 0
     li      t2, 0
+#if PRINTF_ROI
+    /* Both gates take one jump. The hardware gate skips the spill slots. */
+    .globl roi_save_start, roi_save_end
+roi_save_start:
+    j       .Lenter_policy
+    .word   0
+#if !SOFTWARE_REGS
+    .space  8
+#endif
+.Lenter_policy:
+#if SOFTWARE_REGS
+    sd      s3, CTX_GPR_SAVE(t0)
+    fsd     fs3, CTX_FPR_SAVE(t0)
+#endif
+#else
     lla     t0, probe_b_entry
+#endif
     .globl gate_proreg_g, gate_proreg_f, gate_clr_g
 gate_proreg_g:
-#if PROTECTED
+#if PROTECTED && !SOFTWARE_REGS
     .word   0x0080300b              /* proreg.g.i s3 */
 #else
     li      s3, 0
 #endif
 gate_proreg_f:
-#if PROTECTED
+#if PROTECTED && !SOFTWARE_REGS
     .word   0x0080400b              /* proreg.f.i fs3 */
 #else
     fmv.d.x fs3, zero
 #endif
 gate_clr_g:
-#if PROTECTED
+#if PROTECTED && !SOFTWARE_REGS
     .word   0x0400200b              /* clr.g.i t6 */
 #else
     li      t6, 0
+#endif
+#if PRINTF_ROI
+roi_save_end:
+    lla     t0, probe_b_entry
 #endif
     .globl gate_call, gate_return, gate_leave, a_result
 gate_call:
@@ -97,12 +117,30 @@ gate_return:
 #else
     lla     t0, __dasics_context_base
 #endif
+#if PRINTF_ROI
+    .globl roi_restore_start, roi_restore_end
+roi_restore_start:
+    j       .Lreturn_policy
+    .word   0
+#if !SOFTWARE_REGS
+    .space  4
+#endif
+.Lreturn_policy:
+#if SOFTWARE_REGS
+    ld      s3, CTX_GPR_SAVE(t0)
+#endif
+#endif
 gate_leave:
-#if PROTECTED
+#if PROTECTED && !SOFTWARE_REGS
     .word   0x0000500b              /* LEAVE consumes both saved slots. */
 #else
+#if !PRINTF_ROI
     ld      s3, CTX_GPR_SAVE(t0)
+#endif
     fld     fs3, CTX_FPR_SAVE(t0)
+#endif
+#if PRINTF_ROI
+roi_restore_end:
 #endif
 a_result:
     li      t1, 0x531

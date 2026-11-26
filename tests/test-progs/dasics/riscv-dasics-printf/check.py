@@ -46,7 +46,7 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def inspect_elf(elf, protected):
+def inspect_elf(elf, protected, *, software_gate=False):
     prefix = os.environ.get("CROSS_COMPILE", "riscv64-linux-gnu-")
     table = subprocess.check_output(
         [prefix + "nm", "-n", "--defined-only", elf], text=True
@@ -63,17 +63,12 @@ def inspect_elf(elf, protected):
     for name in CALL_PATH[1:6]:
         require(start <= markers[name] < end, f"{name} is outside B")
     if protected:
-        markers.update({name: symbols[name] for name in GATE_OPS})
+        if not software_gate:
+            markers.update({name: symbols[name] for name in GATE_OPS})
         lo, hi = (
             symbols[f"__dasics_trusted_{limit}"] for limit in ("start", "end")
         )
-        for name in (
-            "gate_call",
-            "gate_return",
-            "a_result",
-            "emit_buffer",
-            *GATE_OPS,
-        ):
+        for name in markers.keys() - set(CALL_PATH[1:6]):
             require(lo <= markers[name] < hi, f"{name} is outside A")
 
     # The trace provides PCs; use the linked ELF to identify the actual opcodes.
@@ -86,12 +81,13 @@ def inspect_elf(elf, protected):
             r"^\s*([0-9a-f]+):\s+([0-9a-f]{4,8})\s", disassembly, re.M
         )
     }
-    if protected:
+    if protected and not software_gate:
         for name, word in GATE_OPS.items():
             require(
                 words.get(markers[name]) == word,
                 f"Unexpected opcode at {name}",
             )
+    if protected:
         call = markers["gate_call"]
         require(words[call] == 0x0002908B, "Expected DASICSCALL.JR ra,t0,0")
         require(markers["gate_return"] == call + 4, "Unexpected return gate")
@@ -153,7 +149,7 @@ def verify_trace(path, markers, start, end, words, protected):
             counts[pc] == 1, f"{name} at {pc:#x} retired {counts[pc]} times"
         )
     order = list(CALL_PATH)
-    if protected:
+    if "gate_leave" in markers:
         before = sorted(
             (n for n in GATE_OPS if n != "gate_leave"), key=markers.get
         )
@@ -177,7 +173,7 @@ def run(args):
     directory.mkdir(parents=True, exist_ok=True)
     m5out = directory / "m5out"
     m5out.mkdir(exist_ok=True)
-    protected = args.mode == "protected"
+    protected = args.mode != "plain"
     guest_out, guest_err = (
         directory / name for name in ("guest.out", "guest.err")
     )
@@ -205,7 +201,9 @@ def run(args):
     ]
     result = {"mode": args.mode, "elf": str(elf), "status": "FAIL"}
     try:
-        markers, start, end, words = inspect_elf(elf, protected)
+        markers, start, end, words = inspect_elf(
+            elf, protected, software_gate=args.mode == "dasics-sw"
+        )
         log = directory / "gem5.log"
         with log.open("w") as stream:
             completed = subprocess.run(
@@ -258,7 +256,7 @@ def run(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("plain", "protected"))
+    parser.add_argument("mode", choices=("plain", "protected", "dasics-sw"))
     parser.add_argument("--elf", type=Path, required=True)
     parser.add_argument("--outdir", type=Path, required=True)
     try:
