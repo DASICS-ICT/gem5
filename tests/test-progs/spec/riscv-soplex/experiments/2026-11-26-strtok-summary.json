@@ -1,0 +1,75 @@
+{
+    "status": "PASS",
+    "cpu_ticks_per_cycle": 500,
+    "window": {
+        "calls": 9596,
+        "sw_cycles": 4085911,
+        "hw_cycles": 3614075,
+        "mean_sw_cycles": 425.7931429762401,
+        "mean_hw_cycles": 376.6230721133806,
+        "saved_cycles": 471836,
+        "mean_saved_cycles": 49.170070862859525,
+        "saved_percent": 11.547877572467927
+    },
+    "by_category": {
+        "first_token": {
+            "calls": 2174,
+            "sw_cycles": 862870,
+            "hw_cycles": 760950,
+            "mean_sw_cycles": 396.90432382704694,
+            "mean_hw_cycles": 350.0229990800368,
+            "saved_cycles": 101920,
+            "mean_saved_cycles": 46.88132474701012,
+            "saved_percent": 11.811744526985525
+        },
+        "next_token": {
+            "calls": 6524,
+            "sw_cycles": 2699344,
+            "hw_cycles": 2375013,
+            "mean_sw_cycles": 413.75597792765177,
+            "mean_hw_cycles": 364.042458614347,
+            "saved_cycles": 324331,
+            "mean_saved_cycles": 49.71351931330472,
+            "saved_percent": 12.015178502628787
+        },
+        "next_null": {
+            "calls": 898,
+            "sw_cycles": 523697,
+            "hw_cycles": 478112,
+            "mean_sw_cycles": 583.1815144766147,
+            "mean_hw_cycles": 532.4187082405346,
+            "saved_cycles": 45585,
+            "mean_saved_cycles": 50.76280623608018,
+            "saved_percent": 8.704460785530564
+        }
+    },
+    "whole_program": {
+        "sw": {
+            "system.cpu.numCycles": 37729433,
+            "system.cpu.commitStats0.numInsts": 56239485,
+            "system.cpu.commitStats0.numLoadInsts": 11656865,
+            "system.cpu.commitStats0.numStoreInsts": 5453453
+        },
+        "hw": {
+            "system.cpu.numCycles": 37279843,
+            "system.cpu.commitStats0.numInsts": 55462209,
+            "system.cpu.commitStats0.numLoadInsts": 11426561,
+            "system.cpu.commitStats0.numStoreInsts": 5223149
+        },
+        "saved_cycles": 449590,
+        "saved_percent": 1.1916161051240817,
+        "outside_windows_sw_cycles": 33643522,
+        "outside_windows_hw_cycles": 33665768,
+        "outside_windows_saved_cycles": -22246,
+        "observed_retired_deltas": {
+            "system.cpu.commitStats0.numInsts": 777276,
+            "system.cpu.commitStats0.numLoadInsts": 230304,
+            "system.cpu.commitStats0.numStoreInsts": 230304
+        },
+        "expected_retired_deltas": {
+            "system.cpu.commitStats0.numInsts": 777276,
+            "system.cpu.commitStats0.numLoadInsts": 230304,
+            "system.cpu.commitStats0.numStoreInsts": 230304
+        }
+    }
+}
