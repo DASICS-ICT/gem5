@@ -1,0 +1,86 @@
+{
+    "status": "PASS",
+    "timesteps": 1,
+    "cpu_ticks_per_cycle": 500,
+    "window": {
+        "calls": 139392,
+        "sw_cycles": 47925646,
+        "hw_cycles": 41536116,
+        "mean_sw_cycles": 343.81920052800734,
+        "mean_hw_cycles": 297.98063016528926,
+        "saved_cycles": 6389530,
+        "mean_saved_cycles": 45.83857036271809,
+        "saved_percent": 13.3321729247009
+    },
+    "by_site": {
+        "flux": {
+            "calls": 17424,
+            "sw_cycles": 6339750,
+            "hw_cycles": 5539344,
+            "mean_sw_cycles": 363.8515840220386,
+            "mean_hw_cycles": 317.91460055096417,
+            "saved_cycles": 800406,
+            "mean_saved_cycles": 45.93698347107438,
+            "saved_percent": 12.62519815450136
+        },
+        "jacobian_first": {
+            "calls": 52272,
+            "sw_cycles": 17321593,
+            "hw_cycles": 14920645,
+            "mean_sw_cycles": 331.3742156412611,
+            "mean_hw_cycles": 285.44239745944293,
+            "saved_cycles": 2400948,
+            "mean_saved_cycles": 45.93181818181818,
+            "saved_percent": 13.861011513202047
+        },
+        "jacobian_second": {
+            "calls": 52272,
+            "sw_cycles": 18042759,
+            "hw_cycles": 15656195,
+            "mean_sw_cycles": 345.1706267217631,
+            "mean_hw_cycles": 299.51398454239364,
+            "saved_cycles": 2386564,
+            "mean_saved_cycles": 45.65664217936945,
+            "saved_percent": 13.227267514907227
+        },
+        "shell": {
+            "calls": 17424,
+            "sw_cycles": 6221544,
+            "hw_cycles": 5419932,
+            "mean_sw_cycles": 357.06749311294766,
+            "mean_hw_cycles": 311.0612947658402,
+            "saved_cycles": 801612,
+            "mean_saved_cycles": 46.006198347107436,
+            "saved_percent": 12.884454405530203
+        }
+    },
+    "whole_program": {
+        "sw": {
+            "system.cpu.numCycles": 263533903,
+            "system.cpu.commitStats0.numInsts": 270592618,
+            "system.cpu.commitStats0.numLoadInsts": 72107801,
+            "system.cpu.commitStats0.numStoreInsts": 19585278
+        },
+        "hw": {
+            "system.cpu.numCycles": 257058513,
+            "system.cpu.commitStats0.numInsts": 259301866,
+            "system.cpu.commitStats0.numLoadInsts": 68762393,
+            "system.cpu.commitStats0.numStoreInsts": 16239870
+        },
+        "saved_cycles": 6475390,
+        "saved_percent": 2.457137364978805,
+        "outside_windows_sw_cycles": 215608257,
+        "outside_windows_hw_cycles": 215522397,
+        "outside_windows_saved_cycles": 85860,
+        "observed_retired_deltas": {
+            "system.cpu.commitStats0.numInsts": 11290752,
+            "system.cpu.commitStats0.numLoadInsts": 3345408,
+            "system.cpu.commitStats0.numStoreInsts": 3345408
+        },
+        "expected_retired_deltas": {
+            "system.cpu.commitStats0.numInsts": 11290752,
+            "system.cpu.commitStats0.numLoadInsts": 3345408,
+            "system.cpu.commitStats0.numStoreInsts": 3345408
+        }
+    }
+}
