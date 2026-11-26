@@ -77,8 +77,13 @@ def events(m5out, targets):
             yield name, tick, count
     if seen != json.loads((m5out / "retired-pcs.json").read_text()):
         raise ValueError(f"{trace}: probe totals disagree with trace")
-    if seen["main"] != 1 or seen["b_pow_error"] != 0:
-        raise ValueError(f"{trace}: unexpected main or B math error count")
+    error_count = sum(
+        count
+        for name, count in seen.items()
+        if name in ("b_pow_error", "canary_fail") or name.startswith("error_")
+    )
+    if seen["main"] != 1 or error_count:
+        raise ValueError(f"{trace}: unexpected main or pow error count")
     if any(
         seen[f"call_{site}"] != calls for site, calls in SITE_COUNTS.items()
     ):

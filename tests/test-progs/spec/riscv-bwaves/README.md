@@ -84,3 +84,15 @@ python3 -B "$case_dir/protected/run_pair.py" --ordinary-case "$ordinary" --batch
 两版单步运行的 `bwaves.out`、`bwaves2.out`、`bwaves3.out` 按上表的容差与普通单步参考比较。计时窗口从调用指令退休延伸到调用者返回后的第一条指令退休。按调用点与出现序号配对，`paired-calls.csv.gz` 保存逐次窗口，`summary.json` 汇总各调用点、全部窗口与单步程序的周期差。[配对统计](protected/compare.py)
 
 完整输入应有 3,484,800 次 `pow` 入口执行记录；单步应有 139,392 对窗口，其中 `shell_`、`flux_` 各 17,424 对，`jacobian_` 的两个调用点各 52,272 对。
+
+### 增加直接调用的普通版对照
+
+在同一终端中执行，`batch` 指向上节成功完成的双门批次。
+
+```bash
+native_batch=$(mktemp -d "$case_dir/build/runs/pow-native-XXXXXX")
+python3 -B "$case_dir/protected/run_native.py" \
+    --ordinary-case "$ordinary" --paired-batch "$batch" --batch "$native_batch"
+```
+
+普通版使用相同 gem5 和 `v5_full` 模型，直接执行普通 ELF。脚本复用原批次的单步输入与三份数值参考，按 Fortran 调用点及点内序号匹配三份运行记录。`three-way-calls.csv.gz` 保存各次调用的周期，`summary.json` 给出相对普通版的端到端开销。该差额包含调用门、域切换和重链接布局的影响。[三组配对](protected/native_compare.py)

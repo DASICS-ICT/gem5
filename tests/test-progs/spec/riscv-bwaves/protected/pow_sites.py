@@ -7,13 +7,19 @@ from pathlib import Path
 from elftools.elf.elffile import ELFFile
 
 SPEC = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(SPEC / "riscv-soplex/protected"))
-from perf_sites import (
-    check_policy,
-    instructions,
-    read_layout,
-    transfer,
-)
+# The shared ELF helpers load other benchmark directories. Keep their
+# same-named runners from shadowing BWaves modules after this import.
+_search_path = sys.path.copy()
+try:
+    sys.path.insert(0, str(SPEC / "riscv-soplex/protected"))
+    from perf_sites import (
+        check_policy,
+        instructions,
+        read_layout,
+        transfer,
+    )
+finally:
+    sys.path[:] = _search_path
 
 CALLERS = {
     "flux_": ("flux",),

@@ -82,5 +82,194 @@
             "system.cpu.commitStats0.numLoadInsts": 3345408,
             "system.cpu.commitStats0.numStoreInsts": 3345408
         }
+    },
+    "native_baseline": {
+        "status": "PASS",
+        "timesteps": 1,
+        "cpu_ticks_per_cycle": 500,
+        "by_site": {
+            "flux": {
+                "cycles": {
+                    "native": 1628090,
+                    "sw": 6339750,
+                    "hw": 5539344
+                },
+                "extra_cycles": {
+                    "sw": 4711660,
+                    "hw": 3911254
+                },
+                "overhead_percent": {
+                    "sw": 289.39800625272557,
+                    "hw": 240.23573635364139
+                },
+                "saved_fraction_of_sw_overhead_percent": 16.987770764443955,
+                "calls": 17424,
+                "mean_cycles": {
+                    "native": 93.43950872359963,
+                    "sw": 363.8515840220386,
+                    "hw": 317.91460055096417
+                },
+                "mean_extra_cycles": {
+                    "sw": 270.41207529843894,
+                    "hw": 224.47509182736457
+                }
+            },
+            "jacobian_first": {
+                "cycles": {
+                    "native": 3699391,
+                    "sw": 17321593,
+                    "hw": 14920645
+                },
+                "extra_cycles": {
+                    "sw": 13622202,
+                    "hw": 11221254
+                },
+                "overhead_percent": {
+                    "sw": 368.22822999785643,
+                    "hw": 303.3270611297914
+                },
+                "saved_fraction_of_sw_overhead_percent": 17.625256181049142,
+                "calls": 52272,
+                "mean_cycles": {
+                    "native": 70.77194291398837,
+                    "sw": 331.3742156412611,
+                    "hw": 285.44239745944293
+                },
+                "mean_extra_cycles": {
+                    "sw": 260.60227272727275,
+                    "hw": 214.67045454545453
+                }
+            },
+            "jacobian_second": {
+                "cycles": {
+                    "native": 3554286,
+                    "sw": 18042759,
+                    "hw": 15656195
+                },
+                "extra_cycles": {
+                    "sw": 14488473,
+                    "hw": 12101909
+                },
+                "overhead_percent": {
+                    "sw": 407.6338538879539,
+                    "hw": 340.4877660379609
+                },
+                "saved_fraction_of_sw_overhead_percent": 16.472156865668314,
+                "calls": 52272,
+                "mean_cycles": {
+                    "native": 67.99598255280074,
+                    "sw": 345.1706267217631,
+                    "hw": 299.51398454239364
+                },
+                "mean_extra_cycles": {
+                    "sw": 277.17464416896235,
+                    "hw": 231.5180019895929
+                }
+            },
+            "shell": {
+                "cycles": {
+                    "native": 1690990,
+                    "sw": 6221544,
+                    "hw": 5419932
+                },
+                "extra_cycles": {
+                    "sw": 4530554,
+                    "hw": 3728942
+                },
+                "overhead_percent": {
+                    "sw": 267.92316926770707,
+                    "hw": 220.51827627602765
+                },
+                "saved_fraction_of_sw_overhead_percent": 17.693465302477357,
+                "calls": 17424,
+                "mean_cycles": {
+                    "native": 97.0494719926538,
+                    "sw": 357.06749311294766,
+                    "hw": 311.0612947658402
+                },
+                "mean_extra_cycles": {
+                    "sw": 260.01802112029384,
+                    "hw": 214.0118227731864
+                }
+            }
+        },
+        "window": {
+            "cycles": {
+                "native": 10572757,
+                "sw": 47925646,
+                "hw": 41536116
+            },
+            "extra_cycles": {
+                "sw": 37352889,
+                "hw": 30963359
+            },
+            "overhead_percent": {
+                "sw": 353.2937435334984,
+                "hw": 292.8598377887622
+            },
+            "saved_fraction_of_sw_overhead_percent": 17.10585224077313,
+            "calls": 139392,
+            "mean_cycles": {
+                "native": 75.8490946395776,
+                "sw": 343.81920052800734,
+                "hw": 297.98063016528926
+            },
+            "mean_extra_cycles": {
+                "sw": 267.97010588842977,
+                "hw": 222.13153552571166
+            }
+        },
+        "whole_program": {
+            "cycles": {
+                "native": 223956892,
+                "sw": 263533903,
+                "hw": 257058513
+            },
+            "extra_cycles": {
+                "sw": 39577011,
+                "hw": 33101621
+            },
+            "overhead_percent": {
+                "sw": 17.671709339491994,
+                "hw": 14.780353801302082
+            },
+            "saved_fraction_of_sw_overhead_percent": 16.36149329215387
+        },
+        "outside_windows": {
+            "cycles": {
+                "native": 213384135,
+                "sw": 215608257,
+                "hw": 215522397
+            },
+            "extra_cycles": {
+                "sw": 2224122,
+                "hw": 2138262
+            },
+            "overhead_percent": {
+                "sw": 1.0423089795312102,
+                "hw": 1.0020716863510026
+            },
+            "saved_fraction_of_sw_overhead_percent": 3.860399744258633
+        },
+        "stats": {
+            "native": {
+                "system.cpu.numCycles": 223956892,
+                "system.cpu.commitStats0.numInsts": 250524248,
+                "system.cpu.commitStats0.numLoadInsts": 68065564,
+                "system.cpu.commitStats0.numStoreInsts": 15544553
+            },
+            "sw": {
+                "system.cpu.numCycles": 263533903,
+                "system.cpu.commitStats0.numInsts": 270592618,
+                "system.cpu.commitStats0.numLoadInsts": 72107801,
+                "system.cpu.commitStats0.numStoreInsts": 19585278
+            },
+            "hw": {
+                "system.cpu.numCycles": 257058513,
+                "system.cpu.commitStats0.numInsts": 259301866,
+                "system.cpu.commitStats0.numLoadInsts": 68762393,
+                "system.cpu.commitStats0.numStoreInsts": 16239870
+            }
+        }
     }
 }

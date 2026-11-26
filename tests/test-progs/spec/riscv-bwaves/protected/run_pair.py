@@ -19,6 +19,7 @@ from pow_sites import discover_pair
 
 CASE = Path(__file__).resolve().parents[1]
 REPO = CASE.parents[3]
+SIMULATOR = REPO / "build/RISCV_DASICS/gem5.opt"
 sys.path.insert(0, str(CASE.parent))
 import run as spec
 
@@ -62,26 +63,29 @@ def compare_outputs(current, reference, plan, runtime):
 
 
 def run_one(
-    variant, elf, markers, sites, batch, reference, ref_counts, plan, runtime
+    variant, elf, directory, targets, expected, reference, plan, runtime
 ):
-    directory = batch / variant
     current = directory / "work/01"
     current.mkdir(parents=True)
     m5out = directory / "m5out"
     shutil.copyfile(reference / "bwaves.in", current / "bwaves.in")
     (invocation,) = plan["runs"]
-    targets = probe_targets(markers, sites, variant)
+    config = (
+        "riscv_se_v5_full.py"
+        if variant == "native"
+        else "riscv_se_dasics_v5_full.py"
+    )
     cmd = [
         "timeout",
         "--signal=INT",
         "--kill-after=15s",
         "6h",
-        str(REPO / "build/RISCV_DASICS/gem5.opt"),
+        str(SIMULATOR),
         "--listener-mode=off",
         f"--outdir={m5out}",
         "--debug-flags=PcCountTracker",
         "--debug-file=retire.log",
-        str(REPO / "configs/spec/riscv_se_dasics_v5_full.py"),
+        str(REPO / "configs/spec" / config),
         "--workdir",
         str(current),
         "--stdout",
@@ -115,19 +119,14 @@ def run_one(
             )
         counts = json.loads((m5out / "retired-pcs.json").read_text())
         result["retired_pcs"] = counts
-        expected = dict.fromkeys(targets, ref_counts["pow"])
-        expected.update(main=1, b_pow_error=0)
-        for site in sites.values():
-            expected[f"call_{site}"] = expected[f"resume_{site}"] = ref_counts[
-                site
-            ]
         if counts != expected:
             raise ValueError(
                 f"{variant}: expected {expected}, observed {counts}"
             )
         result["status"] = "PASS"
+        calls = sum(counts[k] for k in counts if k.startswith("call_"))
         print(
-            f"PASS {variant}: {counts['b_pow']:,} pow calls, three numerical outputs",
+            f"PASS {variant}: {calls:,} pow calls, three numerical outputs",
             flush=True,
         )
     except (OSError, ValueError, KeyError) as exc:
@@ -161,21 +160,28 @@ def run(ordinary, batch):
     elfs = {mode: batch / "elfs" / f"bwaves-{mode}.elf" for mode in modes}
     markers, sites = discover_pair(elfs["sw"], elfs["hw"])
     with ThreadPoolExecutor(max_workers=2) as pool:
-        jobs = [
-            pool.submit(
-                run_one,
-                mode,
-                elfs[mode],
-                markers,
-                sites,
-                batch,
-                reference,
-                ref_counts,
-                plan,
-                runtime,
+        jobs = []
+        for mode in modes:
+            targets = probe_targets(markers, sites, mode)
+            expected = dict.fromkeys(targets, ref_counts["pow"])
+            expected.update(main=1, b_pow_error=0)
+            for site in sites.values():
+                expected[f"call_{site}"] = expected[f"resume_{site}"] = (
+                    ref_counts[site]
+                )
+            jobs.append(
+                pool.submit(
+                    run_one,
+                    mode,
+                    elfs[mode],
+                    batch / mode,
+                    targets,
+                    expected,
+                    reference,
+                    plan,
+                    runtime,
+                )
             )
-            for mode in modes
-        ]
         for job in jobs:
             job.result()
     report = compare(batch, markers, sites)
