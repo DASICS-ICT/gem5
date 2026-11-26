@@ -4,6 +4,7 @@
 import argparse
 import gzip
 import json
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import NamedTuple
@@ -42,6 +43,47 @@ POLICY = {
     ),
 }
 
+# Architectural indices in ABI order. The integer and FP saved banks have the
+# same indices; integer temporaries jump from x7 to x28, while ft0-ft6 span f0-f6.
+SAVED = (8, 9, *range(18, 28))
+INT_TEMP = (5, 6, 7, *range(28, 32))
+FP_TEMP = tuple(range(7))
+PROBE_STAGES = ("seed", "entry", "clobber", "restore_check")
+
+
+def full_software_words():
+    stores, loads = [], []
+    # ra holds the frame base for sd/fsd and ld/fld.
+    base = (1 << 15) | (3 << 12)
+    for i, reg in enumerate(SAVED):
+        for slot, store_opcode, load_opcode in (
+            (40, 0x23, 0x03),
+            (136, 0x27, 0x07),
+        ):
+            offset = slot + 8 * i
+            stores.append(
+                ((offset >> 5) << 25)
+                | (reg << 20)
+                | base
+                | ((offset & 31) << 7)
+                | store_opcode
+            )
+            loads.append((offset << 20) | base | (reg << 7) | load_opcode)
+    zeros = [0x13 | reg << 7 for reg in SAVED]
+    zeros += [0xF2000053 | reg << 7 for reg in SAVED]  # fmv.d.x fd,x0
+    zeros += [0x13 | reg << 7 for reg in INT_TEMP]
+    zeros += [0xF2000053 | reg << 7 for reg in FP_TEMP]
+    return stores + zeros, loads
+
+
+FULL_POLICY = {
+    "sw": full_software_words(),
+    "hw": (
+        tuple(check.FULL_GATE_OPS.values())[:-1],
+        (check.FULL_GATE_OPS["gate_leave"],),
+    ),
+}
+
 
 class Layout(NamedTuple):
     addresses: dict
@@ -58,7 +100,7 @@ def reg_protection_word(word):
     )
 
 
-def read_layout(path, mode):
+def read_layout(path, mode, *, full=False, sentinels=False):
     with path.open("rb") as stream:
         elf = ELFFile(stream)
         symbols = {
@@ -66,6 +108,13 @@ def read_layout(path, mode):
             for sym in elf.get_section_by_name(".symtab").iter_symbols()
         }
         pcs = {name: symbols[name]["st_value"] for name in COMMON}
+        if full:
+            pcs["gate_clr_f"] = symbols["gate_clr_f"]["st_value"]
+        if sentinels:
+            for stage in PROBE_STAGES:
+                for suffix in ("start", "end"):
+                    name = f"full_{stage}_{suffix}"
+                    pcs[name] = symbols[name]["st_value"]
         blocks = [
             (
                 symbols[f"{label}_start"]["st_value"],
@@ -115,8 +164,9 @@ def read_layout(path, mode):
                     for word in words.values()
                     if reg_protection_word(word)
                 ]
+                policy = FULL_POLICY if full else POLICY
                 expected = (
-                    [*POLICY["hw"][0], *POLICY["hw"][1]]
+                    [*policy["hw"][0], *policy["hw"][1]]
                     if mode == "hw"
                     else []
                 )
@@ -130,16 +180,53 @@ def read_layout(path, mode):
     return Layout(pcs, blocks, sections, words)
 
 
-def check_policy_trace(directory, blocks, words, mode):
+def sentinel_pcs(addresses, words):
+    """Verify distinct register coverage in each functional probe region."""
+    all_pcs = set()
+    for stage in PROBE_STAGES:
+        expected = [(bank, reg) for bank in ("x", "f") for reg in SAVED]
+        if stage in ("seed", "entry"):
+            expected.extend(("x", reg) for reg in INT_TEMP)
+            expected.extend(("f", reg) for reg in FP_TEMP)
+        reading = stage in ("entry", "restore_check")
+        observed = []
+        lo, hi = (addresses[f"full_{stage}_{s}"] for s in ("start", "end"))
+        for pc in range(lo, hi, 4):
+            all_pcs.add(pc)
+            word = words[pc]
+            rd, rs1 = (word >> 7) & 31, (word >> 15) & 31
+            if reading:
+                if word & 0x707F == 0x1063 and ("x", rs1) in expected:  # bne
+                    observed.append(("x", rs1))
+                elif word & 0xFFF0707F == 0xE2000053:  # fmv.x.d
+                    observed.append(("f", rs1))
+            elif (
+                word & 0xFF07F == 0x13 and word >> 20 and ("x", rd) in expected
+            ):
+                observed.append(("x", rd))  # addi rd,x0,nonzero
+            elif word & 0xFFF0707F == 0xF2000053 and rs1 != 0:  # fmv.d.x
+                observed.append(("f", rd))
+        check.require(
+            Counter(observed) == Counter(expected),
+            f"Wrong register coverage in {stage}",
+        )
+    return all_pcs
+
+
+def check_policy_trace(
+    directory, blocks, words, mode, *, full=False, probe_pcs=()
+):
     actual = [[], []]
     jumps = [[], []]
     trace = directory / "m5out/commit.trace.gz"
+    unseen = set(probe_pcs)
     with gzip.open(trace, "rt") as stream:
         for line in stream:
             match = check.RETIRE.search(line)
             if not match:
                 continue
             pc = int(match[1], 16)
+            unseen.discard(pc)
             for i, (lo, hi) in enumerate(blocks):
                 if lo <= pc < hi:
                     word = words[pc]
@@ -147,7 +234,12 @@ def check_policy_trace(directory, blocks, words, mode):
                         jumps[i].append(pc)
                     else:
                         actual[i].append(word)
-    for i, expected in enumerate(POLICY[mode]):
+    policy = FULL_POLICY if full else POLICY
+    check.require(
+        not unseen,
+        f"{mode}: skipped {len(unseen)} functional probe instructions",
+    )
+    for i, expected in enumerate(policy[mode]):
         check.require(
             actual[i] == list(expected),
             f"{mode}: unexpected retired {BLOCKS[i]} policy {actual[i]}",
@@ -159,9 +251,15 @@ def check_policy_trace(directory, blocks, words, mode):
     return jumps
 
 
-def verify(directory):
-    elfs = {mode: HERE / "build" / f"roi-{mode}.elf" for mode in ("sw", "hw")}
-    layouts = {mode: read_layout(path, mode) for mode, path in elfs.items()}
+def check_pair(directory, prefix, full):
+    elfs = {
+        mode: HERE / "build" / f"{prefix}-{mode}.elf" for mode in ("sw", "hw")
+    }
+    sentinels = prefix == "full-check"
+    layouts = {
+        mode: read_layout(path, mode, full=full, sentinels=sentinels)
+        for mode, path in elfs.items()
+    }
     sw, hw = layouts["sw"], layouts["hw"]
     check.require(
         sw.addresses == hw.addresses and sw.blocks == hw.blocks,
@@ -183,10 +281,16 @@ def verify(directory):
             elf=elfs[mode],
             outdir=directory / mode,
         )
-        check.run(args)
+        words = check.run(args, full=full)
         layout = layouts[mode]
+        probe_pcs = sentinel_pcs(layout.addresses, words) if sentinels else ()
         return check_policy_trace(
-            args.outdir, layout.blocks, layout.gate_words, mode
+            args.outdir,
+            layout.blocks,
+            layout.gate_words,
+            mode,
+            full=full,
+            probe_pcs=probe_pcs,
         )
 
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -194,22 +298,59 @@ def verify(directory):
     check.require(
         sw_jumps == hw_jumps, "Modes retired layout jumps at different PCs"
     )
-    return {
+    evidence = {
         "status": "PASS",
         "common_pcs": {name: hex(pc) for name, pc in sw.addresses.items()},
         "policy_regions": [[hex(lo), hex(hi)] for lo, hi in sw.blocks],
         "save_restore_jumps": [hex(item[0]) for item in sw_jumps],
         "calls_per_gate": 1,
     }
+    # Compare the actual words, including the layout jump and skipped padding,
+    # when the register-sentinel and measured guests have different text sizes.
+    policies = {
+        mode: tuple(
+            tuple(layout.gate_words[pc] for pc in range(lo, hi, 4))
+            for lo, hi in layout.blocks
+        )
+        for mode, layout in layouts.items()
+    }
+    return evidence, policies
+
+
+def verify(directory, *, full=False):
+    if not full:
+        result, _ = check_pair(directory, "roi", False)
+        return result
+    sentinels, checked_policy = check_pair(
+        directory / "sentinels", "full-check", True
+    )
+    timed, timed_policy = check_pair(directory / "timed", "full", True)
+    check.require(
+        checked_policy == timed_policy,
+        "Sentinel and timed guests use different register policies",
+    )
+    return {
+        "status": "PASS",
+        "entry_registers_checked": 38,
+        "restored_registers_checked": 24,
+        "sentinels": sentinels,
+        "timed": timed,
+    }
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--outdir", type=Path, required=True)
-    directory = parser.parse_args().outdir.resolve()
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Check all 24 saved registers and 14 temporaries",
+    )
+    args = parser.parse_args()
+    directory = args.outdir.resolve()
     directory.mkdir(parents=True, exist_ok=True)
     try:
-        result = verify(directory)
+        result = verify(directory, full=args.full)
     except Exception as error:
         (directory / "checks.json").write_text(
             json.dumps({"status": "FAIL", "error": str(error)}, indent=2)

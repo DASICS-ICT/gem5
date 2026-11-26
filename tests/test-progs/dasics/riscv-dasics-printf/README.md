@@ -46,3 +46,20 @@ python3 -B roi_check.py --outdir "$batch/functional" &&
 ```
 
 每个作业先预热 128 次。短计时圈定 4 次调用，正式计时并行运行两种门各 1,024 和 4,096 次。ROI 包含调用循环、寄存器探针、授权与撤权、格式化和返回；A 在 ROI 之后校验并输出 32 KiB 缓冲区中全部实际记录。`measurements/pairs.csv` 给出每种批长的 ROI 总周期、平均周期和相对软件门的节省比例。每个作业的 `m5out/roi-stats.txt` 保存 ROI 统计，脚本将 `numCycles` 与起止 tick 核对，并检查硬件门每次少退休 3 条指令、2 次 load 和 2 次 store。[计时循环](roi_loop.S) · [配对计算](measure_roi.py)
+
+### 全组保护
+
+在本例的两种计时批长下，硬件门相对软件门平均节省约 39 周期/次（约 5.76%）。[全组实验结果与计数核对](experiments/2026-11-26-printf-roi.md#全组寄存器保护)
+
+全组对照保存并恢复 `s0–s11`、`fs0–fs11`，只清零 `t0–t6`、`ft0–ft6`。两种门均用 `ra` 携带 B 的入口，通过 `DASICSCALL.JR ra,ra,0` 传入 `a0/a1`。功能用例给 38 个寄存器写入非零值，检查 B 的入口视图，并在 B 改写全部 24 个被保存的寄存器后，由 A 逐个检查恢复值。计时用例沿用原有的 glibc 函数体和 B 返回前的 `s3/fs3` 改写探针。
+
+```bash
+make -j4 full
+mkdir -p build/runs
+batch=$(mktemp -d build/runs/printf-full-roi-XXXXXX)
+python3 -B roi_check.py --full --outdir "$batch/functional" &&
+    python3 -B measure_roi.py --full --short --outdir "$batch/short" &&
+    python3 -B measure_roi.py --full --outdir "$batch/measurements"
+```
+
+软件策略执行 24 条保存、38 条清零、24 条恢复。硬件策略执行两条 `PROREG`、两条 `CLR` 和一条 `LEAVE`。配对检查要求每次调用的退休指令、加载、存储差额分别为 81、24、24，实测周期汇总在 `measurements/pairs.csv`。

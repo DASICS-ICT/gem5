@@ -23,7 +23,7 @@ POLICIES = ("sw", "hw")
 COUNTS = (1024, 4096)
 CPU_CYCLES = "system.cpu.numCycles"
 COMMIT = "system.cpu.commitStats0."
-DELTAS = {"numInsts": 3, "numLoadInsts": 2, "numStoreInsts": 2}
+COMMIT_STATS = ("numInsts", "numLoadInsts", "numStoreInsts")
 
 
 def write_json(path, data):
@@ -37,7 +37,7 @@ def roi_stats(path):
         and text.count("End Simulation Statistics") == 1,
         f"Incomplete or ambiguous ROI statistics: {path}",
     )
-    keys = {"simTicks", CPU_CYCLES, *(COMMIT + name for name in DELTAS)}
+    keys = {"simTicks", CPU_CYCLES, *(COMMIT + name for name in COMMIT_STATS)}
     stats = {}
     for line in text.splitlines():
         fields = line.split()
@@ -50,11 +50,12 @@ def roi_stats(path):
     return stats
 
 
-def run_one(outdir, mode, count):
+def run_one(outdir, mode, count, full=False):
     directory = outdir / f"{mode}-{count}"
     directory.mkdir()
     m5out = directory / "m5out"
-    elf = HERE / "build" / f"roi-{mode}.elf"
+    group = "full" if full else "roi"
+    elf = HERE / "build" / f"{group}-{mode}.elf"
     nm = os.getenv("CROSS_COMPILE", "riscv64-linux-gnu-") + "nm"
     symbols = {}
     for line in subprocess.check_output(
@@ -122,26 +123,41 @@ def run_one(outdir, mode, count):
         and stats[CPU_CYCLES] == roi["elapsed_cycles"],
         f"CPU cycles disagree with ROI tick boundaries: {directory}",
     )
-    result = dict(mode=mode, calls=count, warmup=WARMUP, stats=stats, roi=roi)
+    result = dict(
+        mode=mode,
+        elf=elf.name,
+        calls=count,
+        warmup=WARMUP,
+        stats=stats,
+        roi=roi,
+    )
     write_json(directory / "result.json", result)
     return result
 
 
-def measure(outdir, counts):
+def measure(outdir, counts, full=False):
     outdir.mkdir(parents=True)
     jobs = list(product(counts, POLICIES))
     with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
-        futures = [pool.submit(run_one, outdir, mode, n) for n, mode in jobs]
+        futures = [
+            pool.submit(run_one, outdir, mode, n, full) for n, mode in jobs
+        ]
         results = {job: future.result() for job, future in zip(jobs, futures)}
     pairs = []
+    # Software spills, clears and reloads each saved register. Temporaries
+    # need only a clear. Hardware uses two PROREGs, one or two CLRs and LEAVE.
+    saved_regs, clear_only, hw_ops = (24, 14, 5) if full else (2, 1, 4)
+    expected = (3 * saved_regs + clear_only - hw_ops, saved_regs, saved_regs)
     for n in counts:
         sw, hw = (results[n, mode]["stats"] for mode in POLICIES)
-        for name, delta in DELTAS.items():
+        differences = {}
+        for name, delta in zip(COMMIT_STATS, expected, strict=True):
             observed = sw[COMMIT + name] - hw[COMMIT + name]
             require(
                 observed == n * delta,
                 f"{n} calls: {name} delta {observed}, expected {n * delta}",
             )
+            differences[name] = observed
         saved = sw[CPU_CYCLES] - hw[CPU_CYCLES]
         pairs.append(
             dict(
@@ -152,6 +168,9 @@ def measure(outdir, counts):
                 hw_cycles_per_call=hw[CPU_CYCLES] / n,
                 saved_cycles_per_call=saved / n,
                 saved_percent=100 * saved / sw[CPU_CYCLES],
+                retired_instructions_saved=differences["numInsts"],
+                retired_loads_saved=differences["numLoadInsts"],
+                retired_stores_saved=differences["numStoreInsts"],
             )
         )
     write_json(outdir / "pairs.json", pairs)
@@ -182,5 +201,10 @@ if __name__ == "__main__":
         action="store_true",
         help="Validate one short pair before the full batch",
     )
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Protect all s/fs registers and clear t0-t6 and ft0-ft6",
+    )
     args = parser.parse_args()
-    measure(args.outdir.resolve(), (4,) if args.short else COUNTS)
+    measure(args.outdir.resolve(), (4,) if args.short else COUNTS, args.full)

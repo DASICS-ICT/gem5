@@ -4,10 +4,12 @@ CC := $(CROSS_COMPILE)gcc
 ABI := -march=rv64gc -mabi=lp64d
 LIBC := $(shell $(CC) $(ABI) -print-file-name=libc.a)
 BUILD := build
+FULL_MODES := full-sw full-hw full-check-sw full-check-hw
 
-.PHONY: all roi
+.PHONY: all roi full
 all: $(BUILD)/plain.elf $(BUILD)/protected.elf
 roi: $(BUILD)/roi-sw.elf $(BUILD)/roi-hw.elf
+full: $(addprefix $(BUILD)/,$(addsuffix .elf,$(FULL_MODES)))
 
 $(BUILD):
 	mkdir -p $@
@@ -33,6 +35,14 @@ $(BUILD)/gate-roi-sw.o: software := 1
 $(BUILD)/gate-roi-hw.o: software := 0
 $(BUILD)/gate-roi-sw.o $(BUILD)/gate-roi-hw.o: gate.S ../riscv-dasics-reg-protection/src/context.h | $(BUILD)
 	$(CC) $(ABI) -DPROTECTED=1 -DPRINTF_ROI=1 -DSOFTWARE_REGS=$(software) -c -o $@ $<
+
+$(addprefix $(BUILD)/gate-,$(addsuffix .o,$(FULL_MODES))): gate.S full_policy.inc ../riscv-dasics-reg-protection/src/context.h | $(BUILD)
+	$(CC) $(ABI) -DPROTECTED=1 -DPRINTF_ROI=1 -DPRINTF_FULL=1 \
+	    -DSOFTWARE_REGS=$(if $(filter %-sw.o,$@),1,0) \
+	    -DPRINTF_FULL_CHECK=$(if $(findstring -check-,$@),1,0) -c -o $@ $<
+
+$(BUILD)/full-%.elf: $(BUILD)/gate-full-%.o $(BUILD)/main-roi.o $(BUILD)/roi_loop.o $(BUILD)/printf-private.o layout.ld
+	$(CC) $(ABI) -static -no-pie -Wl,-T,layout.ld,-Map,$@.map -o $@ $(filter %.o,$^)
 
 $(BUILD)/roi-%.elf: $(BUILD)/gate-roi-%.o $(BUILD)/main-roi.o $(BUILD)/roi_loop.o $(BUILD)/printf-private.o layout.ld
 	$(CC) $(ABI) -static -no-pie -Wl,-T,layout.ld,-Map,$@.map -o $@ $(filter %.o,$^)

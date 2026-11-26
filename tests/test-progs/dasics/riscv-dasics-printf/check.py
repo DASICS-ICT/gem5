@@ -19,6 +19,13 @@ GATE_OPS = {
     "gate_clr_g": 0x0400200B,
     "gate_leave": 0x0000500B,
 }
+FULL_GATE_OPS = {
+    "gate_proreg_g": 0xFFF0300B,
+    "gate_proreg_f": 0xFFF0400B,
+    "gate_clr_g": 0x07F0200B,
+    "gate_clr_f": 0x07F0600B,
+    "gate_leave": 0x0000500B,
+}
 CALL_PATH = (
     "gate_call",
     "probe_b_entry",
@@ -46,7 +53,7 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def inspect_elf(elf, protected, *, software_gate=False):
+def inspect_elf(elf, protected, *, software_gate=False, full=False):
     prefix = os.environ.get("CROSS_COMPILE", "riscv64-linux-gnu-")
     table = subprocess.check_output(
         [prefix + "nm", "-n", "--defined-only", elf], text=True
@@ -56,6 +63,7 @@ def inspect_elf(elf, protected, *, software_gate=False):
         for pc, name in re.findall(r"^([0-9a-f]+) \w (\S+)$", table, re.M)
     }
     markers = {name: symbols[name] for name in CALL_PATH}
+    gate_ops = FULL_GATE_OPS if full else GATE_OPS
     start, end = (
         symbols[f"__dasics_untrusted_{limit}"] for limit in ("start", "end")
     )
@@ -64,7 +72,7 @@ def inspect_elf(elf, protected, *, software_gate=False):
         require(start <= markers[name] < end, f"{name} is outside B")
     if protected:
         if not software_gate:
-            markers.update({name: symbols[name] for name in GATE_OPS})
+            markers.update({name: symbols[name] for name in gate_ops})
         lo, hi = (
             symbols[f"__dasics_trusted_{limit}"] for limit in ("start", "end")
         )
@@ -82,14 +90,19 @@ def inspect_elf(elf, protected, *, software_gate=False):
         )
     }
     if protected and not software_gate:
-        for name, word in GATE_OPS.items():
+        for name, word in gate_ops.items():
             require(
                 words.get(markers[name]) == word,
                 f"Unexpected opcode at {name}",
             )
     if protected:
         call = markers["gate_call"]
-        require(words[call] == 0x0002908B, "Expected DASICSCALL.JR ra,t0,0")
+        # Full protection clears t0 along with the other temporary registers.
+        target = "ra" if full else "t0"
+        require(
+            words[call] == (0x0000908B if full else 0x0002908B),
+            f"Expected DASICSCALL.JR ra,{target},0",
+        )
         require(markers["gate_return"] == call + 4, "Unexpected return gate")
     return markers, start, end, words
 
@@ -151,7 +164,12 @@ def verify_trace(path, markers, start, end, words, protected):
     order = list(CALL_PATH)
     if "gate_leave" in markers:
         before = sorted(
-            (n for n in GATE_OPS if n != "gate_leave"), key=markers.get
+            (
+                n
+                for n in markers
+                if n.startswith(("gate_proreg_", "gate_clr_"))
+            ),
+            key=markers.get,
         )
         order = before + order
         order.insert(order.index("a_result"), "gate_leave")
@@ -167,7 +185,7 @@ def verify_trace(path, markers, start, end, words, protected):
     }
 
 
-def run(args):
+def run(args, *, full=False):
     elf = args.elf.resolve(strict=True)
     directory = args.outdir.resolve()
     directory.mkdir(parents=True, exist_ok=True)
@@ -202,7 +220,7 @@ def run(args):
     result = {"mode": args.mode, "elf": str(elf), "status": "FAIL"}
     try:
         markers, start, end, words = inspect_elf(
-            elf, protected, software_gate=args.mode == "dasics-sw"
+            elf, protected, software_gate=args.mode == "dasics-sw", full=full
         )
         log = directory / "gem5.log"
         with log.open("w") as stream:
@@ -252,6 +270,7 @@ def run(args):
         raise
     finally:
         report.write_text(json.dumps(result, indent=2) + "\n")
+    return words
 
 
 if __name__ == "__main__":

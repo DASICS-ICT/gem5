@@ -1,6 +1,15 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 #include "../riscv-dasics-reg-protection/src/context.h"
 
+#if PRINTF_FULL
+#include "full_policy.inc"
+/* The caller's original ra is on A's stack. Reuse it for the trusted frame,
+ * then the call target, so all seven integer temporaries stay zero on entry. */
+#define FRAME_BASE ra
+#else
+#define FRAME_BASE t0
+#endif
+
     .equ context_base, 0x8b4
     .equ lib_cfg, 0x880
     .option norelax
@@ -21,24 +30,35 @@
     .type run_printf,@function
 run_printf:
     /* Keep the C caller's ABI state outside B's data windows. */
+#if PRINTF_FULL_CHECK
+    /* The all-register sentinel test also preserves the C caller's ABI. */
+    addi    sp, sp, -208
+    sd      ra, 0(sp)
+    frcsr   t1
+    sd      t1, 8(sp)
+    full_transfer sd, fsd, sp, 16, 112
+#else
     addi    sp, sp, -32
     sd      ra, 0(sp)
     sd      s3, 8(sp)
     fsd     fs3, 16(sp)
     frcsr   t1
     sd      t1, 24(sp)
-#if PROTECTED
-    csrr    t0, context_base
-#else
-    lla     t0, __dasics_context_base
 #endif
-    sd      sp, CTX_SP(t0)
-    sd      gp, CTX_GP(t0)
-    sd      tp, CTX_TP(t0)
+#if PROTECTED
+    csrr    FRAME_BASE, context_base
+#else
+    lla     FRAME_BASE, __dasics_context_base
+#endif
+    sd      sp, CTX_SP(FRAME_BASE)
+    sd      gp, CTX_GP(FRAME_BASE)
+    sd      tp, CTX_TP(FRAME_BASE)
+#if !PRINTF_FULL_CHECK
     li      s3, 0x531
     li      t1, 0x4008000000000053
     fmv.d.x fs3, t1
     li      t6, 0x76
+#endif
     csrwi   fcsr, 0
 #if PROTECTED
     grant_symbols 0, __dasics_b_ro_start, __dasics_b_ro_end
@@ -61,8 +81,16 @@ run_printf:
 #endif
     lla     sp, __dasics_stack_top
     lla     tp, __dasics_b_tp        /* The fixed formatting path reads B's errno. */
+#if PRINTF_FULL_CHECK
+    full_seed
+#else
     li      t1, 0
     li      t2, 0
+#endif
+#if PRINTF_FULL
+    full_enter
+    lla     ra, probe_b_entry
+#else
 #if PRINTF_ROI
     /* Both gates take one jump. The hardware gate skips the spill slots. */
     .globl roi_save_start, roi_save_end
@@ -103,9 +131,12 @@ gate_clr_g:
 roi_save_end:
     lla     t0, probe_b_entry
 #endif
+#endif
     .globl gate_call, gate_return, gate_leave, a_result
 gate_call:
-#if PROTECTED
+#if PRINTF_FULL
+    .insn   i 0x0b, 1, ra, ra, 0    /* Read target ra, write return ra. */
+#elif PROTECTED
     .insn   i 0x0b, 1, ra, t0, 0    /* DASICSCALL.JR ra,t0,0 */
 #else
     jalr    ra, 0(t0)
@@ -113,10 +144,13 @@ gate_call:
 gate_return:
 #if PROTECTED
     csrw    lib_cfg, zero
-    csrr    t0, context_base
+    csrr    FRAME_BASE, context_base
 #else
-    lla     t0, __dasics_context_base
+    lla     FRAME_BASE, __dasics_context_base
 #endif
+#if PRINTF_FULL
+    full_leave
+#else
 #if PRINTF_ROI
     .globl roi_restore_start, roi_restore_end
 roi_restore_start:
@@ -142,24 +176,37 @@ gate_leave:
 #if PRINTF_ROI
 roi_restore_end:
 #endif
+#endif
 a_result:
+#if PRINTF_FULL_CHECK
+    full_check_restore
+    j       .Lrestore_abi
+#else
     li      t1, 0x531
     bne     s3, t1, .Lbad_restore
     fmv.x.d t2, fs3
     li      t1, 0x4008000000000053
     beq     t1, t2, .Lrestore_abi
+#endif
 .Lbad_restore:
     li      a0, -2
 .Lrestore_abi:
-    ld      sp, CTX_SP(t0)
-    ld      gp, CTX_GP(t0)
-    ld      tp, CTX_TP(t0)
+    ld      sp, CTX_SP(FRAME_BASE)
+    ld      gp, CTX_GP(FRAME_BASE)
+    ld      tp, CTX_TP(FRAME_BASE)
     ld      ra, 0(sp)
+#if PRINTF_FULL_CHECK
+    full_transfer ld, fld, sp, 16, 112
+    ld      t1, 8(sp)
+    fscsr   t1
+    addi    sp, sp, 208
+#else
     ld      s3, 8(sp)
     fld     fs3, 16(sp)
     ld      t1, 24(sp)
     fscsr   t1
     addi    sp, sp, 32
+#endif
     ret
     .size run_printf, .-run_printf
 
@@ -169,17 +216,25 @@ a_result:
     .type probe_b_entry,@function
 probe_b_entry:
     /* Sample the register view before libc can save or reuse any register. */
+#if PRINTF_FULL_CHECK
+    full_check_entry
+#else
     fmv.x.d t0, fs3
     or      t0, t0, s3
     or      t0, t0, t6
     bnez    t0, .Lbad_entry
+#endif
     addi    sp, sp, -16
     sd      ra, 8(sp)
     call    b_printf
 probe_b_clobber:
     /* Force LEAVE to restore A even when libc follows the calling convention. */
+#if PRINTF_FULL_CHECK
+    full_clobber
+#else
     li      s3, 0x713
     fmv.d.x fs3, s3
+#endif
     ld      ra, 8(sp)
     addi    sp, sp, 16
 probe_b_return:
