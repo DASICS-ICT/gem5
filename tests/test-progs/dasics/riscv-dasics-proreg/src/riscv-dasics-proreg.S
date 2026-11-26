@@ -5,6 +5,7 @@
     .equ CSR_DASICS_U_MAIN_BOUND_HI, 0x9E3
     .equ CSR_DASICS_S_MAIN_BOUND_LO, 0xBC2
     .equ CSR_DASICS_S_MAIN_BOUND_HI, 0xBC3
+    .equ CSR_DASICS_PROREG_MASK,    0x8B5
     .equ DASICS_SENA, 1 << 0
     .equ DASICS_UENA, 1 << 1
     .equ PRV_U, 0
@@ -27,6 +28,16 @@
     .equ PROREG_F_I_FS3, 0x0080400B
     .equ PROREG_F_I_FS11, 0x8000400B
     .equ PROREG_F_I_FS3_FS11, 0x8080400B
+    .equ PROREG_G_C, 0x0000308B
+    .equ PROREG_F_C, 0x0000408B
+    .equ CLR_G_ZERO, 0x0000200B
+    .equ CLR_G_T3,   0x0080200B
+    .equ CLR_G_T6,   0x0400200B
+    .equ CLR_G_ALL,  0x07F0200B
+    .equ CLR_F_ZERO, 0x0000600B
+    .equ CLR_F_FT0,  0x0010600B
+    .equ CLR_F_FT6,  0x0400600B
+    .equ CLR_F_ALL,  0x07F0600B
     .equ CALLER_FS3, -1
     .equ CALLER_FS11, 0x8000000000000000
     .equ CONTROL_FS2, 0x6b3
@@ -103,6 +114,40 @@ start_case:
     slli    t0, s2, 11
     csrs    mstatus, t0
     mret
+
+    /* Paired G and F candidates have opposite, nonzero caller values. */
+    .macro CHECK_CSR_VIEW x31_expected, x12_expected
+    bne     t6, \x31_expected, .Lcsr_mask_fail
+    bne     a2, \x12_expected, .Lcsr_mask_fail
+    fmv.x.d t3, ft0
+    neg     t2, \x31_expected
+    bne     t3, t2, .Lcsr_mask_fail
+    fmv.x.d t3, ft11
+    neg     t2, \x12_expected
+    bne     t3, t2, .Lcsr_mask_fail
+    .endm
+
+    .macro CALL_WITH_UNWRITTEN_T6 seed, protect
+    .if \protect
+    li      t0, 1 << 31              /* PROREG.G.C selects x31 (t6). */
+    csrw    CSR_DASICS_PROREG_MASK, t0
+    .endif
+    li      t6, \seed
+    beqz    t6, .Lclr_fail
+    li      a0, -1                   /* B must replace this with its sample. */
+    la      t0, sample_t6
+    .word   CLR_G_T6
+    .if \protect
+    .word   PROREG_G_C
+    .endif
+    .insn   i 0x0b, 1, ra, t0, 0     /* DASICSCALL.JR */
+    .if \protect
+    .word   LEAVE
+    .endif
+    bnez    a0, .Lclr_fail
+    bnez    t6, .Lclr_fail
+    j       csr_masks_break
+    .endm
 
     .macro PROBE name, trusted_cases
     .balign 8
@@ -291,6 +336,176 @@ fp_leave_off:
     .word   PROREG_F_I_ZERO
 fp_leave_off_break:
     ebreak
+
+csr_occupied:
+    csrw    CSR_DASICS_PROREG_MASK, zero
+csr_occupied_g:
+    .word   PROREG_G_C
+csr_occupied_f:
+    .word   PROREG_F_C
+
+csr_masks:
+    /* Select x31/f0, then x12/f31 at the same two instruction PCs. */
+    li      t0, 1 << 31
+    li      t1, 1 << 32
+    li      a0, 0                   /* Expected view of x31 on entry. */
+    li      a1, 0x731               /* Expected view of x12 on entry. */
+.Lcsr_mask_round:
+    li      t6, 0x731
+    mv      a2, t6
+    neg     t2, t6
+    fmv.d.x ft0, t2
+    fmv.d.x ft11, t2
+    csrw    CSR_DASICS_PROREG_MASK, t0
+    .word   PROREG_G_C
+    csrw    CSR_DASICS_PROREG_MASK, t1
+    .word   PROREG_F_C
+    CHECK_CSR_VIEW a0, a1
+    /* LEAVE restores only the selected values over these four zero writes. */
+    li      t6, 0
+    li      a2, 0
+    fmv.d.x ft0, zero
+    fmv.d.x ft11, zero
+    .word   LEAVE
+    CHECK_CSR_VIEW a1, a0
+    bnez    a0, csr_masks_break
+    mv      a0, a1
+    li      a1, 0
+    li      t0, 1 << 12
+    li      t1, 1 << 63
+    j       .Lcsr_mask_round
+csr_masks_break:
+    /* Self-checking CSR probes use this breakpoint to report success. */
+    ebreak
+.Lcsr_mask_fail:
+    ebreak
+
+csr_shared_mask:
+    /* One policy selects x31 and f0; x12 and f31 remain visible. */
+    li      a0, 0x731
+    li      a1, 0x412
+    mv      t6, a0
+    mv      a2, a1
+    neg     t2, a0
+    fmv.d.x ft0, t2
+    neg     t2, a1
+    fmv.d.x ft11, t2
+    li      t0, (1 << 31) | (1 << 32)
+    csrw    CSR_DASICS_PROREG_MASK, t0
+    .word   PROREG_G_C
+    .word   PROREG_F_C
+    CHECK_CSR_VIEW zero, a1
+    csrr    t1, CSR_DASICS_PROREG_MASK
+    bne     t1, t0, .Lcsr_mask_fail
+    li      t6, 1
+    fmv.d.x ft0, t6
+    /* Clearing B's local mappings must preserve A's saved values. */
+    .word   CLR_G_T6
+    .word   CLR_F_FT0
+    CHECK_CSR_VIEW zero, a1
+    .word   LEAVE
+    CHECK_CSR_VIEW a0, a1
+    csrr    t1, CSR_DASICS_PROREG_MASK
+    bne     t1, t0, .Lcsr_mask_fail
+    j       csr_masks_break
+
+csr_fs_off_protect:
+    /* While FS is off, a second FP request observes the live f0 slot. */
+    li      t0, 1 << 32
+    csrw    CSR_DASICS_PROREG_MASK, t0
+    .word   PROREG_F_C
+    .word   CLR_F_ZERO              /* Neither request depends on FS or slots. */
+    .word   CLR_F_FT0
+csr_fs_off_conflict:
+    .word   PROREG_F_I_ZERO
+csr_fs_off_leave:
+    .word   LEAVE
+    .word   PROREG_F_I_ZERO         /* Succeeds only with an empty FP bank. */
+    j       csr_masks_break
+
+clear_temporaries:
+    li      a0, 0x257
+    fmv.d.x ft7, a0                 /* Controls outside the two masks. */
+    .irp i,0,1,2,3,4,5,6
+    li      t\i, (0x41 + \i)
+    fmv.d.x ft\i, t\i
+    .endr
+    .word   CLR_G_ALL
+    .word   CLR_F_ALL
+    .word   CLR_G_ALL
+    .word   CLR_F_ALL
+    addi    t0, t0, 7               /* Read zero and create local values. */
+    fmv.x.d a1, ft0
+    addi    a1, a1, 9
+    fmv.d.x ft0, a1
+    .word   CLR_G_ZERO
+    .word   CLR_F_ZERO
+    .word   LEAVE                   /* Standalone clears have no saved slots. */
+    li      a1, 7
+    bne     t0, a1, .Lclr_fail
+    li      a1, 9
+    fmv.x.d a2, ft0
+    bne     a2, a1, .Lclr_fail
+    .irp i,1,2,3,4,5,6
+    bnez    t\i, .Lclr_fail
+    fmv.x.d a1, ft\i
+    bnez    a1, .Lclr_fail
+    .endr
+    li      a1, 0x257
+    bne     a0, a1, .Lclr_fail
+    fmv.x.d a2, ft7
+    bne     a2, a1, .Lclr_fail
+    j       csr_masks_break
+
+clear_rollback:
+    li      t0, (1 << 31) | (1 << 32)   /* Save t6 and ft0 with PROREG.C. */
+    csrw    CSR_DASICS_PROREG_MASK, t0
+    li      a0, 0x521               /* Physical bits hidden in A. */
+    li      a1, 0x732               /* Values visible to B. */
+    li      t3, 0x243
+    li      a2, GENERATION_ROUNDS
+    /* Keep the three wrong-path operations in one fetch block. */
+    .balign 32
+clr_rollback_clear:
+    .word   CLR_G_T3
+clr_rollback_write:
+    fmv.d.x ft6, a0
+clr_rollback_leave:
+    .word   LEAVE
+    mv      t6, a0
+    fmv.d.x ft0, a0
+    .word   CLR_G_T6
+    .word   CLR_F_FT0
+    .word   PROREG_G_C
+    .word   PROREG_F_C
+    mv      t6, a1
+    fmv.d.x ft0, a1
+    li      t3, 0x243
+    .word   CLR_F_FT6
+    addi    a2, a2, -1
+clr_rollback_branch:
+    bnez    a2, clr_rollback_clear
+clr_rollback_exit:
+    /* Undo the wrong-path G clear, F write and mixed LEAVE, in reverse. */
+    li      t1, 0x243
+    bne     t3, t1, .Lclr_fail
+    fmv.x.d t1, ft6
+    bnez    t1, .Lclr_fail
+    bne     t6, a1, .Lclr_fail
+    fmv.x.d t1, ft0
+    bne     t1, a1, .Lclr_fail
+    .word   LEAVE
+    bnez    t6, .Lclr_fail
+    fmv.x.d t1, ft0
+    bnez    t1, .Lclr_fail
+    j       csr_masks_break
+.Lclr_fail:
+    ebreak
+
+clear_t6_call:
+    CALL_WITH_UNWRITTEN_T6 0x431, 0
+clear_protect_t6_call:
+    CALL_WITH_UNWRITTEN_T6 0x632, 1
     .endif
     .balign 8
 \name\()_end:
@@ -339,6 +554,21 @@ fp_read_write:
 fp_read_write_break:
     ebreak
 
+csr_untrusted_g:
+    .word   PROREG_G_C
+csr_untrusted_f:
+    .word   PROREG_F_C
+clr_untrusted_g:
+    .word   CLR_G_ALL
+clr_untrusted_f:
+    .word   CLR_F_ALL
+
+    /* Outside both trusted ranges, B reports t6 without writing it. */
+    .balign 8
+sample_t6:
+    mv      a0, t6
+    ret
+
     .balign 4
 machine_trap:
     csrr    t0, mstatus
@@ -352,6 +582,8 @@ machine_trap:
     la      t1, sparse_break
     beq     t0, t1, check_sparse
     la      t1, reuse_break
+    beq     t0, t1, case_passed
+    la      t1, csr_masks_break
     beq     t0, t1, case_passed
     la      t1, generation_break
     beq     t0, t1, case_passed
@@ -554,11 +786,40 @@ cases:
     .dword fp_occupied_failure, PROREG_F_I_ZERO
     .dword fp_occupied_disjoint, BOOT_PRIV, ILLEGAL, fp_occupied_disjoint
     .dword fp_occupied_failure, PROREG_F_I_FS11
+    .dword csr_occupied, BOOT_PRIV, ILLEGAL, csr_occupied_g
+    .dword csr_occupied_failure, PROREG_G_C
+    .dword csr_occupied_f, BOOT_PRIV, ILLEGAL, csr_occupied_f
+    .dword csr_occupied_failure, PROREG_F_C
     /* The preceding F requests ran with FS=Off; enable it for fmv.d.x/x.d. */
     .dword fp_read_write, BOOT_PRIV | (MSTATUS_FS >> 11)
     .dword BREAKPOINT, fp_read_write_break, fp_view_failure, 0
     .dword fp_leave_off, BOOT_PRIV, BREAKPOINT, fp_leave_off_break
     .dword fp_leave_failure, LEAVE
+    .dword csr_masks, BOOT_PRIV | (MSTATUS_FS >> 11), BREAKPOINT
+    .dword csr_masks_break, csr_masks_failure, 0
+    .dword csr_shared_mask, BOOT_PRIV | (MSTATUS_FS >> 11), BREAKPOINT
+    .dword csr_masks_break, csr_shared_mask_failure, 0
+    /* The live FP slot carries across these two FS=Off cases. */
+    .dword csr_fs_off_protect, BOOT_PRIV, ILLEGAL, csr_fs_off_conflict
+    .dword csr_fs_off_failure, PROREG_F_I_ZERO
+    .dword csr_fs_off_leave, BOOT_PRIV, BREAKPOINT, csr_masks_break
+    .dword csr_fs_off_failure, 0
+    .dword csr_untrusted_g, BOOT_PRIV, ILLEGAL, csr_untrusted_g
+    .dword csr_untrusted_failure, PROREG_G_C
+    .dword csr_untrusted_f, BOOT_PRIV, ILLEGAL, csr_untrusted_f
+    .dword csr_untrusted_failure, PROREG_F_C
+    .dword clear_temporaries, BOOT_PRIV | (MSTATUS_FS >> 11), BREAKPOINT
+    .dword csr_masks_break, clr_view_failure, 0
+    .dword clear_rollback, BOOT_PRIV | (MSTATUS_FS >> 11), BREAKPOINT
+    .dword csr_masks_break, clr_rollback_failure, 0
+    .dword clr_untrusted_g, BOOT_PRIV, ILLEGAL, clr_untrusted_g
+    .dword clr_untrusted_failure, CLR_G_ALL
+    .dword clr_untrusted_f, BOOT_PRIV, ILLEGAL, clr_untrusted_f
+    .dword clr_untrusted_failure, CLR_F_ALL
+    .dword clear_t6_call, BOOT_PRIV, BREAKPOINT, csr_masks_break
+    .dword clear_t6_call_failure, 0
+    .dword clear_protect_t6_call, BOOT_PRIV, BREAKPOINT, csr_masks_break
+    .dword clear_protect_t6_call_failure, 0
 cases_end:
 setup_failure:       .asciz "PROREG.G.I: setup failed\n"
 trusted_u_failure:   .asciz "PROREG.G.I: trusted U failed\n"
@@ -578,6 +839,16 @@ fp_trusted_failure: .asciz "PROREG.F.I: trusted access failed\n"
 fp_occupied_failure: .asciz "PROREG.F.I: occupied FP slot conflict failed\n"
 fp_view_failure: .asciz "PROREG.F.I: incorrect floating-point register view\n"
 fp_leave_failure: .asciz "LEAVE: mixed restore or FP slot reuse failed\n"
+csr_masks_failure: .asciz "PROREG.C: wrong register view after CSR write or LEAVE\n"
+csr_shared_mask_failure: .asciz "PROREG.C: shared G/F policy or mapping mismatch\n"
+csr_fs_off_failure: .asciz "PROREG.F.C: FP slot lifetime with FS off failed\n"
+csr_untrusted_failure: .asciz "PROREG.C: untrusted denial failed\n"
+csr_occupied_failure: .asciz "PROREG.C: occupied zero-mask denial failed\n"
+clr_view_failure:    .asciz "CLR: incorrect register view\n"
+clr_rollback_failure: .asciz "CLR: incorrect mapping or saved view after rollback\n"
+clr_untrusted_failure: .asciz "CLR: untrusted denial failed\n"
+clear_t6_call_failure: .asciz "CLR: unwritten t6 changed across call\n"
+clear_protect_t6_call_failure: .asciz "CLR/PROREG: unwritten t6 changed across call\n"
 
     .section .data
     .balign 8

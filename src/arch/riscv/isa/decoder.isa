@@ -1342,8 +1342,8 @@ decode QUADRANT default Unknown::unknown() {
             // RVTYPE comes from the PC state: 0 selects RV32, 1 selects RV64.
             0x1: decode FUNCT3 {
                 // FUNCT3 (inst[14:12]) selects the DASICS operation:
-                // 0: DASICSCALL.J, 1: DASICSCALL.JR, 3: PROREG.G,
-                // 4: PROREG.F, 5: LEAVE.
+                // 0: DASICSCALL.J, 1: DASICSCALL.JR, 2: CLR.G.I,
+                // 3: PROREG.G, 4: PROREG.F, 5: LEAVE, 6: CLR.F.I.
                 0x0: DasicsCallJ::dasicscall_j({{
                     ra = rvSext(PC + 4);
                     NPC = rvSext(PC + imm);
@@ -1354,25 +1354,39 @@ decode QUADRANT default Unknown::unknown() {
                     NPC = rvSext((Rs1 + imm) & ~0x1);
                 }}, IsIndirectControl, IsUncondControl, IsNonSpeculative,
                     IsSerializeAfter);
+                // IMM12 bit i selects ti, for i = 0 through 6.
+                0x2: DasicsClrI::clr_g_i(
+                    IntRegClass, IsRenamePermissionRequired, No_OpClass);
                 0x3: decode RD {
                     // PROREG.G uses RD (inst[11:7]) as its mask selector:
-                    // 0 = immediate mask, 1 = reserved for a register mask.
+                    // 0 = immediate mask, 1 = mask CSR.
                     0x0: decode RS1 {
                         // PROREG.G.I reads no source register, so RS1
                         // (inst[19:15]) must be zero. IMM12 (inst[31:20])
                         // holds the unsigned mask for s0 through s11.
-                        0x0: DasicsProregI::proreg_g_i(
-                            IntRegClass, IsRenamePermissionRequired,
+                        0x0: DasicsProreg::proreg_g_i(
+                            IntRegClass, Immediate,
+                            IsRenamePermissionRequired, No_OpClass);
+                    }
+                    0x1: decode ALL {
+                        // The CSR form reserves inst[31:15] as zero.
+                        0x0000308B: DasicsProreg::proreg_g_c(
+                            IntRegClass, CSR, IsRenamePermissionRequired,
                             No_OpClass);
                     }
                 }
                 0x4: decode RD {
-                    // RD=0 selects the immediate mask; RD=1 is reserved
-                    // for a register mask.
+                    // RD=0 selects the immediate mask; RD=1 selects the CSR.
                     0x0: decode RS1 {
                         // RS1 must be zero. IMM12 bit i selects fs<i>.
-                        0x0: DasicsProregI::proreg_f_i(
-                            FloatRegClass, IsRenamePermissionRequired,
+                        0x0: DasicsProreg::proreg_f_i(
+                            FloatRegClass, Immediate,
+                            IsRenamePermissionRequired, No_OpClass);
+                    }
+                    0x1: decode ALL {
+                        // The CSR form reserves inst[31:15] as zero.
+                        0x0000408B: DasicsProreg::proreg_f_c(
+                            FloatRegClass, CSR, IsRenamePermissionRequired,
                             No_OpClass);
                     }
                 }
@@ -1382,6 +1396,9 @@ decode QUADRANT default Unknown::unknown() {
                         // O3 Rename restores the saved GPR and FPR mappings.
                     }}, IsRenamePermissionRequired, No_OpClass);
                 }
+                // IMM12 bit i selects fti, for i = 0 through 6.
+                0x6: DasicsClrI::clr_f_i(
+                    FloatRegClass, IsRenamePermissionRequired, No_OpClass);
             }
         }
 #endif // USE_DASICS

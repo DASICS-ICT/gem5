@@ -961,19 +961,21 @@ Rename::doSquash(const InstSeqNum &squashed_seq_num, ThreadID tid)
         if (hb_it->renameKind != RenameKind::Normal) {
             auto &state = restoreState[tid];
             auto &map = *renameMap[tid];
+            assert(map.lookup(hb_it->archReg) == hb_it->newPhysReg);
             if (hb_it->renameKind == RenameKind::Leave) {
-                assert(map.lookup(hb_it->archReg) == hb_it->newPhysReg);
+                // Younger changes are undone. The RAT holds the caller's
+                // mapping and visibility that LEAVE consumed from this slot.
+                state.save(hb_it->archReg, hb_it->newPhysReg,
+                           map.isRegUnreadable(hb_it->archReg));
                 map.setEntry(hb_it->archReg, hb_it->prevPhysReg);
-                // A younger PROREG may have overwritten the slot's pointer.
-                state.save(hb_it->archReg, hb_it->newPhysReg);
-            } else {
-                assert(hb_it->renameKind == RenameKind::Proreg);
+            } else if (hb_it->renameKind == RenameKind::Proreg) {
                 assert(hb_it->prevPhysReg == hb_it->newPhysReg);
                 state.undoSave(hb_it->archReg, hb_it->prevPhysReg);
             }
 
+            // CLR only changed visibility. These history entries never
+            // allocated a physical register or produced a scoreboard value.
             map.setRegUnreadable(hb_it->archReg, hb_it->prevUnreadable);
-            // Neither operation allocated a register or produced a value.
             continue;
         }
 #endif
@@ -1058,6 +1060,10 @@ Rename::removeFromHistory(InstSeqNum inst_seq_num, ThreadID tid)
 
         ++stats.committedMaps;
 #if USE_DASICS
+        if (entry.renameKind == RenameKind::Clear) {
+            // The hidden physical register is still the current mapping.
+            continue;
+        }
         if (entry.renameKind == RenameKind::Proreg) {
             assert(entry.newPhysReg == prev_reg);
             prev_reg->setReclaimBlocked(true);
@@ -1101,9 +1107,9 @@ Rename::handleDasicsRename(const DynInstPtr &inst, ThreadID tid)
     auto &fault = inst->getFault();
     fault = static_inst->checkRenameAccess(inst.get());
     if (fault == NoFault) {
-        const auto request = static_inst->regProtectionRequest();
+        const auto request = static_inst->regProtectionRequest(inst.get());
         if (request.has_value()) {
-            fault = protectRegs(inst, tid, request->regClass, request->mask);
+            fault = applyRegRequest(inst, tid, *request);
         } else if (static_inst->restoresProtectedRegs()) {
             restoreProtectedRegs(inst, tid);
         }
@@ -1114,31 +1120,42 @@ Rename::handleDasicsRename(const DynInstPtr &inst, ThreadID tid)
 }
 
 Fault
-Rename::protectRegs(const DynInstPtr &inst, ThreadID tid,
-                    RegClassType reg_class, uint32_t mask)
+Rename::applyRegRequest(const DynInstPtr &inst, ThreadID tid,
+                        const StaticInst::RegProtectionRequest &request)
 {
+    const auto reg_class = request.regClass;
     assert(reg_class == IntRegClass || reg_class == FloatRegClass);
+    const bool protect =
+        request.action == StaticInst::RegProtectionAction::Protect;
+    const auto kind = protect ? RenameKind::Proreg : RenameKind::Clear;
     auto &state = restoreState[tid];
-    // Even a zero mask requires all slots of its own class to be empty.
-    if (state.hasValid(reg_class)) {
+    // Only PROREG requires empty slots, including when its mask is zero.
+    if (protect && state.hasValid(reg_class)) {
         return inst->staticInst->regProtectionConflictFault();
     }
 
     auto &map = *renameMap[tid];
     const auto &classes = inst->tcBase()->getIsaPtr()->regClasses();
     const auto &regs = *classes.at(reg_class);
+    uint32_t mask = request.mask;
     while (mask != 0) {
         const RegIndex reg_idx = findLsbSet(mask);
         replaceBits(mask, reg_idx, 0);
         const RegId arch_reg = regs[reg_idx];
+        const bool unreadable = map.isRegUnreadable(arch_reg);
+        if (!protect && unreadable) {
+            continue;
+        }
         PhysRegIdPtr phys_reg = map.lookup(arch_reg);
-        // PROREG changes source visibility without allocating a destination.
-        historyBuffer[tid].emplace_front(RenameKind::Proreg, inst->seqNum,
-                                         arch_reg, phys_reg, phys_reg,
-                                         map.isRegUnreadable(arch_reg));
-
-        state.save(arch_reg, phys_reg);
-        map.setRegUnreadable(arch_reg, true);
+        historyBuffer[tid].emplace_front(kind, inst->seqNum, arch_reg,
+                                         phys_reg, phys_reg, unreadable);
+        if (protect) {
+            state.save(arch_reg, phys_reg, unreadable);
+        }
+        if (!unreadable) {
+            map.setRegUnreadable(arch_reg, true);
+            inst->addRegMappingUpdate(arch_reg, phys_reg, true);
+        }
     }
     return NoFault;
 }
@@ -1149,16 +1166,17 @@ Rename::restoreProtectedRegs(const DynInstPtr &inst, ThreadID tid)
     auto &state = restoreState[tid];
     auto &map = *renameMap[tid];
     const auto &classes = inst->tcBase()->getIsaPtr()->regClasses();
-    auto restore = [&](RegClassType cls, RegIndex index, PhysRegIdPtr saved) {
+    auto restore = [&](RegClassType cls, RegIndex index, PhysRegIdPtr saved,
+                       bool saved_unreadable) {
         const RegId arch_reg = (*classes.at(cls))[index];
-        // Even an unchanged physical mapping can regain read access.
+        // The caller's saved view may itself be a logical zero.
         historyBuffer[tid].emplace_front(RenameKind::Leave, inst->seqNum,
                                          arch_reg, saved, map.lookup(arch_reg),
                                          map.isRegUnreadable(arch_reg));
-        inst->addRestoredMapping(arch_reg, saved);
+        inst->addRegMappingUpdate(arch_reg, saved, saved_unreadable);
 
         map.setEntry(arch_reg, saved);
-        map.setRegUnreadable(arch_reg, false);
+        map.setRegUnreadable(arch_reg, saved_unreadable);
     };
     state.consumeAll(restore);
 }

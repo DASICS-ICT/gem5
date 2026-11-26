@@ -94,11 +94,12 @@ class DynInst : public ExecContext, public RefCounted
     typedef typename std::list<DynInstPtr>::iterator ListIt;
 
 #if USE_DASICS
-    /** A mapping captured by LEAVE at rename for publication at commit. */
-    struct RestoredMapping
+    /** A scalar mapping and source visibility to publish at commit. */
+    struct RegMappingUpdate
     {
         RegId archReg;
-        PhysRegIdPtr newPhysReg;
+        PhysRegIdPtr physReg;
+        bool unreadable;
     };
 #endif
 
@@ -226,7 +227,7 @@ class DynInst : public ExecContext, public RefCounted
     std::bitset<NumStatus> status;
 
 #if USE_DASICS
-    std::vector<RestoredMapping> restoredMappings;
+    std::vector<RegMappingUpdate> regMappingUpdates;
 #endif
 
   protected:
@@ -512,16 +513,17 @@ class DynInst : public ExecContext, public RefCounted
 
 #if USE_DASICS
     void
-    addRestoredMapping(const RegId &arch_reg, PhysRegIdPtr new_phys_reg)
+    addRegMappingUpdate(const RegId &arch_reg, PhysRegIdPtr phys_reg,
+                        bool unreadable)
     {
-        assert(new_phys_reg && new_phys_reg->is(arch_reg.classValue()));
-        restoredMappings.push_back({arch_reg, new_phys_reg});
+        assert(phys_reg && phys_reg->is(arch_reg.classValue()));
+        regMappingUpdates.push_back({arch_reg, phys_reg, unreadable});
     }
 
-    const std::vector<RestoredMapping> &
-    getRestoredMappings() const
+    const std::vector<RegMappingUpdate> &
+    getRegMappingUpdates() const
     {
-        return restoredMappings;
+        return regMappingUpdates;
     }
 #endif
 

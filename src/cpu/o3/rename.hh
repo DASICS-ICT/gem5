@@ -56,6 +56,7 @@
 #include "cpu/o3/free_list.hh"
 #include "cpu/o3/iew.hh"
 #include "cpu/o3/limits.hh"
+#include "cpu/static_inst.hh"
 #include "cpu/timebuf.hh"
 #include "sim/probe/probe.hh"
 
@@ -222,9 +223,9 @@ class Rename
 #if USE_DASICS
     /** Check DASICS permissions and apply the authorized rename operation. */
     void handleDasicsRename(const DynInstPtr &inst, ThreadID tid);
-    /** Save the selected mappings in the requesting thread and class. */
-    Fault protectRegs(const DynInstPtr &inst, ThreadID tid,
-                      RegClassType reg_class, uint32_t mask);
+    /** Apply a trusted protect or clear request to this thread's mappings. */
+    Fault applyRegRequest(const DynInstPtr &inst, ThreadID tid,
+                          const StaticInst::RegProtectionRequest &request);
     /** Restore the thread's saved GPR and FPR mappings for a trusted LEAVE. */
     void restoreProtectedRegs(const DynInstPtr &inst, ThreadID tid);
 #endif
@@ -314,6 +315,7 @@ class Rename
     {
         Normal,
         Proreg,
+        Clear,
         Leave
     };
 #endif
@@ -377,6 +379,8 @@ class Rename
             static constexpr unsigned Count = 32 - FirstReg;
             PhysRegIdPtr mappings[Count] = {};
             std::bitset<Count> valid{};
+            // A valid slot remembers whether its caller already read zero.
+            std::bitset<Count> savedUnreadable{};
 
             static RegIndex
             slotIndex(const RegId &reg)
@@ -388,11 +392,12 @@ class Rename
             }
 
             void
-            save(const RegId &reg, PhysRegIdPtr mapping)
+            save(const RegId &reg, PhysRegIdPtr mapping, bool unreadable)
             {
                 const auto slot = slotIndex(reg);
                 assert(mapping && mapping->is(Class) && !valid.test(slot));
                 mappings[slot] = mapping;
+                savedUnreadable.set(slot, unreadable);
                 valid.set(slot);
             }
 
@@ -412,7 +417,8 @@ class Rename
                     const auto slot = findLsbSet(valid);
                     const auto mapping = mappings[slot];
                     assert(mapping && mapping->is(Class));
-                    consume(Class, FirstReg + slot, mapping);
+                    consume(Class, FirstReg + slot, mapping,
+                            savedUnreadable.test(slot));
                     valid.reset(slot);
                 }
             }
@@ -431,12 +437,12 @@ class Rename
         }
 
         void
-        save(const RegId &reg, PhysRegIdPtr mapping)
+        save(const RegId &reg, PhysRegIdPtr mapping, bool unreadable)
         {
             if (reg.is(IntRegClass)) {
-                intSlots.save(reg, mapping);
+                intSlots.save(reg, mapping, unreadable);
             } else {
-                floatSlots.save(reg, mapping);
+                floatSlots.save(reg, mapping, unreadable);
             }
         }
 

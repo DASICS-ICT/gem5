@@ -15,9 +15,15 @@ def check_trace(nm, elf, trace):
         [nm, "-n", elf], text=True
     ).splitlines():
         fields = row.split()
-        if len(fields) == 3 and fields[2].startswith("generation_"):
+        if len(fields) == 3 and fields[2].startswith(
+            ("generation_", "clr_rollback_")
+        ):
             symbols[fields[2]] = int(fields[0], 16)
 
+    loop_exits = {
+        symbols[prefix + "branch"]: symbols[prefix + "exit"]
+        for prefix in ("generation_", "clr_rollback_")
+    }
     # A PC can occur on both paths. Identify individual instructions by SN.
     pcs = {}
     allowed = set()
@@ -49,31 +55,26 @@ def check_trace(nm, elf, trace):
                 allowed.add(int(re.search(r"\[sn:(\d+)\]", line)[1]))
             elif "Squashing due to branch mispred PC:" in line:
                 match = re.search(r"PC:(0x[0-9a-f]+) \[sn:(\d+)\]", line)
-                mispredict = int(match[2])
-                if int(match[1], 16) != symbols["generation_branch"]:
-                    mispredict = None
+                mispredict = (int(match[2]), loop_exits.get(int(match[1], 16)))
             elif "Redirecting to PC" in line:
                 dest = int(re.search(pc_pattern, line)[1], 16)
-                if (
-                    mispredict is not None
-                    and dest == symbols["generation_exit"]
-                ):
-                    exit_branches.add(mispredict)
+                if mispredict is not None and dest == mispredict[1]:
+                    exit_branches.add(mispredict[0])
                 mispredict = None
             elif "Squashing instructions." in line:
                 boundary = int(re.search(r"\[squash sn:(\d+)\]", line)[1])
                 if boundary in exit_branches:
-                    rollbacks[boundary] = {"integer": [], "floating_point": []}
+                    rollbacks[boundary] = {}
             elif boundary in rollbacks and "Removing history entry" in line:
                 # x19 and f19 have the same index and share the LEAVE's SN.
                 match = re.search(
-                    r"number (\d+) \(archReg: 19 \((integer|floating_point)\), "
+                    r"number (\d+) \(archReg: (\d+) \((integer|floating_point)\), "
                     r"newPhysReg: (\d+), prevPhysReg: (\d+)\)",
                     line,
                 )
                 if match:
-                    sn, cls, new, prev = match.groups()
-                    rollbacks[boundary][cls].append(
+                    sn, idx, cls, new, prev = match.groups()
+                    rollbacks[boundary].setdefault((cls, int(idx)), []).append(
                         (int(sn), int(new), int(prev))
                     )
             elif boundary in rollbacks and "Freeing phys regs of" in line:
@@ -100,14 +101,39 @@ def check_trace(nm, elf, trace):
     expected_pcs = [
         symbols["generation_" + name] for name in ("leave", "write", "proreg")
     ]
+    clr_pcs = [
+        symbols["clr_rollback_" + name] for name in ("clear", "write", "leave")
+    ]
+    found_mixed = found_clear = False
     for branch, history in rollbacks.items():
         speculative = sorted(sn for sn in pcs if sn > branch)[:3]
+        if [pcs[sn] for sn in speculative] == clr_pcs:
+            clear, write, leave = speculative
+            rolled_back = {
+                (sn, cls, idx, new == prev)
+                for (cls, idx), rows in history.items()
+                for sn, new, prev in rows
+            }
+            # CLR changes visibility in place. The FP write and LEAVE change
+            # mappings; LEAVE previously consumed both logically zero slots.
+            if {clear, leave} <= allowed and {
+                (clear, "integer", 28, True),
+                (write, "floating_point", 6, False),
+                (leave, "integer", 31, False),
+                (leave, "floating_point", 0, False),
+            } <= rolled_back:
+                found_clear = True
+                print(
+                    f"CLR loop-exit squash sn={branch}: reversed CLR x28 "
+                    f"sn={clear}, write f6 sn={write}, mixed LEAVE sn={leave}"
+                )
+            continue
         if [pcs[sn] for sn in speculative] != expected_pcs:
             continue
         # Match these exact instructions within one youngest-first rollback.
         changes = [
             row
-            for row in reversed(history["integer"])
+            for row in reversed(history.get(("integer", 19), []))
             if row[0] in speculative
         ]
         if [row[0] for row in changes] != speculative:
@@ -119,7 +145,7 @@ def check_trace(nm, elf, trace):
         ) = changes
         fp_changes = [
             (new, prev)
-            for sn, new, prev in history["floating_point"]
+            for sn, new, prev in history.get(("floating_point", 19), [])
             if sn == leave
         ]
         if len(fp_changes) != 1:
@@ -150,8 +176,8 @@ def check_trace(nm, elf, trace):
                 f"local=P{fp_local}; squash returned integer P{fresh}, "
                 f"committed LEAVE returned integer P{local}"
             )
-            return True
-    return False
+            found_mixed = True
+    return found_mixed and found_clear
 
 
 def main():
@@ -183,7 +209,7 @@ def main():
     if check_trace(args.nm, args.elf, trace):
         return 0
     print(
-        "Missing mixed LEAVE rollback or integer free-list coverage",
+        "Missing CLR, mixed LEAVE, or integer free-list rollback coverage",
         file=sys.stderr,
     )
     return 1

@@ -1265,15 +1265,22 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
 
     // Update the commit rename map
     for (int i = 0; i < head_inst->numDestRegs(); i++) {
-        renameMap[tid]->setEntry(head_inst->flattenedDestIdx(i),
-                                 head_inst->renamedDestIdx(i));
+        const auto &arch_reg = head_inst->flattenedDestIdx(i);
+        const auto phys_reg = head_inst->renamedDestIdx(i);
+        renameMap[tid]->setEntry(arch_reg, phys_reg);
+#if USE_DASICS
+        // A new destination mapping exposes the instruction's result.
+        if (phys_reg != head_inst->prevDestIdx(i) &&
+            renameMap[tid]->isRegUnreadable(arch_reg)) {
+            renameMap[tid]->setRegUnreadable(arch_reg, false);
+        }
+#endif
     }
 
 #if USE_DASICS
-    // Publish the protected mappings captured by this LEAVE at rename.
-    for (const auto &mapping : head_inst->getRestoredMappings()) {
-        renameMap[tid]->setEntry(mapping.archReg, mapping.newPhysReg);
-        renameMap[tid]->setRegUnreadable(mapping.archReg, false);
+    for (const auto &mapping : head_inst->getRegMappingUpdates()) {
+        renameMap[tid]->setEntry(mapping.archReg, mapping.physReg);
+        renameMap[tid]->setRegUnreadable(mapping.archReg, mapping.unreadable);
     }
 #endif
 

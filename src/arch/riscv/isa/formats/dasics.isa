@@ -120,7 +120,7 @@ def template DasicsTrustedRenameAccess {{
     }
 }};
 
-def template DasicsProregIDeclare {{
+def template DasicsProregDeclare {{
     class %(class_name)s : public %(base_class)s
     {
       private:
@@ -128,7 +128,7 @@ def template DasicsProregIDeclare {{
 
       public:
         %(class_name)s(ExtMachInst machInst);
-        std::optional<RegProtectionRequest> regProtectionRequest()
+        std::optional<RegProtectionRequest> regProtectionRequest(ExecContext *)
             const override;
         Fault regProtectionConflictFault() const override;
         Fault checkRenameAccess(ExecContext *xc) const override;
@@ -139,18 +139,33 @@ def template DasicsProregIDeclare {{
     };
 }};
 
-def template DasicsProregIMethods {{
+def template DasicsImmediateRegRequest {{
     std::optional<StaticInst::RegProtectionRequest>
-    %(class_name)s::regProtectionRequest() const
+    %(class_name)s::regProtectionRequest(ExecContext *) const
     {
-        // The two saved ranges skip argument registers 10-17 in both classes.
-        const uint32_t low = bits(imm, 1, 0);
-        const uint32_t high = bits(imm, 11, 2);
-        const uint32_t mask = (low << %(saved0)s.index()) |
-                              (high << %(saved2)s.index());
-        return RegProtectionRequest{%(reg_class)s, mask};
+        // Each part starts at the architectural index of its ABI range.
+        const uint32_t low = bits(imm, %(split_bit)s - 1, 0);
+        const uint32_t high = imm >> %(split_bit)s;
+        const uint32_t mask = (low << %(low_base)s.index()) |
+                              (high << %(high_base)s.index());
+        return RegProtectionRequest{
+            RegProtectionAction::%(action)s, %(reg_class)s, mask};
     }
+}};
 
+def template DasicsProregCRequest {{
+    std::optional<StaticInst::RegProtectionRequest>
+    %(class_name)s::regProtectionRequest(ExecContext *xc) const
+    {
+        // CSR serialization makes older writes visible at Rename.
+        const RegVal csr = xc->readMiscReg(MISCREG_DASICS_PROREG_MASK);
+        const uint32_t mask = %(csr_mask)s;
+        return RegProtectionRequest{
+            RegProtectionAction::Protect, %(reg_class)s, mask};
+    }
+}};
+
+def template DasicsProregMethods {{
     Fault
     %(class_name)s::regProtectionConflictFault() const
     {
@@ -170,28 +185,108 @@ def template DasicsProregIMethods {{
     %(class_name)s::generateDisassembly(
             Addr pc, const loader::SymbolTable *symtab) const
     {
+        return %(disassembly)s;
+    }
+}};
+
+def format DasicsProreg(reg_class, mask_source, *opt_flags) {{
+    # The selector occupies the usual rd bits; it is not a register operand.
+    mnemonic = name.replace("_", ".")
+    if mask_source == "Immediate":
+        iop = InstObjParams(mnemonic, Name, "ImmOp<uint16_t>",
+            {"imm_code": "imm = IMM12;"}, opt_flags)
+        iop.action = "Protect"
+        iop.split_bit = 2
+        iop.low_base, iop.high_base = {
+            "IntRegClass": ("int_reg::S0", "int_reg::S2"),
+            "FloatRegClass": ("float_reg::Fs0", "float_reg::Fs2"),
+        }[reg_class]
+        iop.disassembly = 'csprintf("%s 0x%03x", mnemonic, imm)'
+        constructor = ImmConstructor
+        request = DasicsImmediateRegRequest
+    elif mask_source == "CSR":
+        iop = InstObjParams(mnemonic, Name, "SystemOp", {}, opt_flags)
+        # x0 has no restore slot. Bit 32 selects f0, a writable FPR.
+        iop.csr_mask = {
+            "IntRegClass": "mbits(csr, 31, 1)",
+            "FloatRegClass": "bits(csr, 63, 32)",
+        }[reg_class]
+        iop.disassembly = "mnemonic"
+        constructor = BasicConstructor
+        request = DasicsProregCRequest
+    else:
+        raise ValueError(f"Unknown PROREG mask source: {mask_source}")
+    iop.reg_class = reg_class
+    slot_kind = "integer" if reg_class == "IntRegClass" else "floating-point"
+    iop.conflict_reason = (f"{mnemonic.upper()} requires all {slot_kind} "
+                           "restore slots to be empty")
+    header_output = DasicsProregDeclare.subst(iop)
+    decoder_output = constructor.subst(iop)
+    decode_block = BasicDecode.subst(iop)
+    exec_output = (DasicsTrustedRenameAccess.subst(iop) +
+                   request.subst(iop) + DasicsProregMethods.subst(iop))
+}};
+
+def template DasicsClrIDeclare {{
+    class %(class_name)s : public %(base_class)s
+    {
+      private:
+        %(reg_idx_arr_decl)s;
+
+      public:
+        %(class_name)s(ExtMachInst machInst);
+        std::optional<RegProtectionRequest> regProtectionRequest(ExecContext *)
+            const override;
+        Fault checkRenameAccess(ExecContext *xc) const override;
+        Fault execute(ExecContext *xc, trace::InstRecord *traceData)
+            const override;
+        std::string generateDisassembly(Addr pc,
+            const loader::SymbolTable *symtab) const override;
+    };
+}};
+
+def template DasicsClrIDecode {{
+    // Only the low seven mask bits vary within each CLR encoding.
+    if (RD != 0 || RS1 != 0 || bits(IMM12, 11, 7) != 0) {
+        return new Unknown(machInst);
+    }
+    return new %(class_name)s(machInst);
+}};
+
+def template DasicsClrIMethods {{
+    Fault
+    %(class_name)s::execute(ExecContext *xc,
+        trace::InstRecord *traceData) const
+    {
+        // O3 Rename has applied the authorized clear or recorded its fault.
+        return NoFault;
+    }
+
+    std::string
+    %(class_name)s::generateDisassembly(
+            Addr pc, const loader::SymbolTable *symtab) const
+    {
         return csprintf("%s 0x%03x", mnemonic, imm);
     }
 }};
 
-def format DasicsProregI(reg_class, *opt_flags) {{
-    # The selector occupies the usual rd bits; it is not a register operand.
-    mnemonic = name.replace("_", ".")
-    iop = InstObjParams(mnemonic, Name, "ImmOp<uint16_t>",
+def format DasicsClrI(reg_class, *opt_flags) {{
+    iop = InstObjParams(name.replace("_", "."), Name, "ImmOp<uint16_t>",
         {"imm_code": "imm = IMM12;"}, opt_flags)
     iop.reg_class = reg_class
-    iop.saved0, iop.saved2, slot_kind = {
-        "IntRegClass": ("int_reg::S0", "int_reg::S2", "integer"),
-        "FloatRegClass": ("float_reg::Fs0", "float_reg::Fs2",
-                          "floating-point"),
+    iop.action = "Clear"
+    iop.split_bit = 3
+    # t3 starts at x28, whereas ft3 immediately follows ft2.
+    iop.low_base, iop.high_base = {
+        "IntRegClass": ("int_reg::T0", "int_reg::T3"),
+        "FloatRegClass": ("float_reg::Ft0", "float_reg::Ft3"),
     }[reg_class]
-    iop.conflict_reason = (f"{mnemonic.upper()} requires all {slot_kind} "
-                           "restore slots to be empty")
-    header_output = DasicsProregIDeclare.subst(iop)
+    header_output = DasicsClrIDeclare.subst(iop)
     decoder_output = ImmConstructor.subst(iop)
-    decode_block = BasicDecode.subst(iop)
+    decode_block = DasicsClrIDecode.subst(iop)
     exec_output = (DasicsTrustedRenameAccess.subst(iop) +
-                   DasicsProregIMethods.subst(iop))
+                   DasicsImmediateRegRequest.subst(iop) +
+                   DasicsClrIMethods.subst(iop))
 }};
 
 def template DasicsLeaveDeclare {{

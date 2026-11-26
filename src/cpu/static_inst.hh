@@ -301,19 +301,28 @@ class StaticInst : public RefCounted, public StaticInstFlags
     virtual ~StaticInst() {};
 
 #if USE_DASICS
+    enum class RegProtectionAction
+    {
+        Protect,
+        Clear
+    };
+
     struct RegProtectionRequest
     {
+        RegProtectionAction action;
         RegClassType regClass;
         /** Bit N selects architectural register N within regClass. */
         uint32_t mask;
     };
 
     /**
-     * No value means no PROREG request. A zero mask still requests the
-     * class and requires its restore slots to be empty.
+     * Resolve the mask in the current thread after Rename grants access.
+     * An empty optional means no request. Protect requires empty restore
+     * slots even for a zero mask. Clear selects registers independently
+     * of those slots.
      */
     virtual std::optional<RegProtectionRequest>
-    regProtectionRequest() const
+    regProtectionRequest(ExecContext *) const
     {
         return std::nullopt;
     }
