@@ -5,6 +5,7 @@
 - [2026-11-18 · 软件寄存器保护开销（标量分量、两种向量 ABI 与 VLEN）](experiments/2026-11-18-register-protection.md)
 - [2026-11-22 · 硬件辅助调用门的周期收益与 B 改写 0、1、6、12 个 s 寄存器的影响](experiments/2026-11-22-proreg-roi.md)
 - [2026-11-23 · 仅 G 与 G+F 调用门的配对测量：浮点保护的额外收益](experiments/2026-11-23-proreg-gf-roi.md)
+- [2026-11-28 · 整数物理寄存器压力：ROB 与寄存器容量对调用门收益的影响](experiments/2026-11-28-integer-prf-pressure.md)
 
 ## 测试范围
 

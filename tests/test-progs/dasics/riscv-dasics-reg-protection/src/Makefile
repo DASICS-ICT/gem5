@@ -13,6 +13,8 @@ SEQUENCE_ELFS := $(addprefix $(OUT)-sequence-,sw.elf gf.elf b-read-c.elf c-read-
 	b-jump-c.elf c-jump-b.elf)
 SEQUENCE_FULL_ELFS := $(addprefix $(OUT)-sequence-full-,sw.elf gf.elf)
 COMMON := context.h runtime.inc gate.inc link.ld
+PRF_ELFS := $(addprefix ../build/prf-pressure/,k0.elf k12.elf)
+PRF_SOFTWARE_ELFS := $(addprefix ../build/prf-pressure/software/,k0.elf k12.elf)
 ROI_COUNTS ?= 1024 4096
 SEQUENCE_ROI_ELFS := $(foreach mode,software proreg_gf,\
     $(foreach n,$(sort 4 $(ROI_COUNTS)),../build/roi/sequence/$(mode)-$(n).elf))
@@ -49,11 +51,23 @@ VEC_ELFS := $(foreach mode,$(VEC_MODES),$(foreach body,empty compute,\
 VEC_CHECKS := $(addprefix $(VEC_BUILD)/vector-check-,standard.elf variant.elf)
 
 .PHONY: all roi sequence-roi sequence-full-roi proreg-roi proreg-gf-roi clobber-roi fp-clobber-roi \
-    vector-roi vector-roi-all $(VEC_WIDTH_TARGETS) run clean
+    vector-roi vector-roi-all $(VEC_WIDTH_TARGETS) prf-pressure prf-pressure-software run clean
 
 all: $(ELFS) $(SEQUENCE_ELFS) $(SEQUENCE_FULL_ELFS)
 
 roi: $(ROI_ELFS)
+
+prf-pressure: $(PRF_ELFS)
+
+$(PRF_ELFS): ../build/prf-pressure/k%.elf: prf-pressure.S $(COMMON) $(MAKEFILE_LIST)
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -DPRF_CLOBBERS=$* $(LDFLAGS) -o $@ $<
+
+prf-pressure-software: $(PRF_SOFTWARE_ELFS)
+
+$(PRF_SOFTWARE_ELFS): ../build/prf-pressure/software/k%.elf: prf-pressure.S $(COMMON) $(MAKEFILE_LIST)
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -DUSE_INT_PROREG=0 -DPRF_CLOBBERS=$* $(LDFLAGS) -o $@ $<
 
 sequence-roi: $(OUT)-sequence-sw.elf $(OUT)-sequence-gf.elf $(SEQUENCE_ROI_ELFS)
 
@@ -136,7 +150,7 @@ run: all
 		--config "$(GEM5_CONFIG)" --outdir "$(GEM5_OUTDIR)" --cpu "$(CPU)"
 
 clean:
-	rm -f $(ELFS) $(SEQUENCE_ELFS) $(SEQUENCE_FULL_ELFS) $(SEQUENCE_ROI_ELFS) \
+	rm -f $(ELFS) $(PRF_ELFS) $(PRF_SOFTWARE_ELFS) $(SEQUENCE_ELFS) $(SEQUENCE_FULL_ELFS) $(SEQUENCE_ROI_ELFS) \
 	    $(SEQUENCE_FULL_ROI_ELFS) $(SCALAR_ROI_ELFS) \
 	    $(foreach dir,../build $(addprefix ../build/vlen-,256 512 1024),\
 	      $(addprefix $(dir)/,$(notdir $(VEC_CHECKS))) \

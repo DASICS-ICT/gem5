@@ -59,6 +59,7 @@
 #include "cpu/o3/lsq.hh"
 #include "debug/HtmCpu.hh"
 #include "debug/LSQUnit.hh"
+#include "debug/O3RegPressure.hh"
 #include "mem/htm.hh"
 #include "mem/packet.hh"
 #include "mem/port.hh"
@@ -177,6 +178,14 @@ LSQUnit::completeDataAccess(PacketPtr pkt)
     }
 
     cpu->ppDataAccessComplete->notify(std::make_pair(inst, pkt));
+    if (TRACING_ON && debug::O3RegPressure && inst->isLoad() &&
+        !inst->isSquashed() && !request->isSplit() && pkt->req->hasPaddr()) {
+        DPRINTF(O3RegPressure,
+                "PRF response tid=%u sn=%llu pc=0x%x "
+                "addr=0x%x size=%u\n",
+                inst->threadNumber, inst->seqNum, inst->pcState().instAddr(),
+                pkt->getAddr(), pkt->getSize());
+    }
 
     assert(!cpu->switchedOut());
     if (!inst->isSquashed()) {
@@ -1303,6 +1312,16 @@ LSQUnit::trySendPacket(bool isLoad, PacketPtr data_pkt)
     }
 
     if (ret) {
+        if (TRACING_ON && debug::O3RegPressure && isLoad &&
+            !request->isSplit() && data_pkt->req->hasPaddr()) {
+            const auto &inst = request->instruction();
+            DPRINTF(O3RegPressure,
+                    "PRF send tid=%u sn=%llu pc=0x%x "
+                    "addr=0x%x size=%u\n",
+                    inst->threadNumber, inst->seqNum,
+                    inst->pcState().instAddr(), data_pkt->getAddr(),
+                    data_pkt->getSize());
+        }
         if (!isLoad) {
             isStoreBlocked = false;
         }

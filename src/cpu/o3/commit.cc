@@ -63,6 +63,7 @@
 #include "debug/Drain.hh"
 #include "debug/ExecFaulting.hh"
 #include "debug/HtmCpu.hh"
+#include "debug/O3RegPressure.hh"
 #include "params/BaseO3CPU.hh"
 #include "sim/faults.hh"
 #include "sim/full_system.hh"
@@ -647,6 +648,10 @@ Commit::tick()
             const DynInstPtr &inst = rob->readHeadInst(tid);
 
             ppCommitStall->notify(inst);
+            if (TRACING_ON && debug::O3RegPressure && inst->isLoad()) {
+                DPRINTF(O3RegPressure, "PRF head tid=%u sn=%llu pc=0x%x\n",
+                        tid, inst->seqNum, inst->pcState().instAddr());
+            }
 
             DPRINTF(Commit,"[tid:%i] Can't commit, Instruction [sn:%llu] PC "
                     "%s is head of ROB and not ready\n",
@@ -990,6 +995,9 @@ Commit::commitInsts()
                     ->committedInstType[head_inst->opClass()]++;
                 stats.committedInstType[tid][head_inst->opClass()]++;
                 ppCommit->notify(head_inst);
+                DPRINTF(O3RegPressure, "PRF retire tid=%u sn=%llu pc=0x%x\n",
+                        tid, head_inst->seqNum,
+                        head_inst->pcState().instAddr());
 
                 // hardware transactional memory
 

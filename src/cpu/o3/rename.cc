@@ -49,6 +49,7 @@
 #include "cpu/o3/limits.hh"
 #include "cpu/reg_class.hh"
 #include "debug/Activity.hh"
+#include "debug/O3RegPressure.hh"
 #include "debug/Rename.hh"
 #include "params/BaseO3CPU.hh"
 
@@ -694,6 +695,17 @@ Rename::renameInsts(ThreadID tid)
         // Check here to make sure there are enough destination registers
         // to rename to.  Otherwise block.
         if (!renameMap[tid]->canRename(inst)) {
+            if (TRACING_ON && debug::O3RegPressure) {
+                const auto need = inst->numDestRegs(IntRegClass);
+                const auto free = renameMap[tid]->numFreeEntries(IntRegClass);
+                if (need > free) {
+                    DPRINTF(O3RegPressure,
+                            "PRF reject tid=%u sn=%llu "
+                            "pc=0x%x need=%u free=%u\n",
+                            tid, inst->seqNum, inst->pcState().instAddr(),
+                            need, free);
+                }
+            }
             DPRINTF(Rename,
                     "Blocking due to "
                     " lack of free physical registers to rename to.\n");
@@ -1067,16 +1079,43 @@ Rename::removeFromHistory(InstSeqNum inst_seq_num, ThreadID tid)
         if (entry.renameKind == RenameKind::Proreg) {
             assert(entry.newPhysReg == prev_reg);
             prev_reg->setReclaimBlocked(true);
+            if (TRACING_ON && debug::O3RegPressure &&
+                prev_reg->is(IntRegClass)) {
+                DPRINTF(O3RegPressure,
+                        "PRF protect tid=%u sn=%llu "
+                        "arch=%u phys=%u\n",
+                        tid, entry.instSeqNum, entry.archReg.index(),
+                        prev_reg->index());
+            }
             continue;
         }
         if (entry.renameKind == RenameKind::Leave) {
             // The restored register remains mapped after its protection ends.
             entry.newPhysReg->setReclaimBlocked(false);
+            if (TRACING_ON && debug::O3RegPressure &&
+                entry.newPhysReg->is(IntRegClass)) {
+                DPRINTF(O3RegPressure,
+                        "PRF release tid=%u sn=%llu "
+                        "arch=%u phys=%u\n",
+                        tid, entry.instSeqNum, entry.archReg.index(),
+                        entry.newPhysReg->index());
+            }
             if (!mapping_changed) {
                 continue;
             }
         }
         if (prev_reg->isReclaimBlocked()) {
+            // Count only ordinary overwrites that would have freed this
+            // physical register without the outstanding protection.
+            if (TRACING_ON && debug::O3RegPressure && mapping_changed &&
+                entry.renameKind == RenameKind::Normal &&
+                prev_reg->is(IntRegClass)) {
+                DPRINTF(O3RegPressure,
+                        "PRF hold tid=%u sn=%llu "
+                        "arch=%u phys=%u\n",
+                        tid, entry.instSeqNum, entry.archReg.index(),
+                        prev_reg->index());
+            }
             continue;
         }
 #endif
@@ -1298,6 +1337,18 @@ Rename::renameDestRegs(const DynInstPtr &inst, ThreadID tid)
         // Bind this destination and record its previous physical mapping.
         inst->renameDestReg(dest_idx, rename_result.newPhysReg,
                             rename_result.prevPhysReg);
+        if (TRACING_ON && debug::O3RegPressure &&
+            flat_dest_regid.is(IntRegClass) &&
+            rename_result.newPhysReg != rename_result.prevPhysReg) {
+            DPRINTF(O3RegPressure,
+                    "PRF rename tid=%u sn=%llu pc=0x%x "
+                    "arch=%u old=%u new=%u free=%u\n",
+                    tid, inst->seqNum, inst->pcState().instAddr(),
+                    flat_dest_regid.index(),
+                    rename_result.prevPhysReg->index(),
+                    rename_result.newPhysReg->index(),
+                    map->numFreeEntries(IntRegClass));
+        }
 
         ++stats.renamedOperands;
     }

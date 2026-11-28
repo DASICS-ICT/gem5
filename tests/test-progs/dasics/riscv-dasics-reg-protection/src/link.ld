@@ -51,6 +51,14 @@ SECTIONS
         *(.data.machine)
     } > ram :data
 
+    /* The pressure probe needs a cold line untouched by the boot-time zeroing. */
+    .rodata.prf_pressure ALIGN(4096) :
+    {
+        *(.rodata.prf_pressure)
+    } > ram :data
+    ASSERT(SIZEOF(.rodata.prf_pressure) == 0 || SIZEOF(.rodata.prf_pressure) == 4096,
+           "PRF load targets must occupy one read-only user page")
+
     .bss.page_tables ALIGN(4096) (NOLOAD) :
     {
         __bss_start = .;

@@ -329,13 +329,18 @@ user_pages:
 #else
     .dword input_buffer, PTE_USER_RW
     .dword output_buffer, PTE_USER_RW
+#if PRF_PRESSURE
+    .dword prf_hot_word, (PTE_V | 0x2 | 0x10 | 0x40) /* U/R, accessed */
+#endif
 #endif
 #if VECTOR_ABI
     .dword vector_save_page, PTE_USER_RW
 #endif
 user_pages_end:
 success_message:
-#if SEQUENCE_ROI || ROI_MEASUREMENT
+#if PRF_PRESSURE
+    .asciz "[OK] DASICS register protection: PRF pressure\n"
+#elif SEQUENCE_ROI || ROI_MEASUREMENT
     .asciz "[OK] DASICS register protection: roi\n"
 #elif SEQUENCE_CALLS
 #if SEQUENCE_FULL && SEQUENCE_SOFTWARE && SEQUENCE_DENY == 0
